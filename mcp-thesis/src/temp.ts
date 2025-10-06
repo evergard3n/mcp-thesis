@@ -1,0 +1,780 @@
+// import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+// import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+// import { GoogleGenerativeAI } from "@google/generative-ai";
+// import * as fs from "fs/promises";
+// import * as path from "path";
+
+// // Simple markdown-based project structure
+// interface ProjectMetadata {
+//   name: string;
+//   description: string;
+//   createdAt: string;
+//   conventions: {
+//     namingStyle: "camelCase" | "PascalCase" | "snake_case";
+//   };
+// }
+
+// class MarkdownProjectStore {
+//   private projectRoot: string | null = null;
+
+//   // Initialize/create a new project
+//   async initProject(projectPath: string, name: string, description: string) {
+//     this.projectRoot = projectPath;
+
+//     // Create project structure
+//     await fs.mkdir(projectPath, { recursive: true });
+//     await fs.mkdir(path.join(projectPath, "use-cases"), { recursive: true });
+//     await fs.mkdir(path.join(projectPath, "diagrams"), { recursive: true });
+//     await fs.mkdir(path.join(projectPath, "entities"), { recursive: true });
+
+//     // Create project metadata file
+//     const metadata: ProjectMetadata = {
+//       name,
+//       description,
+//       createdAt: new Date().toISOString(),
+//       conventions: {
+//         namingStyle: "PascalCase"
+//       }
+//     };
+
+//     const readmeMd = `# ${name}
+
+// ${description}
+
+// **Created:** ${new Date().toLocaleDateString()}
+
+// ## Project Structure
+
+// \`\`\`
+// ${path.basename(projectPath)}/
+// ├── README.md           # This file
+// ├── project.json        # Project metadata
+// ├── use-cases/          # Use case descriptions
+// ├── diagrams/           # Generated PlantUML diagrams
+// │   ├── use-case.md
+// │   ├── sequence/
+// │   └── class.md
+// └── entities/           # Extracted entities
+//     ├── actors.md
+//     ├── systems.md
+//     └── classes.md
+// \`\`\`
+
+// ## Usage
+
+// 1. Add use cases to \`use-cases/\` directory
+// 2. Run tools to extract entities and generate diagrams
+// 3. All diagrams are stored in \`diagrams/\` with consistent naming
+// `;
+
+//     await fs.writeFile(path.join(projectPath, "README.md"), readmeMd);
+//     await fs.writeFile(path.join(projectPath, "project.json"), JSON.stringify(metadata, null, 2));
+
+//     // Initialize entity files
+//     await fs.writeFile(path.join(projectPath, "entities", "actors.md"), "# Actors\n\n");
+//     await fs.writeFile(path.join(projectPath, "entities", "systems.md"), "# Systems\n\n");
+//     await fs.writeFile(path.join(projectPath, "entities", "classes.md"), "# Classes\n\n");
+
+//     return projectPath;
+//   }
+
+//   // Load existing project
+//   async loadProject(projectPath: string) {
+//     try {
+//       await fs.access(path.join(projectPath, "project.json"));
+//       this.projectRoot = projectPath;
+//       return true;
+//     } catch {
+//       return false;
+//     }
+//   }
+
+//   getProjectRoot(): string | null {
+//     return this.projectRoot;
+//   }
+
+//   // Read entities from markdown files
+//   async readEntities(type: "actors" | "systems" | "classes"): Promise<string[]> {
+//     if (!this.projectRoot) return [];
+
+//     try {
+//       const content = await fs.readFile(
+//         path.join(this.projectRoot, "entities", `${type}.md`),
+//         "utf-8"
+//       );
+
+//       // Extract list items
+//       const matches = content.match(/^- (.+)$/gm);
+//       return matches ? matches.map(m => m.replace(/^- /, "").trim()) : [];
+//     } catch {
+//       return [];
+//     }
+//   }
+
+//   // Write entities to markdown files
+//   async writeEntities(type: "actors" | "systems" | "classes", entities: string[]) {
+//     if (!this.projectRoot) return;
+
+//     const uniqueEntities = [...new Set(entities)].sort();
+//     const content = `# ${type.charAt(0).toUpperCase() + type.slice(1)}
+
+// ${uniqueEntities.map(e => `- ${e}`).join("\n")}
+
+// ---
+// *Last updated: ${new Date().toISOString()}*
+// `;
+
+//     await fs.writeFile(
+//       path.join(this.projectRoot, "entities", `${type}.md`),
+//       content
+//     );
+//   }
+
+//   // Add entity (read, append, write)
+//   async addEntity(type: "actors" | "systems" | "classes", entity: string) {
+//     const existing = await this.readEntities(type);
+//     if (!existing.includes(entity)) {
+//       existing.push(entity);
+//       await this.writeEntities(type, existing);
+//     }
+//   }
+
+//   // Save use case as markdown
+//   async saveUseCase(id: string, title: string, content: string, extracted: any) {
+//     if (!this.projectRoot) return;
+
+//     const markdown = `# ${title}
+
+// **ID:** ${id}
+// **Created:** ${new Date().toISOString()}
+
+// ## Description
+
+// ${content}
+
+// ## Extracted Entities
+
+// ### Actors
+// ${extracted.actors.map((a: string) => `- ${a}`).join("\n")}
+
+// ### Systems
+// ${extracted.systems.map((s: string) => `- ${s}`).join("\n")}
+
+// ### Potential Classes
+// ${extracted.classes.map((c: string) => `- ${c}`).join("\n")}
+
+// ---
+// *Auto-generated by MCP UML Server*
+// `;
+
+//     await fs.writeFile(
+//       path.join(this.projectRoot, "use-cases", `${id}.md`),
+//       markdown
+//     );
+//   }
+
+//   // Read all use cases
+//   async readAllUseCases(): Promise<Array<{id: string, content: string}>> {
+//     if (!this.projectRoot) return [];
+
+//     try {
+//       const files = await fs.readdir(path.join(this.projectRoot, "use-cases"));
+//       const useCases = [];
+
+//       for (const file of files) {
+//         if (file.endsWith(".md")) {
+//           const content = await fs.readFile(
+//             path.join(this.projectRoot, "use-cases", file),
+//             "utf-8"
+//           );
+//           useCases.push({
+//             id: file.replace(".md", ""),
+//             content
+//           });
+//         }
+//       }
+
+//       return useCases;
+//     } catch {
+//       return [];
+//     }
+//   }
+
+//   // Save diagram as markdown with embedded PlantUML
+//   async saveDiagram(type: string, plantuml: string, metadata?: any) {
+//     if (!this.projectRoot) return;
+
+//     const markdown = `# ${type.charAt(0).toUpperCase() + type.slice(1)} Diagram
+
+// **Generated:** ${new Date().toISOString()}
+
+// ${metadata ? `## Metadata\n\n\`\`\`json\n${JSON.stringify(metadata, null, 2)}\n\`\`\`\n\n` : ""}
+
+// ## PlantUML Code
+
+// \`\`\`plantuml
+// ${plantuml}
+// \`\`\`
+
+// ## Visualization
+
+// To view this diagram:
+// 1. Copy the PlantUML code above
+// 2. Paste into https://www.plantuml.com/plantuml/uml/
+// 3. Or use PlantUML extension in VS Code
+
+// ---
+// *Auto-generated by MCP UML Server*
+// `;
+
+//     const diagramPath = type.includes("/")
+//       ? path.join(this.projectRoot, "diagrams", type + ".md")
+//       : path.join(this.projectRoot, "diagrams", `${type}.md`);
+
+//     // Ensure directory exists
+//     await fs.mkdir(path.dirname(diagramPath), { recursive: true });
+//     await fs.writeFile(diagramPath, markdown);
+//   }
+
+//   // Read project metadata
+//   async readMetadata(): Promise<ProjectMetadata | null> {
+//     if (!this.projectRoot) return null;
+
+//     try {
+//       const content = await fs.readFile(
+//         path.join(this.projectRoot, "project.json"),
+//         "utf-8"
+//       );
+//       return JSON.parse(content);
+//     } catch {
+//       return null;
+//     }
+//   }
+
+//   // Get project summary
+//   async getProjectSummary() {
+//     if (!this.projectRoot) return null;
+
+//     const metadata = await this.readMetadata();
+//     const actors = await this.readEntities("actors");
+//     const systems = await this.readEntities("systems");
+//     const classes = await this.readEntities("classes");
+//     const useCases = await this.readAllUseCases();
+
+//     return {
+//       metadata,
+//       entities: {
+//         actors: actors.length,
+//         systems: systems.length,
+//         classes: classes.length
+//       },
+//       useCases: useCases.length,
+//       path: this.projectRoot
+//     };
+//   }
+// }
+
+// // Initialize
+// const projectStore = new MarkdownProjectStore();
+// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+// const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// const server = new Server(
+//   {
+//     name: "markdown-uml-server",
+//     version: "1.0.0",
+//   },
+//   {
+//     capabilities: {
+//       tools: {},
+//     },
+//   }
+// );
+
+// // ============================================
+// // PROJECT MANAGEMENT TOOLS
+// // ============================================
+
+// server.tool(
+//   "initProject",
+//   "Initialize a new UML project with markdown-based storage",
+//   {
+//     projectPath: {
+//       type: "string",
+//       description: "Path where project will be created (e.g., ./my-uml-project)"
+//     },
+//     name: {
+//       type: "string",
+//       description: "Project name"
+//     },
+//     description: {
+//       type: "string",
+//       description: "Project description"
+//     }
+//   },
+//   async ({ projectPath, name, description }) => {
+//     try {
+//       const path = await projectStore.initProject(projectPath, name, description);
+
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `✅ Project initialized successfully!
+
+// **Path:** ${path}
+// **Name:** ${name}
+
+// Project structure created:
+// - README.md (project documentation)
+// - project.json (metadata)
+// - use-cases/ (store use case descriptions)
+// - diagrams/ (generated PlantUML diagrams)
+// - entities/ (actors, systems, classes)
+
+// You can now add use cases with the 'addUseCase' tool.`
+//         }]
+//       };
+//     } catch (error) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `Error: ${error instanceof Error ? error.message : String(error)}`
+//         }],
+//         isError: true
+//       };
+//     }
+//   }
+// );
+
+// server.tool(
+//   "loadProject",
+//   "Load an existing project from path",
+//   {
+//     projectPath: {
+//       type: "string",
+//       description: "Path to existing project"
+//     }
+//   },
+//   async ({ projectPath }) => {
+//     const success = await projectStore.loadProject(projectPath);
+
+//     if (!success) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: "❌ Project not found at this path. Use 'initProject' to create a new one."
+//         }],
+//         isError: true
+//       };
+//     }
+
+//     const summary = await projectStore.getProjectSummary();
+
+//     return {
+//       content: [{
+//         type: "text",
+//         text: `✅ Project loaded successfully!
+
+// **Name:** ${summary?.metadata?.name}
+// **Description:** ${summary?.metadata?.description}
+// **Path:** ${projectPath}
+
+// **Current state:**
+// - Use cases: ${summary?.useCases}
+// - Actors: ${summary?.entities.actors}
+// - Systems: ${summary?.entities.systems}
+// - Classes: ${summary?.entities.classes}`
+//       }]
+//     };
+//   }
+// );
+
+// server.tool(
+//   "getProjectInfo",
+//   "Get information about the current project",
+//   {},
+//   async () => {
+//     const summary = await projectStore.getProjectSummary();
+
+//     if (!summary) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: "❌ No project loaded. Use 'initProject' or 'loadProject' first."
+//         }],
+//         isError: true
+//       };
+//     }
+
+//     return {
+//       content: [{
+//         type: "text",
+//         text: `📊 **Project Information**
+
+// **Name:** ${summary.metadata?.name}
+// **Description:** ${summary.metadata?.description}
+// **Created:** ${summary.metadata?.createdAt}
+// **Path:** ${summary.path}
+
+// **Entities:**
+// - Actors: ${summary.entities.actors}
+// - Systems: ${summary.entities.systems}
+// - Classes: ${summary.entities.classes}
+
+// **Use Cases:** ${summary.useCases}
+
+// **Conventions:**
+// - Naming style: ${summary.metadata?.conventions.namingStyle}`
+//       }]
+//     };
+//   }
+// );
+
+// // ============================================
+// // USE CASE MANAGEMENT
+// // ============================================
+
+// server.tool(
+//   "addUseCase",
+//   "Add a use case to the project (extracts entities automatically)",
+//   {
+//     useCaseId: {
+//       type: "string",
+//       description: "Unique ID (e.g., 'login', 'checkout')"
+//     },
+//     title: {
+//       type: "string",
+//       description: "Use case title"
+//     },
+//     description: {
+//       type: "string",
+//       description: "Use case description/steps"
+//     }
+//   },
+//   async ({ useCaseId, title, description }) => {
+//     if (!projectStore.getProjectRoot()) {
+//       return {
+//         content: [{ type: "text", text: "❌ No project loaded" }],
+//         isError: true
+//       };
+//     }
+
+//     try {
+//       // Extract entities using LLM
+//       const prompt = `Analyze this use case and extract entities:
+
+// Title: ${title}
+// Description: ${description}
+
+// Return ONLY valid JSON (no markdown):
+// {
+//   "actors": ["list of human/external actors"],
+//   "systems": ["list of system components"],
+//   "classes": ["potential domain classes"]
+// }`;
+
+//       const result = await model.generateContent(prompt);
+//       const jsonText = result.response.text().replace(/```json\n?|```\n?/g, "").trim();
+//       const extracted = JSON.parse(jsonText);
+
+//       // Save use case as markdown
+//       await projectStore.saveUseCase(useCaseId, title, description, extracted);
+
+//       // Update entity lists
+//       for (const actor of extracted.actors) {
+//         await projectStore.addEntity("actors", actor);
+//       }
+//       for (const system of extracted.systems) {
+//         await projectStore.addEntity("systems", system);
+//       }
+//       for (const cls of extracted.classes) {
+//         await projectStore.addEntity("classes", cls);
+//       }
+
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `✅ Use case added: **${title}**
+
+// **File:** use-cases/${useCaseId}.md
+
+// **Extracted entities:**
+// - Actors: ${extracted.actors.join(", ")}
+// - Systems: ${extracted.systems.join(", ")}
+// - Classes: ${extracted.classes.join(", ")}
+
+// Entities have been added to the project's entity lists.`
+//         }]
+//       };
+//     } catch (error) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `Error: ${error instanceof Error ? error.message : String(error)}`
+//         }],
+//         isError: true
+//       };
+//     }
+//   }
+// );
+
+// server.tool(
+//   "listUseCases",
+//   "List all use cases in the project",
+//   {},
+//   async () => {
+//     const useCases = await projectStore.readAllUseCases();
+
+//     if (useCases.length === 0) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: "No use cases found. Add one with 'addUseCase'."
+//         }]
+//       };
+//     }
+
+//     const list = useCases.map(uc => {
+//       const titleMatch = uc.content.match(/^# (.+)$/m);
+//       return `- **${uc.id}**: ${titleMatch ? titleMatch[1] : "Untitled"}`;
+//     }).join("\n");
+
+//     return {
+//       content: [{
+//         type: "text",
+//         text: `📋 **Use Cases (${useCases.length})**\n\n${list}`
+//       }]
+//     };
+//   }
+// );
+
+// // ============================================
+// // DIAGRAM GENERATION
+// // ============================================
+
+// server.tool(
+//   "generateUseCaseDiagram",
+//   "Generate use case diagram using all project entities",
+//   {},
+//   async () => {
+//     if (!projectStore.getProjectRoot()) {
+//       return {
+//         content: [{ type: "text", text: "❌ No project loaded" }],
+//         isError: true
+//       };
+//     }
+
+//     try {
+//       const actors = await projectStore.readEntities("actors");
+//       const systems = await projectStore.readEntities("systems");
+//       const useCases = await projectStore.readAllUseCases();
+//       const metadata = await projectStore.readMetadata();
+
+//       const useCasesText = useCases.map(uc => {
+//         const descMatch = uc.content.match(/## Description\n\n([\s\S]+?)\n\n##/);
+//         return descMatch ? descMatch[1] : "";
+//       }).join("\n\n");
+
+//       const prompt = `Generate PlantUML use case diagram.
+
+// Project entities (USE THESE EXACT NAMES):
+// Actors: ${actors.join(", ")}
+// Systems: ${systems.join(", ")}
+
+// Use cases:
+// ${useCasesText}
+
+// Requirements:
+// - Use @startuml and @enduml
+// - Use ${metadata?.conventions.namingStyle} naming
+// - Show all actors and their relationships to use cases
+// - Group related use cases in rectangles if appropriate
+// - Output ONLY PlantUML code, no explanations`;
+
+//       const result = await model.generateContent(prompt);
+//       const plantuml = result.response.text().replace(/```plantuml\n?|```\n?/g, "").trim();
+
+//       // Save diagram
+//       await projectStore.saveDiagram("use-case", plantuml, {
+//         actors,
+//         systems,
+//         useCaseCount: useCases.length
+//       });
+
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `✅ Use case diagram generated!
+
+// **File:** diagrams/use-case.md
+
+// **Entities used:**
+// - Actors: ${actors.length}
+// - Systems: ${systems.length}
+// - Use cases: ${useCases.length}
+
+// \`\`\`plantuml
+// ${plantuml}
+// \`\`\`
+
+// View at: https://www.plantuml.com/plantuml/uml/`
+//         }]
+//       };
+//     } catch (error) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `Error: ${error instanceof Error ? error.message : String(error)}`
+//         }],
+//         isError: true
+//       };
+//     }
+//   }
+// );
+
+// server.tool(
+//   "generateSequenceDiagram",
+//   "Generate sequence diagram for a specific use case",
+//   {
+//     useCaseId: {
+//       type: "string",
+//       description: "Use case ID"
+//     }
+//   },
+//   async ({ useCaseId }) => {
+//     if (!projectStore.getProjectRoot()) {
+//       return {
+//         content: [{ type: "text", text: "❌ No project loaded" }],
+//         isError: true
+//       };
+//     }
+
+//     try {
+//       const useCases = await projectStore.readAllUseCases();
+//       const useCase = useCases.find(uc => uc.id === useCaseId);
+
+//       if (!useCase) {
+//         return {
+//           content: [{ type: "text", text: `❌ Use case '${useCaseId}' not found` }],
+//           isError: true
+//         };
+//       }
+
+//       const actors = await projectStore.readEntities("actors");
+//       const systems = await projectStore.readEntities("systems");
+
+//       const prompt = `Generate PlantUML sequence diagram.
+
+// Known entities (USE EXACT NAMES):
+// Actors: ${actors.join(", ")}
+// Systems: ${systems.join(", ")}
+
+// Use case:
+// ${useCase.content}
+
+// Show the interaction flow. Output ONLY PlantUML code.`;
+
+//       const result = await model.generateContent(prompt);
+//       const plantuml = result.response.text().replace(/```plantuml\n?|```\n?/g, "").trim();
+
+//       await projectStore.saveDiagram(`sequence/${useCaseId}`, plantuml, {
+//         useCaseId,
+//         consistentWith: "project entities"
+//       });
+
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `✅ Sequence diagram generated for **${useCaseId}**!
+
+// **File:** diagrams/sequence/${useCaseId}.md
+
+// \`\`\`plantuml
+// ${plantuml}
+// \`\`\``
+//         }]
+//       };
+//     } catch (error) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `Error: ${error instanceof Error ? error.message : String(error)}`
+//         }],
+//         isError: true
+//       };
+//     }
+//   }
+// );
+
+// server.tool(
+//   "generateClassDiagram",
+//   "Generate class diagram from all use cases",
+//   {},
+//   async () => {
+//     if (!projectStore.getProjectRoot()) {
+//       return {
+//         content: [{ type: "text", text: "❌ No project loaded" }],
+//         isError: true
+//       };
+//     }
+
+//     try {
+//       const classes = await projectStore.readEntities("classes");
+//       const useCases = await projectStore.readAllUseCases();
+
+//       const useCasesText = useCases.map(uc => uc.content).join("\n\n---\n\n");
+
+//       const prompt = `Generate PlantUML class diagram.
+
+// Identified classes: ${classes.join(", ")}
+
+// All use cases:
+// ${useCasesText}
+
+// Generate:
+// - Classes with attributes and methods
+// - Relationships (association, inheritance, composition)
+// - Proper UML notation
+
+// Output ONLY PlantUML code.`;
+
+//       const result = await model.generateContent(prompt);
+//       const plantuml = result.response.text().replace(/```plantuml\n?|```\n?/g, "").trim();
+
+//       await projectStore.saveDiagram("class", plantuml, {
+//         classCount: classes.length
+//       });
+
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `✅ Class diagram generated!
+
+// **File:** diagrams/class.md
+// **Classes:** ${classes.length}
+
+// \`\`\`plantuml
+// ${plantuml}
+// \`\`\``
+//         }]
+//       };
+//     } catch (error) {
+//       return {
+//         content: [{
+//           type: "text",
+//           text: `Error: ${error instanceof Error ? error.message : String(error)}`
+//         }],
+//         isError: true
+//       };
+//     }
+//   }
+// );
+
+// // Start server
+// async function main() {
+//   const transport = new StdioServerTransport();
+//   await server.connect(transport);
+//   console.error("Markdown-based UML Server running");
+// }
+
+// main().catch(console.error);
