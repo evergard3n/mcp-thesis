@@ -194,7 +194,7 @@ server.tool(
 
 server.tool(
   "addUseCase",
-  "Add a use case to the project. Returns instructions for the LLM to extract entities, then call saveUseCaseWithEntities to save.",
+  "Add a use case to the project. Try to extract as much actors and actions from the given input",
   {
     useCaseId: z.string().describe("Unique ID (e.g., 'login', 'checkout')"),
     title: z.string().describe("Use case title"),
@@ -213,30 +213,61 @@ server.tool(
       content: [
         {
           type: "text",
-          text: `I need you to analyze this use case and extract entities, then call the saveUseCaseWithEntities tool.
+          text: `I need you to analyze this use case and extract entities, then call the actionsRefining tool.
 
 **Use Case ID:** ${useCaseId}
 **Title:** ${title}
 **Description:**
 ${description}
 
-Please identify:
+Please identify and extract from the input, and not create any new entities:
 1. **Actors**: Human users or external systems that interact (e.g., User, Admin, Customer)
-2. **Systems**: Internal system components (e.g., AuthenticationSystem, PaymentGateway, Database)
-3. **Classes**: Potential domain classes/objects (e.g., Account, Order, Product)
+2. **Actions**: Given actions that the actor will take. Make sure to follow the format: "Actor -> Action -> Receiver Actor". If you cannot detect the actor, return "Unknown: Action".
 
-After analyzing, call the 'saveUseCaseWithEntities' tool with:
+After analyzing, call the 'actionsRefining' tool with:
 - useCaseId: "${useCaseId}"
 - title: "${title}"
 - description: "${description}"
 - actors: [list of actors you identified]
-- systems: [list of systems you identified]
-- classes: [list of classes you identified]`,
+- actions: [list of actions you identified]`,
         },
       ],
     };
   }
 );
+
+server.tool(
+  "actionsRefining",
+  "Given a set of actors and actions, search the project store for actions related to the actors, and refine the actions to be more specific and detailed",
+  {
+    useCaseId: z.string().describe("Unique ID for the use case"),
+    actors: z.array(z.string()).describe("List of actors"),
+    actions: z.array(z.string()).describe("List of actions"),
+  },
+  async ({ useCaseId, actions, actors }) => {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `
+        You are a part of a team that is creating a UML diagram for a use case.
+        A tool have already extracted raw actors and actions from an user use case input. It might not be complete or correct.
+        Actors: ${actors.join(", ")}
+        Actions: ${actions.join(", ")}
+        Actions already following the format: "Actor -> Action -> Receiver Actor".
+        Your job is to break down actions into more specific steps. You might add more actors and actions to the list.
+        After you have refined the actions, return to the user with the following format:
+        - Actors: [new actors you identified]
+        - Actions: [new actions you identified], following the format: "Actor -> Action -> Receiver Actor"
+        `,
+        },
+      ],
+    };
+  }
+);
+
+// rebuild the project store, now with new possible way to find actions related to one actor.
+
 server.tool(
   "saveUseCaseWithEntities",
   "Save a use case with extracted entities to the project",

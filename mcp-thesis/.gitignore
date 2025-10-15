@@ -4,3 +4,4 @@ temp
 *.log
 .env*
 *.lock
+package-lock.json
