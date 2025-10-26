@@ -1,311 +1,315 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-
 import * as os from "os";
+import { Store } from "../interfaces/store.interface.js";
+import { UseCase, Actor, Action } from "../interfaces/usecase.interface.js";
+import { isContain } from "../helpers/helpers.js";
 
-interface ProjectMetadata {
-  name: string;
-  description: string;
-  createdAt: string;
-  conventions: {
-    namingStyle: "camelCase" | "PascalCase" | "snake_case";
-  };
-}
+export class JsonProjectStore {
+  private storePath: string | null = null;
+  private store: Store | null = null;
+  public logPath: string | null = null;
+  private readonly baseDir: string;
 
-export class MarkdownProjectStore {
-  private projectRoot: string | null = null;
+  constructor() {
+    this.baseDir = path.join(os.homedir(), "Documents", "mcp-thesis-projects");
+  }
 
-  // Initialize/create a new project
-  async initProject(name: string, description: string) {
-    const tempDir = path.join(
-      os.homedir(),
-      "Documents",
-      "mcp-thesis-projects",
-      "projects"
-    );
+  // Initialize a new project store
+  async initProject(name: string, description: string): Promise<string> {
+    // Sanitize project name for filename
+    const sanitizedName = name
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
+    this.storePath = path.join(this.baseDir, `${sanitizedName}.json`);
+    this.logPath = path.join(this.baseDir, `${sanitizedName}.log`);
 
-    const projectPath = path.join(tempDir, name);
-    this.projectRoot = projectPath;
-
-    // Create project structure
-    await fs.mkdir(projectPath, { recursive: true });
-    await fs.mkdir(path.join(projectPath, "use-cases"), { recursive: true });
-    await fs.mkdir(path.join(projectPath, "diagrams"), { recursive: true });
-    await fs.mkdir(path.join(projectPath, "entities"), { recursive: true });
-
-    // Create project metadata file
-    const metadata: ProjectMetadata = {
+    const store: Store = {
+      id: this.generateId(),
       name,
       description,
       createdAt: new Date().toISOString(),
-      conventions: {
-        namingStyle: "PascalCase",
-      },
+      updatedAt: new Date().toISOString(),
+      actors: [],
+      useCases: [],
     };
 
-    const readmeMd = `# ${name}
+    await fs.mkdir(this.baseDir, { recursive: true });
+    await this.writeStore(store);
+    this.store = store;
 
-${description}
-
-**Created:** ${new Date().toLocaleDateString()}
-
-## Project Structure
-
-\`\`\`
-${path.basename(projectPath)}/
-├── README.md           # This file
-├── project.json        # Project metadata
-├── use-cases/          # Use case descriptions
-├── diagrams/           # Generated PlantUML diagrams
-│   ├── use-case.md
-│   ├── sequence/
-│   └── class.md
-└── entities/           # Extracted entities
-    ├── actors.md
-    ├── systems.md
-    └── classes.md
-\`\`\`
-
-## Usage
-
-1. Add use cases to \`use-cases/\` directory
-2. Run tools to extract entities and generate diagrams
-3. All diagrams are stored in \`diagrams/\` with consistent naming
-`;
-
-    await fs.writeFile(path.join(projectPath, "README.md"), readmeMd);
-    await fs.writeFile(
-      path.join(projectPath, "project.json"),
-      JSON.stringify(metadata, null, 2)
-    );
-
-    // Initialize entity files
-    await fs.writeFile(
-      path.join(projectPath, "entities", "actors.md"),
-      "# Actors\n\n"
-    );
-    await fs.writeFile(
-      path.join(projectPath, "entities", "systems.md"),
-      "# Systems\n\n"
-    );
-    await fs.writeFile(
-      path.join(projectPath, "entities", "classes.md"),
-      "# Classes\n\n"
-    );
-
-    return projectPath;
+    return this.storePath;
   }
 
-  // Load existing project
-  async loadProject(projectPath: string) {
+  // Load existing project store by path
+  async loadProject(projectPath: string): Promise<boolean> {
     try {
-      await fs.access(path.join(projectPath, "project.json"));
-      this.projectRoot = projectPath;
+      const content = await fs.readFile(projectPath, "utf-8");
+      this.store = JSON.parse(content) as Store;
+      this.storePath = projectPath;
+      // Set log path based on the store path
+      this.logPath = projectPath.replace(/\.json$/, ".log");
       return true;
     } catch {
       return false;
     }
   }
 
-  getProjectRoot(): string | null {
-    return this.projectRoot;
-  }
-
-  // Read entities from markdown files
-  async readEntities(
-    type: "actors" | "systems" | "classes"
-  ): Promise<string[]> {
-    if (!this.projectRoot) return [];
-
-    try {
-      const content = await fs.readFile(
-        path.join(this.projectRoot, "entities", `${type}.md`),
-        "utf-8"
-      );
-
-      // Extract list items
-      const matches = content.match(/^- (.+)$/gm);
-      return matches ? matches.map((m) => m.replace(/^- /, "").trim()) : [];
-    } catch {
-      return [];
+  // Load project by name
+  async loadProjectByName(name: string): Promise<boolean> {
+    const projectPath = await this.findProjectByName(name);
+    if (projectPath) {
+      return await this.loadProject(projectPath);
     }
+    return false;
   }
 
-  // Write entities to markdown files
-  async writeEntities(
-    type: "actors" | "systems" | "classes",
-    entities: string[]
-  ) {
-    if (!this.projectRoot) return;
-
-    const uniqueEntities = [...new Set(entities)].sort();
-    const content = `# ${type.charAt(0).toUpperCase() + type.slice(1)}
-
-${uniqueEntities.map((e) => `- ${e}`).join("\n")}
-
----
-*Last updated: ${new Date().toISOString()}*
-`;
-
-    await fs.writeFile(
-      path.join(this.projectRoot, "entities", `${type}.md`),
-      content
-    );
-  }
-
-  // Add entity (read, append, write)
-  async addEntity(type: "actors" | "systems" | "classes", entity: string) {
-    const existing = await this.readEntities(type);
-    if (!existing.includes(entity)) {
-      existing.push(entity);
-      await this.writeEntities(type, existing);
-    }
-  }
-
-  // Save use case as markdown
-  async saveUseCase(
-    id: string,
-    title: string,
-    content: string,
-    extracted: any
-  ) {
-    if (!this.projectRoot) return;
-
-    const markdown = `# ${title}
-
-**ID:** ${id}  
-**Created:** ${new Date().toISOString()}
-
-## Description
-
-${content}
-
-## Extracted Entities
-
-### Actors
-${extracted.actors.map((a: string) => `- ${a}`).join("\n")}
-
-### Systems
-${extracted.systems.map((s: string) => `- ${s}`).join("\n")}
-
-### Potential Classes
-${extracted.classes.map((c: string) => `- ${c}`).join("\n")}
-
----
-*Auto-generated by MCP UML Server*
-`;
-
-    await fs.writeFile(
-      path.join(this.projectRoot, "use-cases", `${id}.md`),
-      markdown
-    );
-  }
-
-  // Read all use cases
-  async readAllUseCases(): Promise<Array<{ id: string; content: string }>> {
-    if (!this.projectRoot) return [];
-
+  // Find project by name (utility function)
+  async findProjectByName(name: string): Promise<string | null> {
     try {
-      const files = await fs.readdir(path.join(this.projectRoot, "use-cases"));
-      const useCases = [];
+      await fs.access(this.baseDir);
+      const files = await fs.readdir(this.baseDir);
 
       for (const file of files) {
-        if (file.endsWith(".md")) {
-          const content = await fs.readFile(
-            path.join(this.projectRoot, "use-cases", file),
-            "utf-8"
-          );
-          useCases.push({
-            id: file.replace(".md", ""),
-            content,
-          });
+        if (file.endsWith(".json")) {
+          const filePath = path.join(this.baseDir, file);
+          try {
+            const content = await fs.readFile(filePath, "utf-8");
+            const store = JSON.parse(content) as Store;
+
+            // Match by exact name (case-insensitive)
+            if (store.name.toLowerCase() === name.toLowerCase()) {
+              return filePath;
+            }
+          } catch {
+            // Skip invalid JSON files
+            continue;
+          }
         }
       }
-
-      return useCases;
-    } catch {
-      return [];
-    }
-  }
-
-  // Save diagram as markdown with embedded PlantUML
-  async saveDiagram(type: string, plantuml: string, metadata?: any) {
-    if (!this.projectRoot) return;
-
-    const markdown = `# ${type.charAt(0).toUpperCase() + type.slice(1)} Diagram
-
-**Generated:** ${new Date().toISOString()}
-
-${
-  metadata
-    ? `## Metadata\n\n\`\`\`json\n${JSON.stringify(
-        metadata,
-        null,
-        2
-      )}\n\`\`\`\n\n`
-    : ""
-}
-
-## PlantUML Code
-
-\`\`\`plantuml
-${plantuml}
-\`\`\`
-
-## Visualization
-
-To view this diagram:
-1. Copy the PlantUML code above
-2. Paste into https://www.plantuml.com/plantuml/uml/
-3. Or use PlantUML extension in VS Code
-
----
-*Auto-generated by MCP UML Server*
-`;
-
-    const diagramPath = type.includes("/")
-      ? path.join(this.projectRoot, "diagrams", type + ".md")
-      : path.join(this.projectRoot, "diagrams", `${type}.md`);
-
-    // Ensure directory exists
-    await fs.mkdir(path.dirname(diagramPath), { recursive: true });
-    await fs.writeFile(diagramPath, markdown);
-  }
-
-  // Read project metadata
-  async readMetadata(): Promise<ProjectMetadata | null> {
-    if (!this.projectRoot) return null;
-
-    try {
-      const content = await fs.readFile(
-        path.join(this.projectRoot, "project.json"),
-        "utf-8"
-      );
-      return JSON.parse(content);
+      return null;
     } catch {
       return null;
     }
   }
 
+  // List all projects in the directory
+  async listAllProjects(): Promise<
+    Array<{
+      name: string;
+      path: string;
+      createdAt: string;
+      description: string;
+    }>
+  > {
+    try {
+      await fs.access(this.baseDir);
+      const files = await fs.readdir(this.baseDir);
+      const projects: Array<{
+        name: string;
+        path: string;
+        createdAt: string;
+        description: string;
+      }> = [];
+
+      for (const file of files) {
+        if (file.endsWith(".json")) {
+          const filePath = path.join(this.baseDir, file);
+          try {
+            const content = await fs.readFile(filePath, "utf-8");
+            const store = JSON.parse(content) as Store;
+            projects.push({
+              name: store.name,
+              path: filePath,
+              createdAt: store.createdAt,
+              description: store.description,
+            });
+          } catch {
+            // Skip invalid JSON files
+            continue;
+          }
+        }
+      }
+
+      return projects.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    } catch {
+      return [];
+    }
+  }
+
+  // Get store data
+  getStore(): Store | null {
+    return this.store;
+  }
+
+  // Get project root path
+  getProjectRoot(): string | null {
+    return this.storePath ? path.dirname(this.storePath) : null;
+  }
+
+  // Add an actor to the project
+  async addActor(newActors: Actor[]): Promise<void> {
+    if (!this.store) {
+      throw new Error(
+        "Store not initialized. Call initProject or loadProject first."
+      );
+    }
+    const actors = await this.getAllActors();
+    for (const actor of newActors) {
+      if (!actors.some((a) => a.actor_id === actor.actor_id)) {
+        this.store.actors.push(actor);
+      }
+    }
+    this.store.updatedAt = new Date().toISOString();
+    await this.writeStore(this.store);
+  }
+
+  // Get an actor by id
+  async getActor(actorId: string): Promise<Actor | null> {
+    if (!this.store) {
+      throw new Error(
+        "Store not initialized. Call initProject or loadProject first."
+      );
+    }
+    return this.store.actors.find((a) => a.actor_id === actorId) || null;
+  }
+
+  // Get all actors
+  async getAllActors(): Promise<Actor[]> {
+    if (!this.store) {
+      throw new Error(
+        "Store not initialized. Call initProject or loadProject first."
+      );
+    }
+    return this.store.actors;
+  }
+
+  // Add or update a use case
+  async saveUseCase({
+    id,
+    name,
+    description,
+    mainActorId,
+    actorIds,
+    actions,
+  }: {
+    id?: string;
+    name: string;
+    description: string;
+    mainActorId: string;
+    actorIds: string[];
+    actions: Action[];
+  }): Promise<void> {
+    if (!this.store) {
+      throw new Error(
+        "Store not initialized. Call initProject or loadProject first."
+      );
+    }
+
+    const existingIndex = this.store.useCases.findIndex((uc) => uc.id === id);
+
+    // If mainActor not provided, use first actor or create a default one
+    const actualMainActorId = mainActorId || actorIds[0] || "undefined";
+
+    const useCase: UseCase = {
+      id,
+      name,
+      description,
+      mainActor: actualMainActorId,
+      actors: actorIds,
+      actions,
+    };
+
+    if (existingIndex >= 0) {
+      this.store.useCases[existingIndex] = useCase;
+    } else {
+      this.store.useCases.push(useCase);
+    }
+
+    this.store.updatedAt = new Date().toISOString();
+    await this.writeStore(this.store);
+  }
+
+  // Get a specific use case
+  getUseCase(useCaseId: string): UseCase | null {
+    if (!this.store) return null;
+    return this.store.useCases.find((uc) => uc.id === useCaseId) || null;
+  }
+
+  // Get all use cases
+  getAllUseCases(): UseCase[] {
+    return this.store?.useCases || [];
+  }
+
+  // Get all actions for a specific use case
+  getActionsForUseCase(useCaseId: string): Action[] {
+    const useCase = this.getUseCase(useCaseId);
+    return useCase?.actions || [];
+  }
+
+  // Delete a use case
+  async deleteUseCase(useCaseId: string): Promise<boolean> {
+    if (!this.store) return false;
+
+    const initialLength = this.store.useCases.length;
+    this.store.useCases = this.store.useCases.filter(
+      (uc) => uc.id !== useCaseId
+    );
+
+    if (this.store.useCases.length !== initialLength) {
+      this.store.updatedAt = new Date().toISOString();
+      await this.writeStore(this.store);
+      return true;
+    }
+
+    return false;
+  }
+
   // Get project summary
   async getProjectSummary() {
-    if (!this.projectRoot) return null;
+    if (!this.store) return null;
 
-    const metadata = await this.readMetadata();
-    const actors = await this.readEntities("actors");
-    const systems = await this.readEntities("systems");
-    const classes = await this.readEntities("classes");
-    const useCases = await this.readAllUseCases();
+    const uniqueActors = await this.getAllActors();
 
     return {
-      metadata,
-      entities: {
-        actors: actors.length,
-        systems: systems.length,
-        classes: classes.length,
+      id: this.store.id,
+      name: this.store.name,
+      description: this.store.description,
+      createdAt: this.store.createdAt,
+      updatedAt: this.store.updatedAt,
+      stats: {
+        totalUseCases: this.store.useCases.length,
+        totalActors: uniqueActors.length,
+        totalActions: this.store.useCases.reduce(
+          (sum, uc) => sum + uc.actions.length,
+          0
+        ),
       },
-      useCases: useCases.length,
-      path: this.projectRoot,
+      path: this.storePath,
     };
+  }
+  async log(message: string): Promise<void> {
+    if (!this.logPath) {
+      throw new Error("Log path not set");
+    }
+    await fs.appendFile(
+      this.logPath,
+      `[${new Date().toISOString()}] ${message}\n`,
+      "utf-8"
+    );
+  }
+
+  // Private helper methods
+  private async writeStore(store: Store): Promise<void> {
+    if (!this.storePath || !this.logPath) {
+      throw new Error("Store path not set. Call initProject first.");
+    }
+    await this.log(`writing store: ${JSON.stringify(store)}`);
+    await fs.writeFile(this.storePath, JSON.stringify(store, null, 2), "utf-8");
+  }
+
+  private generateId(): string {
+    return `store_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }

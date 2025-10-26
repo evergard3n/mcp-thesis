@@ -21,7 +21,11 @@ import {
   makeNWSRequest,
   PointsResponse,
 } from "./helpers/weatherHelpers.js";
-import { MarkdownProjectStore } from "./stores/projectStore.js";
+import { JsonProjectStore } from "./stores/projectStore.js";
+import { UseCase } from "./interfaces/usecase.interface.js";
+import { useCaseSchema } from "./schemas/usecase.schema.js";
+import saveUseCase from "./helpers/saveUseCase.js";
+import { useCaseToUML } from "./helpers/helpers.js";
 
 const server = new McpServer({
   name: "test_server",
@@ -32,7 +36,7 @@ const server = new McpServer({
   },
 });
 
-const projectStore = new MarkdownProjectStore();
+const projectStore = new JsonProjectStore();
 
 // Register weather tools
 server.tool(
@@ -90,19 +94,6 @@ server.tool(
   "initProject",
   "Initialize a new UML project with markdown-based storage",
   {
-    // projectPath: {
-    //   type: "string",
-    //   description:
-    //     "Path where project will be created (e.g., ./my-uml-project)",
-    // },
-    // name: {
-    //   type: "string",
-    //   description: "Project name",
-    // },
-    // description: {
-    //   type: "string",
-    //   description: "Project description",
-    // },
     name: z.string().describe("Project name"),
     description: z.string().describe("Project description"),
   },
@@ -118,6 +109,7 @@ server.tool(
 
 **Path:** ${path}
 **Name:** ${name}
+**Log Path:** ${projectStore.logPath}
 
 Project structure created:
 - README.md (project documentation)
@@ -127,6 +119,151 @@ Project structure created:
 - entities/ (actors, systems, classes)
 
 You can now add use cases with the 'addUseCase' tool.`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Load project by name
+server.tool(
+  "loadProjectByName",
+  "Load an existing project by its name",
+  {
+    name: z.string().describe("Project name to load"),
+  },
+  async ({ name }) => {
+    try {
+      const success = await projectStore.loadProjectByName(name);
+
+      if (success) {
+        const summary = await projectStore.getProjectSummary();
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ Project "${name}" loaded successfully!\n\n📊 Summary:\n- Use Cases: ${summary?.stats.totalUseCases}\n- Actors: ${summary?.stats.totalActors}\n- Actions: ${summary?.stats.totalActions}`,
+            },
+          ],
+        };
+      } else {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Project "${name}" not found. Use 'listAllProjects' to see available projects.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Find project by name
+server.tool(
+  "findProjectByName",
+  "Given a project name, list all projects, then find the project with the closest name or description.",
+  {
+    name: z.string().describe("Project name to search for"),
+  },
+  async ({ name }) => {
+    const projects = await projectStore.listAllProjects();
+
+    if (projects.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "📂 No projects found. Create one with 'initProject'.",
+          },
+        ],
+      };
+    }
+    const projectNamesAndDescriptions = projects.map((p) => ({
+      name: p.name,
+      description: p.description,
+    }));
+    return {
+      content: [
+        {
+          type: "text",
+          text: `
+        You are given a project name - ${name} - that the user is looking for. Here are the steps to find the project:
+        1. ${JSON.stringify(
+          projectNamesAndDescriptions
+        )}. Here is the list of projects with their names and descriptions.
+        2. Find the project with the closest name or description. You can use the 'name' property to find the project with the closest name.
+        3. Retrieve the closest existing project name. Then call tool 'loadProjectByName' to load the project. Pass the closest existing project name to the tool.
+        `,
+        },
+      ],
+    };
+  }
+);
+
+// List all projects
+server.tool(
+  "listAllProjects",
+  "List all available projects in the projects directory",
+  {},
+  async () => {
+    try {
+      const projects = await projectStore.listAllProjects();
+
+      if (projects.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "📂 No projects found. Create one with 'initProject'.",
+            },
+          ],
+        };
+      }
+
+      const projectList = projects
+        .map(
+          (p, idx) =>
+            `${idx + 1}. **${p.name}**\n   - Created: ${new Date(
+              p.createdAt
+            ).toLocaleDateString()}\n   - Path: ${p.path}\n - Description: ${
+              p.description
+            }`
+        )
+        .join("\n\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `📂 **Available Projects** (${projects.length}):\n\n${projectList}`,
           },
         ],
       };
@@ -172,20 +309,16 @@ server.tool(
           type: "text",
           text: `📊 **Project Information**
 
-**Name:** ${summary.metadata?.name}
-**Description:** ${summary.metadata?.description}
-**Created:** ${summary.metadata?.createdAt}
+**Name:** ${summary.name}
+**Description:** ${summary.description}
+**Created:** ${summary.createdAt}
+**Updated:** ${summary.updatedAt}
 **Path:** ${summary.path}
 
-**Entities:**
-- Actors: ${summary.entities.actors}
-- Systems: ${summary.entities.systems}
-- Classes: ${summary.entities.classes}
-
-**Use Cases:** ${summary.useCases}
-
-**Conventions:**
-- Naming style: ${summary.metadata?.conventions.namingStyle}`,
+**Statistics:**
+- Total Use Cases: ${summary.stats.totalUseCases}
+- Total Actors: ${summary.stats.totalActors}
+- Total Actions: ${summary.stats.totalActions}`,
         },
       ],
     };
@@ -193,72 +326,185 @@ server.tool(
 );
 
 server.tool(
-  "addUseCase",
-  "Add a use case to the project. Try to extract as much actors and actions from the given input",
+  "extractUseCase",
+  "First step in adding a use case to the project. Extract use case details from the user's input into a structured format",
   {
-    useCaseId: z.string().describe("Unique ID (e.g., 'login', 'checkout')"),
-    title: z.string().describe("Use case title"),
-    description: z.string().describe("Use case description/steps"),
+    input: z
+      .string()
+      .describe(
+        "User's input about the use case. Just put the user's input here, do not add any other text or formatting."
+      ),
   },
-  async ({ useCaseId, title, description }) => {
-    if (!projectStore.getProjectRoot()) {
+  async ({ input }) => {
+    return {
+      content: [
+        {
+          type: "text",
+          instructions: "",
+          text: `The user has provided a use case description. You need to extract the use case details from the user's input into a structured format. Here is the user's input:
+          ${input}
+          You MUST return the extracted details as a JSON in the following format:
+          {
+            "name": "Use case name",
+            "description": "Use case description",
+            "mainActor": "main_actor_id",
+            "actors": [
+              {
+                "actor_id": "Actor id",
+                "name": "Actor name",
+                "description": "Actor description",
+              }
+            ],  
+            "actions": [
+              {
+                "id": "Action id",
+                "order": 1,
+                "from": "actor_id_who_initiates",
+                "to": "actor_id_who_receives",
+                "action": "Description of the action performed by the actor who initiates the action",
+              }
+            ]
+          }
+            Do not add any other text or formatting. Just return the JSON.
+          After that, call the 'validateUseCase' tool with the extracted JSON to validate the use case details.`,
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "validateUseCase",
+  "Second step in adding a use case to the project. Validate the extracted use case details to see if its already present in the project store, or having mismatch actors or actions",
+  {
+    extractedJsonString: z
+      .string()
+      .describe("Extracted use case details in JSON format"),
+  },
+  async ({ extractedJsonString }) => {
+    const resultValid = useCaseSchema.safeParse(
+      JSON.parse(extractedJsonString)
+    );
+    if (!resultValid.success) {
+      // todo: call gemini to ensure the extracted use case is in the correct format
+      return {
+        content: [{ type: "text", text: "❌ Invalid use case format" }],
+        isError: true,
+      };
+    }
+    const extractedUseCase = resultValid.data;
+    // todo: add a validation to see if the extracted use case is in the correct format
+    const name = extractedUseCase.name;
+    const description = extractedUseCase.description;
+    const mainActor = extractedUseCase.mainActor;
+    const actors = extractedUseCase.actors;
+    const actions = extractedUseCase.actions;
+    if (!projectStore.getStore()) {
       return {
         content: [{ type: "text", text: "❌ No project loaded" }],
         isError: true,
       };
     }
 
-    // Return instructions for Claude to extract entities
-    return {
-      content: [
-        {
-          type: "text",
-          text: `I need you to analyze this use case and extract entities, then call the actionsRefining tool.
-
-**Use Case ID:** ${useCaseId}
-**Title:** ${title}
-**Description:**
-${description}
-
-Please identify and extract from the input, and not create any new entities:
-1. **Actors**: Human users or external systems that interact (e.g., User, Admin, Customer)
-2. **Actions**: Given actions that the actor will take. Make sure to follow the format: "Actor -> Action -> Receiver Actor". If you cannot detect the actor, return "Unknown: Action".
-
-After analyzing, call the 'actionsRefining' tool with:
-- useCaseId: "${useCaseId}"
-- title: "${title}"
-- description: "${description}"
-- actors: [list of actors you identified]
-- actions: [list of actions you identified]`,
-        },
-      ],
-    };
+    const useCases = projectStore.getAllUseCases();
+    if (useCases.length === 0) {
+      await saveUseCase(extractedUseCase, projectStore);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Use case saved successfully:
+        **Use Case ID:** ${extractedUseCase.id || "auto-generated"}
+        **Name:** ${name}
+        **Description:** ${description}
+        **Main Actor:** ${mainActor}
+        **Id of Actors:** ${actors.map((a) => a.actor_id).join(", ")}
+        **Actions:** ${actions.map((a) => a.action).join(", ")}`,
+          },
+        ],
+      };
+    } else {
+      const existingActors = await projectStore.getAllActors();
+      return {
+        content: [
+          {
+            type: "text",
+            text: `The user has provided a use case description. 
+            Here is the use case with extracted details: ${JSON.stringify(
+              extractedUseCase
+            )}
+            Here is the list of actors in the project store: ${JSON.stringify(
+              existingActors
+            )}
+            Here is the list of use cases in the project store: ${JSON.stringify(
+              useCases
+            )}
+            Your job is to validate the use case details to see if its already present in the project store, or having mismatch actors or actions.
+            If its already present in the project store, notify the user and return the use case id.
+            If its not present in the project, but the actors from the newUseCase has different names or descriptions, modify the new use case. 
+            You MUST return the modified use case details as a JSON in the following format:
+          {
+            "name": "Use case name",
+            "description": "Use case description",
+            "mainActor": "main_actor_id",
+            "actors": [
+              {
+                "actor_id": "Actor id",
+                "name": "Actor name",
+                "description": "Actor description",
+              }
+            ],  
+            "actions": [
+              {
+                "id": "Action id",
+                "order": 1,
+                "from": "actor_id_who_initiates",
+                "to": "actor_id_who_receives",
+                "action": "Description of the action performed by the actor who initiates the action",
+              }
+            ]
+          }
+            Do not add any other text or formatting. Just return the JSON.
+            After that, call the 'saveUseCase' tool with the modified use case details to save the use case to the project store.
+  `,
+          },
+        ],
+      };
+    }
   }
 );
 
 server.tool(
-  "actionsRefining",
-  "Given a set of actors and actions, search the project store for actions related to the actors, and refine the actions to be more specific and detailed",
+  "saveUseCase",
+  "Last step in adding a use case to the project. Receives a validated JSON use case, then save the use case to the project store",
   {
-    useCaseId: z.string().describe("Unique ID for the use case"),
-    actors: z.array(z.string()).describe("List of actors"),
-    actions: z.array(z.string()).describe("List of actions"),
+    useCaseJson: z.string().describe("Validated JSON use case"),
   },
-  async ({ useCaseId, actions, actors }) => {
+  async ({ useCaseJson }) => {
+    const useCase = useCaseSchema.parse(JSON.parse(useCaseJson));
+    const resultValid = useCaseSchema.safeParse(useCase);
+    if (!resultValid.success) {
+      // todo: call gemini to ensure the extracted use case is in the correct format
+      return {
+        content: [{ type: "text", text: "❌ Invalid use case format" }],
+        isError: true,
+      };
+    }
+    const extractedUseCase = resultValid.data;
+
+    await saveUseCase(extractedUseCase, projectStore);
     return {
       content: [
         {
           type: "text",
           text: `
-        You are a part of a team that is creating a UML diagram for a use case.
-        A tool have already extracted raw actors and actions from an user use case input. It might not be complete or correct.
-        Actors: ${actors.join(", ")}
-        Actions: ${actions.join(", ")}
-        Actions already following the format: "Actor -> Action -> Receiver Actor".
-        Your job is to break down actions into more specific steps. You might add more actors and actions to the list.
-        After you have refined the actions, return to the user with the following format:
-        - Actors: [new actors you identified]
-        - Actions: [new actions you identified], following the format: "Actor -> Action -> Receiver Actor"
+        Use case saved successfully:
+        **Use Case ID:** ${extractedUseCase.id || "auto-generated"}
+        **Name:** ${extractedUseCase.name}
+        **Description:** ${extractedUseCase.description}
+        **Main Actor:** ${extractedUseCase.mainActor}
+        **Id of Actors:** ${extractedUseCase.actors.join(", ")}
+        **Actions:** ${extractedUseCase.actions.map((a) => a.action).join(", ")}
         `,
         },
       ],
@@ -266,213 +512,155 @@ server.tool(
   }
 );
 
-// rebuild the project store, now with new possible way to find actions related to one actor.
-
 server.tool(
-  "saveUseCaseWithEntities",
-  "Save a use case with extracted entities to the project",
+  "useCaseToUML",
+  "Convert a saved use case to PlantUML format",
   {
-    useCaseId: z.string().describe("Unique ID for the use case"),
-    title: z.string().describe("Use case title"),
-    description: z.string().describe("Use case description"),
-    actors: z
-      .array(z.string())
-      .describe("List of actors (users, external systems)"),
-    systems: z.array(z.string()).describe("List of system components"),
-    classes: z.array(z.string()).describe("List of potential domain classes"),
+    useCaseId: z.string().describe("Use case ID"),
   },
-  async ({ useCaseId, title, description, actors, systems, classes }) => {
-    if (!projectStore.getProjectRoot()) {
+  async ({ useCaseId }) => {
+    if (!projectStore.getStore()) {
       return {
         content: [{ type: "text", text: "❌ No project loaded" }],
         isError: true,
       };
     }
-
-    try {
-      const extracted = { actors, systems, classes };
-
-      // Save use case as markdown
-      await projectStore.saveUseCase(useCaseId, title, description, extracted);
-
-      // Update entity lists
-      for (const actor of actors) {
-        await projectStore.addEntity("actors", actor);
-      }
-      for (const system of systems) {
-        await projectStore.addEntity("systems", system);
-      }
-      for (const cls of classes) {
-        await projectStore.addEntity("classes", cls);
-      }
-
+    const useCase = projectStore.getUseCase(useCaseId);
+    if (!useCase) {
       return {
-        content: [
-          {
-            type: "text",
-            text: `✅ Use case saved: **${title}**
-
-**File:** use-cases/${useCaseId}.md
-
-**Extracted entities:**
-- Actors (${actors.length}): ${actors.join(", ")}
-- Systems (${systems.length}): ${systems.join(", ")}
-- Classes (${classes.length}): ${classes.join(", ")}
-
-All entities have been added to the project's entity lists in the entities/ folder.`,
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
-        ],
+        content: [{ type: "text", text: "❌ Use case not found" }],
         isError: true,
       };
     }
-  }
-);
 
-server.tool(
-  "allUseCasesToPlantUML",
-  "Convert all stored use cases to PlantUML format",
-  {},
-  async () => {
-    const useCases = await projectStore.readAllUseCases();
-    if (!useCases || useCases.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "No use cases found to convert.",
-          },
-        ],
-      };
-    }
-    const useCasesContent = useCases.reduce(
-      (prev, curr) => prev + `## ${curr.id}\n\n${curr.content}\n\n`,
-      ""
-    );
+    const uml = await useCaseToUML(useCase, projectStore);
     return {
       content: [
-        {
-          type: "text",
-          text: `I have all these use cases joined into a single file. Please convert these use cases to PlantUML format:
-
-${useCasesContent}
-
-Requirements:
-- Use @startuml and @enduml tags
-- Identify all actors
-- If reference use cases inside a rectangle, those use cases need to be declared inside the rectangle block — not outside and then referenced later.
-  Otherwise, PlantUML can’t find them in scope.
-- Show relationships with proper syntax
-- Output only the PlantUML code`,
-        },
+        { type: "text", text: `Use case converted to PlantUML format: ${uml}` },
       ],
     };
   }
 );
 
-server.tool(
-  "get_forecast",
-  "Get weather forecast for a location",
-  {
-    latitude: z.number().min(-90).max(90).describe("Latitude of the location"),
-    longitude: z
-      .number()
-      .min(-180)
-      .max(180)
-      .describe("Longitude of the location"),
-  },
-  async ({ latitude, longitude }) => {
-    // Get grid point data
-    const pointsUrl = `${NWS_API_BASE}/points/${latitude.toFixed(
-      4
-    )},${longitude.toFixed(4)}`;
-    const pointsData = await makeNWSRequest<PointsResponse>(pointsUrl);
+// rebuild the project store, now with new possible way to find actions related to one actor.
 
-    if (!pointsData) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to retrieve grid point data for coordinates: ${latitude}, ${longitude}. This location may not be supported by the NWS API (only US locations are supported).`,
-          },
-        ],
-      };
-    }
+// server.tool(
+//   "saveUseCaseWithEntities",
+//   "Save a use case with extracted entities to the project",
+//   {
+//     useCaseId: z.string().describe("Unique ID for the use case"),
+//     title: z.string().describe("Use case title"),
+//     description: z.string().describe("Use case description"),
+//     actors: z
+//       .array(z.string())
+//       .describe("List of actors (users, external systems)"),
+//     systems: z.array(z.string()).describe("List of system components"),
+//     classes: z.array(z.string()).describe("List of potential domain classes"),
+//   },
+//   async ({ useCaseId, title, description, actors, systems, classes }) => {
+//     if (!projectStore.getProjectRoot()) {
+//       return {
+//         content: [{ type: "text", text: "❌ No project loaded" }],
+//         isError: true,
+//       };
+//     }
 
-    const forecastUrl = pointsData.properties?.forecast;
-    if (!forecastUrl) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Failed to get forecast URL from grid point data",
-          },
-        ],
-      };
-    }
+//     try {
+//       // Convert actors to Actor objects
+//       const actorObjects = actors.map((actor) => ({
+//         actor_id: actor.toLowerCase().replace(/\s+/g, "_"),
+//         name: actor,
+//         description: actor,
+//       }));
 
-    // Get forecast data
-    const forecastData = await makeNWSRequest<ForecastResponse>(forecastUrl);
-    if (!forecastData) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Failed to retrieve forecast data",
-          },
-        ],
-      };
-    }
+//       // Save use case with empty actions - will be populated by actionsRefining tool
+//       // mainActor will default to first actor, actions will default to []
+//       await projectStore.saveUseCase(
+//         useCaseId,
+//         title,
+//         description,
+//         actorObjects
+//       );
 
-    const periods = forecastData.properties?.periods || [];
-    if (periods.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "No forecast periods available",
-          },
-        ],
-      };
-    }
+//       return {
+//         content: [
+//           {
+//             type: "text",
+//             text: `✅ Use case saved: **${title}**
 
-    // Format forecast periods
-    const formattedForecast = periods.map((period: ForecastPeriod) =>
-      [
-        `${period.name || "Unknown"}:`,
-        `Temperature: ${period.temperature || "Unknown"}°${
-          period.temperatureUnit || "F"
-        }`,
-        `Wind: ${period.windSpeed || "Unknown"} ${period.windDirection || ""}`,
-        `${period.shortForecast || "No forecast available"}`,
-        "---",
-      ].join("\n")
-    );
+// **File:** use-cases/${useCaseId}.md
 
-    const forecastText = `Forecast for ${latitude}, ${longitude}:\n\n${formattedForecast.join(
-      "\n"
-    )}`;
+// **Extracted entities:**
+// - Actors (${actors.length}): ${actors.join(", ")}
+// - Systems (${systems.length}): ${systems.join(", ")}
+// - Classes (${classes.length}): ${classes.join(", ")}
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: forecastText,
-        },
-      ],
-    };
-  }
-);
+// All entities have been added to the project's entity lists in the entities/ folder.`,
+//           },
+//         ],
+//       };
+//     } catch (error) {
+//       return {
+//         content: [
+//           {
+//             type: "text",
+//             text: `Error: ${
+//               error instanceof Error ? error.message : String(error)
+//             }`,
+//           },
+//         ],
+//         isError: true,
+//       };
+//     }
+//   }
+// );
+
+// server.tool(
+//   "allUseCasesToPlantUML",
+//   "Convert all stored use cases to PlantUML format",
+//   {},
+//   async () => {
+//     const useCases = projectStore.getAllUseCases();
+//     if (!useCases || useCases.length === 0) {
+//       return {
+//         content: [
+//           {
+//             type: "text",
+//             text: "No use cases found to convert.",
+//           },
+//         ],
+//       };
+//     }
+//     const useCasesContent = useCases.reduce(
+//       (prev: string, curr) =>
+//         prev +
+//         `## ${curr.useCase_id}: ${curr.title}\n\n${
+//           curr.description
+//         }\n\n**Actors:** ${curr.actors
+//           .map((a) => a.description)
+//           .join(", ")}\n\n`,
+//       ""
+//     );
+//     return {
+//       content: [
+//         {
+//           type: "text",
+//           text: `I have all these use cases joined into a single file. Please convert these use cases to PlantUML format:
+
+// ${useCasesContent}
+
+// Requirements:
+// - Use @startuml and @enduml tags
+// - Identify all actors
+// - If reference use cases inside a rectangle, those use cases need to be declared inside the rectangle block — not outside and then referenced later.
+//   Otherwise, PlantUML can’t find them in scope.
+// - Show relationships with proper syntax
+// - Output only the PlantUML code`,
+//         },
+//       ],
+//     };
+//   }
+// );
 
 /**
  * Start the server using stdio transport.
