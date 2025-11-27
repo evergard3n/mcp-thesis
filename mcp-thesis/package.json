@@ -17,6 +17,7 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js"
   },
   "dependencies": {
+    "@google/genai": "^1.30.0",
     "@modelcontextprotocol/sdk": "^1.19.1",
     "lodash": "^4.17.21",
     "zod": "3"

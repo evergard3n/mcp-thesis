@@ -4,20 +4,32 @@ export interface Actor {
   description: string;
 }
 
-export interface Action {
+export interface Step {
   id: string;
-  order: number;
-  from: string; // actor_id
-  to: string; // actor_id
-  action: string;
-  type?: "request" | "response";
-}
+  type: "action" | "system";
+  description: string;
+  from: string;
+  to: string;
+  nextStepId?: string;
+  prevStepId?: string;
 
+  alt?: {
+    condition: string; // điều kiện phân nhánh
+    ifSteps: Step[]; // bước khi điều kiện đúng
+    elseSteps?: Step[]; // bước khi điều kiện sai
+  };
+
+  loop?: {
+    condition: string;
+    steps: Step[];
+  };
+}
 export interface UseCase {
   id?: string;
   name: string;
   description: string;
   mainActor: string; // actor_id
   actors: string[]; // actor_ids
-  actions: Action[];
+  firstStepId?: string; // step_id
+  steps: Step[];
 }

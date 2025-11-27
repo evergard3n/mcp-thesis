@@ -30,10 +30,9 @@ import { useCaseToUML } from "./helpers/helpers.js";
 const server = new McpServer({
   name: "test_server",
   version: "1.0.0",
-  capabilities: {
-    resources: {},
-    tools: {},
-  },
+  icons: [{ src: "icon.png" }],
+  title: "MCP Thesis",
+  websiteUrl: "https://github.com/yourusername/mcp-thesis",
 });
 
 const projectStore = new JsonProjectStore();
@@ -155,7 +154,7 @@ server.tool(
           content: [
             {
               type: "text",
-              text: `✅ Project "${name}" loaded successfully!\n\n📊 Summary:\n- Use Cases: ${summary?.stats.totalUseCases}\n- Actors: ${summary?.stats.totalActors}\n- Actions: ${summary?.stats.totalActions}`,
+              text: `✅ Project "${name}" loaded successfully!\n\n📊 Summary:\n- Use Cases: ${summary?.stats.totalUseCases}\n- Actors: ${summary?.stats.totalActors}\n- Steps: ${summary?.stats.totalSteps}`,
             },
           ],
         };
@@ -318,12 +317,55 @@ server.tool(
 **Statistics:**
 - Total Use Cases: ${summary.stats.totalUseCases}
 - Total Actors: ${summary.stats.totalActors}
-- Total Actions: ${summary.stats.totalActions}`,
+- Total Steps: ${summary.stats.totalSteps}`,
         },
       ],
     };
   }
 );
+
+server.tool(
+  "viewProjectUseCases",
+  "View all use cases in the current project. Can be used to search for id of a use case.",
+  {},
+  async () => {
+    if (!projectStore.getStore()) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ No project loaded. Use 'initProject' or 'loadProject' first.",
+          },
+        ],
+        isError: true,
+      };
+    }
+    const useCases = projectStore.getAllUseCases();
+    if (useCases.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No use cases found in the current project.",
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `📋 **Use Cases in Current Project in JSON format**:\n\n${JSON.stringify(
+            useCases
+          )}`,
+        },
+      ],
+    };
+  }
+);
+
+// [ADD USE CASE] Step 1: extract
 
 server.tool(
   "extractUseCase",
@@ -340,9 +382,33 @@ server.tool(
       content: [
         {
           type: "text",
-          instructions: "",
           text: `The user has provided a use case description. You need to extract the use case details from the user's input into a structured format. Here is the user's input:
           ${input}
+          There are three kinds of actions: Simple action (for linear actions between two actors), Conditional blocks (for if structures), and Loop blocks (for loop structures).
+          The simple action itself has a notable type: request or response.
+          The simple action has an interface that could be written in JSON format as follows:
+          {
+            "id": "unique_action_id",
+            "order": 1,
+            "from": "actor_id_who_initiates",
+            "to": "actor_id_who_receives",
+            "action": "Description of the action performed by the actor who initiates the action",
+            "type": "request" | "response"
+          }
+          The loop block has an interface that could be written in JSON format as follows:
+          {
+            "id": "unique_loop_id",
+            "loopCondition": "condition for loop",
+            "steps": [ array of actions, conditional blocks or even other loop blocks inside this loop block ]
+          }
+          The conditional block has an interface that could be written in JSON format as follows:
+          {
+            "id": "unique_action_id",
+            "condition": "condition for if/else",
+            "steps": [ array of actions, conditional blocks or even other loop blocks inside this loop block ],
+            "elseBlock": [ else section of the if structure, is an optional array of actions, conditional blocks or even other loop blocks ]
+          }
+          Your job is to extract the use case details into a JSON format.
           You MUST return the extracted details as a JSON in the following format:
           {
             "name": "Use case name",
@@ -355,14 +421,7 @@ server.tool(
                 "description": "Actor description",
               }
             ],  
-            "actions": [
-              {
-                "id": "Action id",
-                "order": 1,
-                "from": "actor_id_who_initiates",
-                "to": "actor_id_who_receives",
-                "action": "Description of the action performed by the actor who initiates the action",
-              }
+            "steps": [ array of actions and/or control blocks
             ]
           }
             Do not add any other text or formatting. Just return the JSON.
@@ -373,6 +432,7 @@ server.tool(
   }
 );
 
+// [ADD USE CASE] Step 2: validate
 server.tool(
   "validateUseCase",
   "Second step in adding a use case to the project. Validate the extracted use case details to see if its already present in the project store, or having mismatch actors or actions",
@@ -398,7 +458,7 @@ server.tool(
     const description = extractedUseCase.description;
     const mainActor = extractedUseCase.mainActor;
     const actors = extractedUseCase.actors;
-    const actions = extractedUseCase.actions;
+    const steps = extractedUseCase.steps;
     if (!projectStore.getStore()) {
       return {
         content: [{ type: "text", text: "❌ No project loaded" }],
@@ -418,8 +478,8 @@ server.tool(
         **Name:** ${name}
         **Description:** ${description}
         **Main Actor:** ${mainActor}
-        **Id of Actors:** ${actors.map((a) => a.actor_id).join(", ")}
-        **Actions:** ${actions.map((a) => a.action).join(", ")}`,
+        **Actors:** ${actors.map((a) => `${a.name} (${a.actor_id})`).join(", ")}
+        **Steps:** ${steps.length} step(s)`,
           },
         ],
       };
@@ -453,17 +513,22 @@ server.tool(
                 "name": "Actor name",
                 "description": "Actor description",
               }
-            ],  
-            "actions": [
+            ],
+            "firstStepId": "optional_id_of_first_step",
+            "steps": [
               {
-                "id": "Action id",
-                "order": 1,
-                "from": "actor_id_who_initiates",
-                "to": "actor_id_who_receives",
-                "action": "Description of the action performed by the actor who initiates the action",
+                "id": "step_id",
+                "description": "Optional step description",
+                "prev": "optional_previous_step_id",
+                "next": "optional_next_step_id",
+                ... (step-specific fields based on type: Action, ConditionBlock, or LoopBlock)
               }
             ]
           }
+          For Action steps, include: "from", "to", "message", and optionally "type" ("request" | "response")
+          For ConditionBlock steps, include: "condition", "ifSteps", and optionally "elseSteps"
+          For LoopBlock steps, include: "loopCondition", "steps"
+          
             Do not add any other text or formatting. Just return the JSON.
             After that, call the 'saveUseCase' tool with the modified use case details to save the use case to the project store.
   `,
@@ -474,11 +539,20 @@ server.tool(
   }
 );
 
-server.tool(
+// chore: test generate use case with gemini here
+
+// [ADD USE CASE] Step 3: save
+
+server.registerTool(
   "saveUseCase",
-  "Last step in adding a use case to the project. Receives a validated JSON use case, then save the use case to the project store",
+
   {
-    useCaseJson: z.string().describe("Validated JSON use case"),
+    title: "Save use case tool",
+    description:
+      "Last step in adding a use case to the project. Receives a validated JSON use case, then save the use case to the project store",
+    inputSchema: {
+      useCaseJson: z.string().describe("Validated JSON use case"),
+    },
   },
   async ({ useCaseJson }) => {
     const useCase = useCaseSchema.parse(JSON.parse(useCaseJson));
@@ -503,8 +577,11 @@ server.tool(
         **Name:** ${extractedUseCase.name}
         **Description:** ${extractedUseCase.description}
         **Main Actor:** ${extractedUseCase.mainActor}
-        **Id of Actors:** ${extractedUseCase.actors.join(", ")}
-        **Actions:** ${extractedUseCase.actions.map((a) => a.action).join(", ")}
+        **Actors:** ${extractedUseCase.actors
+          .map((a) => `${a.name} (${a.actor_id})`)
+          .join(", ")}
+        **First Step ID:** ${extractedUseCase.firstStepId || "not specified"}
+        **Steps:** ${extractedUseCase.steps.length} step(s)
         `,
         },
       ],
@@ -655,6 +732,18 @@ server.tool(
 // - If reference use cases inside a rectangle, those use cases need to be declared inside the rectangle block — not outside and then referenced later.
 //   Otherwise, PlantUML can’t find them in scope.
 // - Show relationships with proper syntax
+// - Output only the PlantUML code`,
+//         },
+//       ],
+//     };
+//   }
+// );
+
+/**
+ * Start the server using stdio transport.
+ * This allows the server to communicate via standard input/output streams.
+ */
+
 // - Output only the PlantUML code`,
 //         },
 //       ],

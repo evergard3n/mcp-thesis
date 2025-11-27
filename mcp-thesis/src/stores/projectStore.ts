@@ -1,9 +1,8 @@
 import * as fs from "fs/promises";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
 import { Store } from "../interfaces/store.interface.js";
-import { UseCase, Actor, Action } from "../interfaces/usecase.interface.js";
-import { isContain } from "../helpers/helpers.js";
+import { Actor, Step, UseCase } from "../interfaces/usecase.interface.js";
 
 export class JsonProjectStore {
   private storePath: string | null = null;
@@ -192,14 +191,14 @@ export class JsonProjectStore {
     description,
     mainActorId,
     actorIds,
-    actions,
+    steps,
   }: {
     id?: string;
     name: string;
     description: string;
     mainActorId: string;
     actorIds: string[];
-    actions: Action[];
+    steps: Step[];
   }): Promise<void> {
     if (!this.store) {
       throw new Error(
@@ -218,7 +217,7 @@ export class JsonProjectStore {
       description,
       mainActor: actualMainActorId,
       actors: actorIds,
-      actions,
+      steps,
     };
 
     if (existingIndex >= 0) {
@@ -242,10 +241,10 @@ export class JsonProjectStore {
     return this.store?.useCases || [];
   }
 
-  // Get all actions for a specific use case
-  getActionsForUseCase(useCaseId: string): Action[] {
+  // Get all steps for a specific use case
+  getStepsForUseCase(useCaseId: string): Step[] {
     const useCase = this.getUseCase(useCaseId);
-    return useCase?.actions || [];
+    return useCase?.steps || [];
   }
 
   // Delete a use case
@@ -281,8 +280,8 @@ export class JsonProjectStore {
       stats: {
         totalUseCases: this.store.useCases.length,
         totalActors: uniqueActors.length,
-        totalActions: this.store.useCases.reduce(
-          (sum, uc) => sum + uc.actions.length,
+        totalSteps: this.store.useCases.reduce(
+          (sum, uc) => sum + uc.steps.length,
           0
         ),
       },

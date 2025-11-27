@@ -1,7 +1,7 @@
 import z from "zod";
+import { Step } from "../interfaces/usecase.interface.js";
 import { useCaseSchema } from "../schemas/usecase.schema.js";
 import { JsonProjectStore } from "../stores/projectStore.js";
-import { Action, UseCase } from "../interfaces/usecase.interface.js";
 
 type UseCaseZodSchema = z.infer<typeof useCaseSchema>;
 export default async function saveUseCase(
@@ -16,14 +16,14 @@ export default async function saveUseCase(
     description: string;
     mainActorId: string;
     actorIds: string[];
-    actions: Action[];
+    steps: Step[];
   } = {
     id: useCase.id || useCase.name.toLowerCase().replace(/\s+/g, "_"),
     name: useCase.name,
     description: useCase.description,
     mainActorId: useCase.mainActor,
     actorIds: extractedActors.map((a) => a.actor_id),
-    actions: useCase.actions,
+    steps: useCase.steps,
   };
   await projectStore.log(`saving use case: ${JSON.stringify(useCasePayload)}`);
   await projectStore.saveUseCase(useCasePayload);
