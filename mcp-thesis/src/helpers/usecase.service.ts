@@ -1,3 +1,4 @@
+import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import geminiFunctions from "./gemini.functions.js";
 
 export async function generateFlatUseCase({
@@ -112,5 +113,8 @@ ${description}
 
 
 `;
-  return geminiFunctions.generate({ prompt });
+  return geminiFunctions.generateStructured({
+    prompt,
+    schema: genUseCaseSchema,
+  });
 }
