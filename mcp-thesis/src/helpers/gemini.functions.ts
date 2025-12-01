@@ -35,7 +35,8 @@ class GeminiFunctions {
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
-        responseSchema: zodToJsonSchema(schema),
+        responseMimeType: "application/json",
+        responseJsonSchema: zodToJsonSchema(schema),
       },
     });
 
