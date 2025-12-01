@@ -1,5 +1,5 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import geminiFunctions from "./gemini.functions.js";
+import geminiFunctions from "../helpers/gemini.functions.js";
 
 export async function generateFlatUseCase({
   description,

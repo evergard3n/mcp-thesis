@@ -1,5 +1,6 @@
 // --- Score type --------------------------------------------------------------
 
+import z from "zod";
 import { GenStep, GenUseCase } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 
@@ -497,7 +498,7 @@ export function scoreUseCaseTerms(
  * @returns Validation result with errors, warnings, suggestions, and score
  */
 export function validateUseCaseWithFeedback(
-  useCaseInput: string | GenUseCase,
+  useCaseInput: z.infer<typeof genUseCaseSchema>,
   existingActors?: string[]
 ): UseCaseValidationResult {
   const errors: string[] = [];
@@ -507,63 +508,27 @@ export function validateUseCaseWithFeedback(
   // Parse JSON string if needed
   let useCase: GenUseCase;
 
-  if (typeof useCaseInput === "string") {
-    try {
-      const parsed = JSON.parse(useCaseInput);
+  // Direct object input - still validate with Zod
+  const result = genUseCaseSchema.safeParse(useCaseInput);
 
-      // Validate against Zod schema
-      const result = genUseCaseSchema.safeParse(parsed);
+  if (!result.success) {
+    const zodErrors = result.error.errors.map(
+      (err) =>
+        `Schema validation error at ${err.path.join(".")}: ${err.message}`
+    );
+    errors.push(...zodErrors);
 
-      if (!result.success) {
-        // Extract Zod validation errors
-        const zodErrors = result.error.errors.map(
-          (err) =>
-            `Schema validation error at ${err.path.join(".")}: ${err.message}`
-        );
-        errors.push(...zodErrors);
-
-        return {
-          valid: false,
-          errors,
-          warnings,
-          suggestions: [
-            "Please ensure the JSON follows the GenUseCase schema structure.",
-          ],
-        };
-      }
-
-      useCase = result.data as GenUseCase;
-    } catch (parseError) {
-      errors.push(
-        `CRITICAL: Failed to parse JSON input: ${
-          parseError instanceof Error ? parseError.message : String(parseError)
-        }`
-      );
-      return { valid: false, errors, warnings, suggestions };
-    }
-  } else {
-    // Direct object input - still validate with Zod
-    const result = genUseCaseSchema.safeParse(useCaseInput);
-
-    if (!result.success) {
-      const zodErrors = result.error.errors.map(
-        (err) =>
-          `Schema validation error at ${err.path.join(".")}: ${err.message}`
-      );
-      errors.push(...zodErrors);
-
-      return {
-        valid: false,
-        errors,
-        warnings,
-        suggestions: [
-          "Please ensure the object follows the GenUseCase schema structure.",
-        ],
-      };
-    }
-
-    useCase = result.data as GenUseCase;
+    return {
+      valid: false,
+      errors,
+      warnings,
+      suggestions: [
+        "Please ensure the object follows the GenUseCase schema structure.",
+      ],
+    };
   }
+
+  useCase = result.data as GenUseCase;
 
   // --- Critical validation checks ---
 

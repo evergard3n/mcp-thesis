@@ -38,7 +38,22 @@ class GeminiFunctions {
         responseSchema: zodToJsonSchema(schema),
       },
     });
-    return schema.parse(JSON.parse(response.text));
+
+    // Remove markdown code fences if present
+    let cleanedText = response.text.trim();
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText.slice(7); // Remove ```json
+    } else if (cleanedText.startsWith("```")) {
+      cleanedText = cleanedText.slice(3); // Remove ```
+    }
+    if (cleanedText.endsWith("```")) {
+      cleanedText = cleanedText.slice(0, -3); // Remove trailing ```
+    }
+    cleanedText = cleanedText.trim();
+
+    console.log({ logging: cleanedText });
+    console.log(schema.parse(JSON.parse(cleanedText)));
+    return schema.parse(JSON.parse(cleanedText));
   }
 }
 

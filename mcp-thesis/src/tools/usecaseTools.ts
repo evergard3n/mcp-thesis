@@ -4,7 +4,7 @@ import { JsonProjectStore } from "../stores/projectStore.js";
 import { useCaseSchema } from "../schemas/usecase.schema.js";
 import saveUseCase from "../helpers/saveUseCase.js";
 import { useCaseToUML } from "../helpers/helpers.js";
-import { generateFlatUseCase } from "../helpers/usecase.service.js";
+import { generateFlatUseCase } from "../services/usecase.service.js";
 import {
   scoreUseCaseTerms,
   validateUseCaseWithFeedback,
