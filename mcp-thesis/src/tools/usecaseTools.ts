@@ -40,6 +40,9 @@ export function registerUseCaseTools(
             "User's input about the use case. Just put the user's input here, do not add any other text or formatting."
           ),
       },
+      outputSchema: {
+        useCase: genUseCaseSchema.describe("Extracted use case"),
+      },
     },
     async ({ input }) => {
       const geminiResponse = await generateFlatUseCase({ description: input });
@@ -57,12 +60,12 @@ export function registerUseCaseTools(
             type: "text" as const,
             text: `
             <instructions>This is the extracted use case details in JSON string format. Please validate it using the validateUseCase tool. Only pass the JSON string to the validateUseCase tool, do not add any other text or formatting.</instructions>
-            <useCase>
-            ${JSON.stringify(geminiResponse)}
-            </useCase>
         `,
           },
         ],
+        structuredContent: {
+          useCase: geminiResponse,
+        },
       };
     }
   );
@@ -77,18 +80,14 @@ export function registerUseCaseTools(
         Call Gemini to generate further improvement questions if needed.
         `,
       inputSchema: {
-        extractedJsonString: z
-          .string()
-          .describe("Extracted use case details in JSON format"),
+        useCase: genUseCaseSchema.describe("Extracted use case"),
       },
       outputSchema: {
         feedback: z.array(z.string()).describe("Validation feedback"),
       },
     },
-    async ({ extractedJsonString }) => {
-      const resultValid = genUseCaseSchema.safeParse(
-        JSON.parse(extractedJsonString)
-      );
+    async ({ useCase }) => {
+      const resultValid = genUseCaseSchema.safeParse(useCase);
       if (!resultValid.success) {
         // todo: call gemini to ensure the extracted use case is in the correct format
         return {

@@ -12,181 +12,115 @@ import "dotenv/config";
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { JsonProjectStore } from "./stores/projectStore.js";
-import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { registerUseCaseTools } from "./tools/usecaseTools.js";
+import express from "express";
+import { JsonProjectStore } from "./stores/projectStore.js";
 import { registerProjectTools } from "./tools/projectTools.js";
-
-const server = new McpServer({
-  name: "mcp-thesis",
-  version: "1.0.0",
-  icons: [{ src: "icon.png" }],
-  title: "MCP Thesis",
-  websiteUrl: "https://github.com/yourusername/mcp-thesis",
-});
-
-const projectStore = new JsonProjectStore();
-
-// Register project-related tools
-registerProjectTools(server, projectStore);
-
-// Register usecase-related tools
-registerUseCaseTools(server, projectStore);
-
-// rebuild the project store, now with new possible way to find actions related to one actor.
-
-// server.tool(
-//   "saveUseCaseWithEntities",
-//   "Save a use case with extracted entities to the project",
-//   {
-//     useCaseId: z.string().describe("Unique ID for the use case"),
-//     title: z.string().describe("Use case title"),
-//     description: z.string().describe("Use case description"),
-//     actors: z
-//       .array(z.string())
-//       .describe("List of actors (users, external systems)"),
-//     systems: z.array(z.string()).describe("List of system components"),
-//     classes: z.array(z.string()).describe("List of potential domain classes"),
-//   },
-//   async ({ useCaseId, title, description, actors, systems, classes }) => {
-//     if (!projectStore.getProjectRoot()) {
-//       return {
-//         content: [{ type: "text" as const, text: "❌ No project loaded" }],
-//         isError: true,
-//       };
-//     }
-
-//     try {
-//       // Convert actors to Actor objects
-//       const actorObjects = actors.map((actor) => ({
-//         actor_id: actor.toLowerCase().replace(/\s+/g, "_"),
-//         name: actor,
-//         description: actor,
-//       }));
-
-//       // Save use case with empty actions - will be populated by actionsRefining tool
-//       // mainActor will default to first actor, actions will default to []
-//       await projectStore.saveUseCase(
-//         useCaseId,
-//         title,
-//         description,
-//         actorObjects
-//       );
-
-//       return {
-//         content: [
-//           {
-//             type: "text" as const,
-//             text: `✅ Use case saved: **${title}**
-
-// **File:** use-cases/${useCaseId}.md
-
-// **Extracted entities:**
-// - Actors (${actors.length}): ${actors.join(", ")}
-// - Systems (${systems.length}): ${systems.join(", ")}
-// - Classes (${classes.length}): ${classes.join(", ")}
-
-// All entities have been added to the project's entity lists in the entities/ folder.`,
-//           },
-//         ],
-//       };
-//     } catch (error) {
-//       return {
-//         content: [
-//           {
-//             type: "text" as const,
-//             text: `Error: ${
-//               error instanceof Error ? error.message : String(error)
-//             }`,
-//           },
-//         ],
-//         isError: true,
-//       };
-//     }
-//   }
-// );
-
-// server.tool(
-//   "allUseCasesToPlantUML",
-//   "Convert all stored use cases to PlantUML format",
-//   {},
-//   async () => {
-//     const useCases = projectStore.getAllUseCases();
-//     if (!useCases || useCases.length === 0) {
-//       return {
-//         content: [
-//           {
-//             type: "text" as const,
-//             text: "No use cases found to convert.",
-//           },
-//         ],
-//       };
-//     }
-//     const useCasesContent = useCases.reduce(
-//       (prev: string, curr) =>
-//         prev +
-//         `## ${curr.useCase_id}: ${curr.title}\n\n${
-//           curr.description
-//         }\n\n**Actors:** ${curr.actors
-//           .map((a) => a.description)
-//           .join(", ")}\n\n`,
-//       ""
-//     );
-//     return {
-//       content: [
-//         {
-//           type: "text" as const,
-//           text: `I have all these use cases joined into a single file. Please convert these use cases to PlantUML format:
-
-// ${useCasesContent}
-
-// Requirements:
-// - Use @startuml and @enduml tags
-// - Identify all actors
-// - If reference use cases inside a rectangle, those use cases need to be declared inside the rectangle block — not outside and then referenced later.
-//   Otherwise, PlantUML can’t find them in scope.
-// - Show relationships with proper syntax
-// - Output only the PlantUML code`,
-//         },
-//       ],
-//     };
-//   }
-// );
+import { registerUseCaseTools } from "./tools/usecaseTools.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { randomUUID } from "crypto";
 
 /**
- * Start the server using stdio transport.
- * This allows the server to communicate via standard input/output streams.
+ * Session-scoped MCP Server wrapper
+ * Each session gets its own server instance with isolated project store
  */
+class SessionServer {
+  private mcpServer: McpServer;
+  private projectStore: JsonProjectStore;
+  public readonly sessionId: string;
 
-// - Output only the PlantUML code`,
-//         },
-//       ],
-//     };
-//   }
-// );
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
+    this.mcpServer = new McpServer({
+      name: "mcp-thesis",
+      version: "1.0.0",
+      icons: [{ src: "icon.png" }],
+      title: "MCP Thesis",
+      websiteUrl: "https://github.com/yourusername/mcp-thesis",
+    });
+    // Create session-scoped project store
+    this.projectStore = new JsonProjectStore(sessionId);
+    // Register tools with session-specific store
+    registerProjectTools(this.mcpServer, this.projectStore);
+    registerUseCaseTools(this.mcpServer, this.projectStore);
+  }
 
-/**
- * Start the server using stdio transport.
- * This allows the server to communicate via standard input/output streams.
- */
+  async connect(transport: StreamableHTTPServerTransport): Promise<void> {
+    await this.mcpServer.connect(transport);
+  }
+}
+
+// Store active sessions: sessionId -> SessionServer instance
+const sessions: {
+  [sessionId: string]: {
+    server: SessionServer;
+    transport: StreamableHTTPServerTransport;
+  };
+} = {};
+
 const app = express();
 app.use(express.json());
 
 app.post("/mcp", async (req, res) => {
-  // Create a new transport for each request to prevent request ID collisions
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
+  // Check for existing session ID
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
-  res.on("close", () => {
-    transport.close();
-  });
+  if (sessionId && sessions[sessionId]) {
+    // Existing session - reuse server and transport
+    const session = sessions[sessionId];
+    await session.transport.handleRequest(req, res, req.body);
+  } else if (!sessionId && isInitializeRequest(req.body)) {
+    // New initialization request - create new session
+    // Generate sessionId upfront so we can create the server immediately
+    const newSessionId = randomUUID();
 
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+    // Create session-scoped server instance
+    const server = new SessionServer(newSessionId);
+
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => newSessionId,
+      onsessioninitialized: async (sessionId) => {
+        // Store session data (server already created and connected)
+        sessions[sessionId] = {
+          server,
+          transport,
+        };
+      },
+      // enableDnsRebindingProtection: true,
+      // allowedHosts: ["*"],
+      // allowedOrigins: ["*"],
+    });
+
+    // Connect server to transport BEFORE handling requests
+    await server.connect(transport);
+
+    // Clean up session when transport closes
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        delete sessions[transport.sessionId];
+      }
+    };
+
+    // Handle initialization request
+    await transport.handleRequest(req, res, req.body);
+  } else {
+    res.status(400).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Bad Request" },
+      id: null,
+    });
+    return;
+  }
+});
+
+// Handle GET requests for server-to-client notifications via SSE
+app.get("/mcp", async (req, res) => {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+  if (!sessionId || !sessions[sessionId]) {
+    res.status(400).send("Invalid or missing session ID");
+    return;
+  }
+  await sessions[sessionId].transport.handleRequest(req, res);
 });
 
 const port = parseInt(process.env.PORT || "3006");
@@ -198,3 +132,19 @@ app
     console.error("Server error:", error);
     process.exit(1);
   });
+
+// export default {
+//   fetch(request: Request, env: Env, ctx: ExecutionContext) {
+//     const url = new URL(request.url);
+
+//     if (url.pathname === "/sse" || url.pathname === "/sse/message") {
+//       return server.serveSSE("/sse").fetch(request, env, ctx);
+//     }
+
+//     if (url.pathname === "/mcp") {
+//       return MyMCP.serve("/mcp").fetch(request, env, ctx);
+//     }
+
+//     return new Response("Not found", { status: 404 });
+//   },
+// };
