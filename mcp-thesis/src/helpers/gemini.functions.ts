@@ -20,7 +20,7 @@ class GeminiFunctions {
       model: "gemini-2.5-flash",
       contents: prompt,
     });
-    console.log(response.text);
+    console.log(response.text + "\n");
     return response.text;
   }
 
@@ -52,8 +52,6 @@ class GeminiFunctions {
     }
     cleanedText = cleanedText.trim();
 
-    console.log({ logging: cleanedText });
-    console.log(schema.parse(JSON.parse(cleanedText)));
     return schema.parse(JSON.parse(cleanedText));
   }
 }

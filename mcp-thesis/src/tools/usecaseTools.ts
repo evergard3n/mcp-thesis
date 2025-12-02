@@ -5,13 +5,19 @@ import { useCaseSchema } from "../schemas/usecase.schema.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import saveUseCase from "../helpers/saveUseCase.js";
 import { useCaseToUML } from "../helpers/helpers.js";
-import { generateFlatUseCase } from "../services/usecase.service.js";
+import {
+  generateFlatUseCase,
+  improveUseCase,
+} from "../services/usecase.service.js";
 import {
   formatValidationForLLM,
   scoreUseCaseTerms,
   validateUseCaseWithFeedback,
 } from "../validators/flat.validator.js";
-import { generateLLMQuestions } from "../validators/llm.validator.js";
+import {
+  answerLLMQuestions,
+  generateLLMQuestions,
+} from "../validators/llm.validator.js";
 
 /**
  * Register all usecase-related tools to the MCP server
@@ -75,6 +81,9 @@ export function registerUseCaseTools(
           .string()
           .describe("Extracted use case details in JSON format"),
       },
+      outputSchema: {
+        feedback: z.array(z.string()).describe("Validation feedback"),
+      },
     },
     async ({ extractedJsonString }) => {
       const resultValid = genUseCaseSchema.safeParse(
@@ -86,7 +95,9 @@ export function registerUseCaseTools(
           content: [
             { type: "text" as const, text: "❌ Invalid use case format" },
           ],
-          isError: true,
+          structuredContent: {
+            feedback: ["Invalid use case format"],
+          },
         };
       }
       const extractedUseCase = resultValid.data;
@@ -96,14 +107,87 @@ export function registerUseCaseTools(
           projectStore: projectStore,
         }
       );
+      const formattedValidationFeedback =
+        formatValidationForLLM(validationResult);
+      const questions = await generateLLMQuestions(
+        extractedUseCase,
+        formattedValidationFeedback
+      );
       if (
         validationResult.score?.overall &&
-        validationResult.score.overall < 80
+        validationResult.score.overall < 70
+      ) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `This use case can be improved with 'improveUseCase' tool. Please call the tool to improve the use case. This tool takes the base use case and the improvement questions as input. Current score: ${
+                validationResult.score?.overall ?? 0
+              }/100`,
+            },
+          ],
+          structuredContent: {
+            feedback: questions,
+          },
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(extractedUseCase, null, 2),
+          },
+        ],
+        structuredContent: {
+          feedback: formattedValidationFeedback
+            ? [formattedValidationFeedback]
+            : ["Use case is valid"],
+        },
+      };
+    }
+  );
+
+  server.registerTool(
+    "improveUseCase",
+    {
+      title: "Improve Use Case",
+      description: `Improve the use case based on the validation feedback and the improvement questions.
+        `,
+      inputSchema: {
+        baseUseCase: genUseCaseSchema.describe("Base use case to improve"),
+        improvementQuestions: z
+          .array(z.string())
+          .describe("Improvement questions to improve the use case"),
+      },
+      outputSchema: {
+        newUseCase: genUseCaseSchema.describe("Improved use case"),
+        newScore: z.number().describe("Score of the improved use case"),
+      },
+    },
+    async ({ baseUseCase, improvementQuestions }) => {
+      const answers = await answerLLMQuestions({
+        baseUseCase: baseUseCase,
+        questions: improvementQuestions,
+      });
+      const improvedUseCase = await improveUseCase({
+        baseUseCase: baseUseCase,
+        answers: answers,
+      });
+      const validationResult = await validateUseCaseWithFeedback(
+        improvedUseCase,
+        {
+          projectStore: projectStore,
+        }
+      );
+      if (
+        validationResult.score?.overall &&
+        validationResult.score.overall < 70
       ) {
         const formattedValidationFeedback =
           formatValidationForLLM(validationResult);
         const questions = await generateLLMQuestions(
-          extractedUseCase,
+          improvedUseCase,
           formattedValidationFeedback
         );
         return {
@@ -113,6 +197,10 @@ export function registerUseCaseTools(
               text: questions.map((question) => `- ${question}`).join("\n"),
             },
           ],
+          structuredContent: {
+            newUseCase: improvedUseCase,
+            newScore: validationResult.score?.overall ?? 0,
+          },
         };
       }
 
@@ -123,6 +211,10 @@ export function registerUseCaseTools(
             text: JSON.stringify(validationResult, null, 2),
           },
         ],
+        structuredContent: {
+          newUseCase: improvedUseCase,
+          newScore: validationResult.score?.overall ?? 0,
+        },
       };
     }
   );

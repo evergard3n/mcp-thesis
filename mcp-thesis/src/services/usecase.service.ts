@@ -120,36 +120,6 @@ ${description}
   });
 }
 
-export async function answerLLMQuestions({
-  baseUseCase,
-  questions,
-}: {
-  baseUseCase: GenUseCase;
-  questions: string[];
-}) {
-  const answers: string[] = [];
-  for (const question of questions) {
-    const llmAnswer = await geminiFunctions.generate({
-      prompt: `
-      <instructions>
-      You are a member in a team of software analysts. Your teammates have created a draft version of an use case, base on the user query.
-      Another member of yours has validated the use case, and asked you a question to improve the use case.
-      Your task is to answer the questions, and provide some instructions related to your teammates to improve the use case.
-      You do not have to explain your reasons, just provide concise answers and instructions.
-      </instructions>
-      <question>
-      ${question}
-      </question>
-      <draftUseCase>
-      ${JSON.stringify(baseUseCase)}
-      </draftUseCase>
-    `,
-    });
-    answers.push(llmAnswer);
-  }
-  return answers;
-}
-
 export async function improveUseCase({
   baseUseCase,
   answers,

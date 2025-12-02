@@ -1,7 +1,6 @@
 import z from "zod";
 import geminiFunctions from "../helpers/gemini.functions.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import zodToJsonSchema from "zod-to-json-schema";
 
 export const COVE_LLM_QUESTIONS: string[] = [
   "Is the use-case name meaningful and unambiguous?",
@@ -62,5 +61,33 @@ export const generateLLMQuestions = async (
     schema: questionsSchema,
   });
 };
-
-``;
+export async function answerLLMQuestions({
+  baseUseCase,
+  questions,
+}: {
+  baseUseCase: GenUseCase;
+  questions: string[];
+}) {
+  const answers: string[] = [];
+  for (const question of questions) {
+    const llmAnswer = await geminiFunctions.generate({
+      prompt: `
+      <instructions>
+      You are a member in a team of software analysts. Your teammates have created a draft version of an use case, base on the user query.
+      Another member of yours has validated the use case, and asked you a question to improve the use case.
+      Your task is to answer the questions, and provide some instructions related to your teammates to improve the use case.
+      You do not have to explain your reasons, just provide concise answers and instructions.
+      </instructions>
+      <question>
+      ${question}
+      </question>
+      <draftUseCase>
+      ${JSON.stringify(baseUseCase)}
+      </draftUseCase>
+    `,
+    });
+    console.log(new Date().toISOString() + ": " + llmAnswer + "\n");
+    answers.push(llmAnswer);
+  }
+  return answers;
+}
