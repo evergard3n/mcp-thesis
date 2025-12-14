@@ -18,13 +18,14 @@ import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { registerUseCaseTools } from "./tools/usecaseTools.js";
 import { registerProjectTools } from "./tools/projectTools.js";
+import { registerFrslTool } from "./tools/genFRSLTool.js";
 
 const server = new McpServer({
   name: "mcp-thesis",
   version: "1.0.0",
   icons: [{ src: "icon.png" }],
   title: "MCP Thesis",
-  websiteUrl: "https://github.com/yourusername/mcp-thesis",
+  websiteUrl: "https://github.com/evergard3n/mcp-thesis",
 });
 
 const projectStore = new JsonProjectStore();
@@ -34,6 +35,9 @@ registerProjectTools(server, projectStore);
 
 // Register usecase-related tools
 registerUseCaseTools(server, projectStore);
+
+// Register FRSL tool
+registerFrslTool(server, projectStore);
 
 // rebuild the project store, now with new possible way to find actions related to one actor.
 

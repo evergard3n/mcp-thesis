@@ -1,5 +1,52 @@
 import { z } from "zod";
 
+export interface Actor {
+  actor_id: string;
+  name: string;
+  description: string;
+}
+
+export interface GenStep {
+  index: number;
+  actor: string;
+  target?: string;
+  description: string;
+}
+
+// new models for generation
+export interface GenFlow {
+  kind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
+  parentFlow?: "MAIN" | string; // if you use the flow idea
+  fromStepIndex?: number;
+  condition?: string;
+  steps: GenStep[];
+}
+
+export interface GenLoop {
+  // Which flow this loop belongs to
+  flowRef: "MAIN" | string; // or an index into your flows array
+
+  // Steps inside that flow that repeat
+  startIndex: number; // first step in the loop
+  endIndex: number; // last step in the loop
+
+  // Why they repeat
+  condition: string; // "for each item in the cart", "while user keeps adding passengers"
+}
+
+export interface GenUseCase {
+  name: string;
+  summary: string;
+  mainActor: string;
+  actors: string[];
+
+  preconditions?: string[];
+  postconditions?: string[];
+
+  flows: GenFlow[];
+  loops?: GenLoop[];
+}
+
 /**
  * Zod schema for GenStep - individual step in a use case flow
  */

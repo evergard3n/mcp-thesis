@@ -1,0 +1,53 @@
+# Docker Compose với Cloudflare Tunnel (không cần token)
+version: "3.8"
+
+services:
+  # MCP Thesis Server
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-thesis-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NODE_ENV=production
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - mcp-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3000/mcp', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Cloudflare Tunnel - Quick tunnels mode (no token needed)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mcp-cloudflare-tunnel
+    restart: unless-stopped
+    command: tunnel --url http://mcp-server:3000
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    networks:
+      - mcp-network
+    # Note: The tunnel URL will be printed in logs
+    # Run: docker-compose logs cloudflared
+
+networks:
+  mcp-network:
+    driver: bridge
