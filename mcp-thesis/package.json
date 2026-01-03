@@ -20,8 +20,10 @@
   "dependencies": {
     "@google/genai": "^1.30.0",
     "@modelcontextprotocol/sdk": "^1.19.1",
+    "@openrouter/sdk": "^0.2.11",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "firebase": "12.6.0",
     "lodash": "^4.17.21",
     "zod": "3",
     "zod-to-json-schema": "^3.25.0"

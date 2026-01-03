@@ -1,11 +1,13 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import geminiFunctions from "../helpers/gemini.functions.js";
+import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.functions.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
 
 export async function generateFlatUseCase({
   description,
+  geminiFunctions,
 }: {
   description: string;
+  geminiFunctions: GeminiOpenRouterFunctions;
 }) {
   const prompt = `<instruction>You are a part of a team of professional software analysts. Your task is to read a natural-language description of a use case and figure out steps, actors and flows involved, and present them in a JSON object.
   The <description> section contains the use case description in natural language. The description maybe ambiguous or incomplete; do your best to figure out reasonable missing steps, possible flows and actors involved.
@@ -121,20 +123,28 @@ ${description}
 }
 
 export async function improveUseCase({
+  originalDescription,
   baseUseCase,
   answers,
+  geminiFunctions,
 }: {
+  originalDescription: string;
   baseUseCase: GenUseCase;
   answers: string[];
+  geminiFunctions: GeminiOpenRouterFunctions;
 }) {
   const prompt = `
   <instructions>
-  You are a member in a team of software analysts. Your teammates have created a draft version of an use case, base on the user query.
+  You are a member in a team of software analysts. Your teammates have created a draft version of an use case, based on the original user description.
   Another member of yours has validated the use case, and gave you some instructions to improve the use case.
-  Your task is to read the draft use case, the instructions to improve the use case, then create a new version based on these instructions.
+  Your task is to read the original user description, the draft use case, and the instructions to improve the use case, then create a new version based on these instructions.
   You must return in the JSON schema defined in <schema> below.
   Follow the rules in <rules> carefully to ensure the output is valid and complete.
+  IMPORTANT: Make sure the improved use case stays faithful to the original user requirements and description.
   </instructions>
+  <originalDescription>
+  ${originalDescription}
+  </originalDescription>
   <schema>
 
 GenUseCase:
@@ -163,7 +173,7 @@ GenFlow:
 //   - parentFlow must be "MAIN" (for now).
 //   - fromStepIndex is the step index in the MAIN flow where this branch starts.
 //
-// Example: fromStepIndex = 5 means “this flow branches from step 5 of MAIN”.
+// Example: fromStepIndex = 5 means "this flow branches from step 5 of MAIN".
 "parentFlow"?: "MAIN",
 "fromStepIndex"?: number,
 
@@ -242,4 +252,56 @@ Rules:
     schema: genUseCaseSchema,
   });
   return improvedUseCase;
+}
+
+export async function refineWithConstrainedAnswers(
+  originalDescription: string,
+  baseUseCase: GenUseCase,
+  questions: Array<{ id: string; question: string; options: string[] }>,
+  answers: Array<{
+    questionId: string;
+    selectedOption: string;
+    reasoning?: string;
+  }>,
+  geminiFunctions: GeminiOpenRouterFunctions
+): Promise<GenUseCase> {
+  const qaContext = questions
+    .map((q) => {
+      const answer = answers.find((a) => a.questionId === q.id);
+      return `Q: ${q.question}\nA: ${answer?.selectedOption}\nReason: ${
+        answer?.reasoning || "Not provided"
+      }`;
+    })
+    .join("\n\n");
+
+  const prompt = `
+<task>
+Refine the use case incorporating ONLY the clarifications provided.
+DO NOT add anything beyond what was asked and answered.
+</task>
+
+<original_description>
+${originalDescription}
+</original_description>
+
+<base_use_case>
+${JSON.stringify(baseUseCase, null, 2)}
+</base_use_case>
+
+<clarifications>
+${qaContext}
+</clarifications>
+
+<constraints>
+1. ONLY modify based on the Q&A pairs
+2. Do NOT elaborate beyond selected options
+3. Do NOT invent additional scenarios
+4. Keep unchanged elements as-is
+</constraints>
+  `;
+
+  return geminiFunctions.generateStructured({
+    prompt,
+    schema: genUseCaseSchema,
+  });
 }

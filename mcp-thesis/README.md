@@ -33,12 +33,56 @@ A Model Context Protocol (MCP) server for managing UML projects, specifically fo
 - `validateUseCase`: Validate and score the extracted use case; generates improvement questions if quality is low.
 - `useCaseToUML`: Convert a saved use case to PlantUML format.
 
+## API Authentication
+
+This MCP server uses **OpenRouter** with the **Gemini 2.0 Flash** model for all LLM operations. It requires:
+1. A Gemini API key (passed via HTTP header for per-session authentication)
+2. An OpenRouter API key (configured in environment variables for server-side operations)
+
+### Required Configuration
+
+#### 1. HTTP Header (Per-Session)
+
+All requests to the MCP server must include:
+
+```
+x-gemini-api-key: YOUR_GEMINI_API_KEY_HERE
+```
+
+The API key is validated during the initialization request. If the header is missing, the server will return a `400 Bad Request` error.
+
+#### 2. Environment Variable (Server-Side)
+
+The server requires an OpenRouter API key in the `.env` file:
+
+```bash
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+```
+
+If this is not configured, the server will return a `500 Server Configuration Error`.
+
+### Why OpenRouter?
+
+- **Unified API**: Access Gemini models through OpenRouter's standardized API
+- **Better Rate Limiting**: OpenRouter provides more robust rate limiting and queue management
+- **Cost Tracking**: Built-in usage tracking and cost monitoring
+- **Fallback Options**: Easy to switch between different models if needed
+
+### Security Notes
+
+- The Gemini API key is stored per session and is not logged or persisted to disk
+- Each session maintains its own isolated Gemini API client with the provided key
+- The OpenRouter API key is stored server-side and shared across all sessions
+- Never commit your API keys to version control
+- For production use, consider implementing additional security measures like rate limiting and API key rotation
+
 ## Development
 
 ### Prerequisites
 
 - Node.js
-- Gemini API Key (configured in environment)
+- Gemini API Key (passed via HTTP header)
+- OpenRouter API Key (configured in `.env` file)
 
 ### Setup
 
@@ -50,12 +94,18 @@ A Model Context Protocol (MCP) server for managing UML projects, specifically fo
    ```
 
 2. Configure Environment:
-   Ensure you have a `.env` file with your Gemini API key. You can follow the naming in env.example
-
-3. Build the server:
-
+   
+   Create a `.env` file from the example:
+   
    ```bash
-   npm run build
+   cp env.example .env
+   ```
+   
+   Then edit `.env` and add your OpenRouter API key:
+   
+   ```bash
+   OPENROUTER_API_KEY=your_openrouter_api_key_here
+   PORT=3006
    ```
 
 4. Run the server (starts on port 3006 by default):
@@ -84,11 +134,16 @@ This server uses the SSE (Server-Sent Events) transport.
 {
   "mcpServers": {
     "mcp-thesis": {
-      "url": "http://localhost:3006/mcp"
+      "url": "http://localhost:3006/mcp",
+      "headers": {
+        "x-gemini-api-key": "YOUR_GEMINI_API_KEY_HERE"
+      }
     }
   }
 }
 ```
+
+**Important**: Replace `YOUR_GEMINI_API_KEY_HERE` with your actual Gemini API key.
 
 ## Configuration (Visual Studio Code - Recommended)
 
@@ -96,10 +151,10 @@ This server uses the SSE (Server-Sent Events) transport.
 
 1. Ensure the server is running locally (e.g., `npm run dev` in a terminal).
 
-2. Run this command in your terminal
+2. Run this command in your terminal (replace `YOUR_GEMINI_API_KEY_HERE` with your actual API key):
 
 ```bash
-code --add-mcp "{\"name\":\"mcp-thesis\",\"type\":\"http\",\"url\":\"http://localhost:3006/mcp\"}"
+code --add-mcp "{\"name\":\"mcp-thesis\",\"type\":\"http\",\"url\":\"http://localhost:3006/mcp\",\"headers\":{\"x-gemini-api-key\":\"YOUR_GEMINI_API_KEY_HERE\"}}"
 ```
 
 Or, you can locate to mcp.json and add this:
@@ -108,11 +163,16 @@ Or, you can locate to mcp.json and add this:
 {
   "mcpServers": {
     "mcp-thesis": {
-      "url": "http://localhost:3006/mcp"
+      "url": "http://localhost:3006/mcp",
+      "headers": {
+        "x-gemini-api-key": "YOUR_GEMINI_API_KEY_HERE"
+      }
     }
   }
 }
 ```
+
+**Important**: Replace `YOUR_GEMINI_API_KEY_HERE` with your actual Gemini API key.
 
 ## Project Structure
 

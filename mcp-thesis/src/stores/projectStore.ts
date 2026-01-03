@@ -1,32 +1,43 @@
-import * as fs from "fs/promises";
-import * as os from "os";
-import * as path from "path";
-import { Store } from "../interfaces/store.interface.js";
+import { Store, Project } from "../interfaces/store.interface.js";
 import { Actor, Step, UseCase } from "../interfaces/usecase.interface.js";
+import firebaseService from "../services/firebase.service.js";
 
 // Legacy version - kept as backup for non-session-scoped usage
 export class JsonProjectStoreLegacy {
-  private storePath: string | null = null;
   private store: Store | null = null;
-  public logPath: string | null = null;
-  private readonly baseDir: string;
+  private readonly collectionName = "stores";
 
-  constructor() {
-    this.baseDir = path.join(os.homedir(), "Documents", "mcp-thesis-projects");
-  }
+  constructor() {}
 
-  // Initialize a new project store
-  async initProject(name: string, description: string): Promise<string> {
-    // Sanitize project name for filename
-    const sanitizedName = name
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
-    this.storePath = path.join(this.baseDir, `${sanitizedName}.json`);
-    this.logPath = path.join(this.baseDir, `${sanitizedName}.log`);
+  // Initialize a new store (one per session in legacy mode)
+  async initStore(): Promise<string> {
+    const storeId = this.generateId();
 
     const store: Store = {
-      id: this.generateId(),
+      id: storeId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      projects: {},
+      currentProjectId: null,
+    };
+
+    await this.writeStore(store);
+    this.store = store;
+
+    return storeId;
+  }
+
+  // Initialize a new project within the store
+  async initProject(name: string, description: string): Promise<string> {
+    if (!this.store) {
+      // Auto-initialize store if not exists
+      await this.initStore();
+    }
+
+    const projectId = this.generateId();
+
+    const project: Project = {
+      id: projectId,
       name,
       description,
       createdAt: new Date().toISOString(),
@@ -35,107 +46,86 @@ export class JsonProjectStoreLegacy {
       useCases: [],
     };
 
-    await fs.mkdir(this.baseDir, { recursive: true });
-    await this.writeStore(store);
-    this.store = store;
+    this.store!.projects[projectId] = project;
+    this.store!.currentProjectId = projectId;
+    this.store!.updatedAt = new Date().toISOString();
 
-    return this.storePath;
+    await this.writeStore(this.store!);
+
+    return projectId;
   }
 
-  // Load existing project store by path
-  async loadProject(projectPath: string): Promise<boolean> {
+  // Load existing store by ID
+  async loadStore(storeId: string): Promise<boolean> {
     try {
-      const content = await fs.readFile(projectPath, "utf-8");
-      this.store = JSON.parse(content) as Store;
-      this.storePath = projectPath;
-      // Set log path based on the store path
-      this.logPath = projectPath.replace(/\.json$/, ".log");
-      return true;
+      const doc = await firebaseService.getDocument(
+        this.collectionName,
+        storeId,
+      );
+      if (doc) {
+        this.store = doc as Store;
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
   }
 
-  // Load project by name
-  async loadProjectByName(name: string): Promise<boolean> {
-    const projectPath = await this.findProjectByName(name);
-    if (projectPath) {
-      return await this.loadProject(projectPath);
+  // Switch to a specific project
+  async switchToProject(projectId: string): Promise<boolean> {
+    if (!this.store) {
+      throw new Error("Store not initialized. Call initStore first.");
     }
+
+    if (this.store.projects[projectId]) {
+      this.store.currentProjectId = projectId;
+      this.store.updatedAt = new Date().toISOString();
+      await this.writeStore(this.store);
+      return true;
+    }
+
     return false;
   }
 
-  // Find project by name (utility function)
-  async findProjectByName(name: string): Promise<string | null> {
-    try {
-      await fs.access(this.baseDir);
-      const files = await fs.readdir(this.baseDir);
-
-      for (const file of files) {
-        if (file.endsWith(".json")) {
-          const filePath = path.join(this.baseDir, file);
-          try {
-            const content = await fs.readFile(filePath, "utf-8");
-            const store = JSON.parse(content) as Store;
-
-            // Match by exact name (case-insensitive)
-            if (store.name.toLowerCase() === name.toLowerCase()) {
-              return filePath;
-            }
-          } catch {
-            // Skip invalid JSON files
-            continue;
-          }
-        }
-      }
-      return null;
-    } catch {
-      return null;
+  // Load project by name
+  async loadProjectByName(name: string): Promise<boolean> {
+    if (!this.store) {
+      throw new Error("Store not initialized. Call initStore first.");
     }
+
+    const project = Object.values(this.store.projects).find(
+      (p) => p.name.toLowerCase() === name.toLowerCase(),
+    );
+
+    if (project) {
+      return await this.switchToProject(project.id);
+    }
+
+    return false;
   }
 
-  // List all projects in the directory
+  // List all projects in the store
   async listAllProjects(): Promise<
     Array<{
       name: string;
-      path: string;
+      id: string;
       createdAt: string;
       description: string;
     }>
   > {
-    try {
-      await fs.access(this.baseDir);
-      const files = await fs.readdir(this.baseDir);
-      const projects: Array<{
-        name: string;
-        path: string;
-        createdAt: string;
-        description: string;
-      }> = [];
-
-      for (const file of files) {
-        if (file.endsWith(".json")) {
-          const filePath = path.join(this.baseDir, file);
-          try {
-            const content = await fs.readFile(filePath, "utf-8");
-            const store = JSON.parse(content) as Store;
-            projects.push({
-              name: store.name,
-              path: filePath,
-              createdAt: store.createdAt,
-              description: store.description,
-            });
-          } catch {
-            // Skip invalid JSON files
-            continue;
-          }
-        }
-      }
-
-      return projects.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    } catch {
+    if (!this.store) {
       return [];
     }
+
+    const projects = Object.values(this.store.projects).map((p) => ({
+      name: p.name,
+      id: p.id,
+      createdAt: p.createdAt,
+      description: p.description,
+    }));
+
+    return projects.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   // Get store data
@@ -143,46 +133,65 @@ export class JsonProjectStoreLegacy {
     return this.store;
   }
 
-  // Get project root path
-  getProjectRoot(): string | null {
-    return this.storePath ? path.dirname(this.storePath) : null;
+  // Get current project
+  getCurrentProject(): Project | null {
+    if (!this.store || !this.store.currentProjectId) {
+      return null;
+    }
+    return this.store.projects[this.store.currentProjectId] || null;
   }
 
-  // Add an actor to the project
+  // Get store ID
+  getStoreId(): string | null {
+    return this.store?.id || null;
+  }
+
+  // Get current project ID
+  getProjectId(): string | null {
+    return this.store?.currentProjectId || null;
+  }
+
+  // Add an actor to the current project
   async addActor(newActors: Actor[]): Promise<void> {
-    if (!this.store) {
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
-    const actors = await this.getAllActors();
+
+    const actors = project.actors;
     for (const actor of newActors) {
       if (!actors.some((a) => a.actor_id === actor.actor_id)) {
-        this.store.actors.push(actor);
+        project.actors.push(actor);
       }
     }
-    this.store.updatedAt = new Date().toISOString();
-    await this.writeStore(this.store);
+
+    project.updatedAt = new Date().toISOString();
+    this.store!.updatedAt = new Date().toISOString();
+    await this.writeStore(this.store!);
   }
 
   // Get an actor by id
   async getActor(actorId: string): Promise<Actor | null> {
-    if (!this.store) {
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
-    return this.store.actors.find((a) => a.actor_id === actorId) || null;
+    return project.actors.find((a) => a.actor_id === actorId) || null;
   }
 
   // Get all actors
   async getAllActors(): Promise<Actor[]> {
-    if (!this.store) {
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
-    return this.store.actors;
+    return project.actors;
   }
 
   // Add or update a use case
@@ -201,13 +210,14 @@ export class JsonProjectStoreLegacy {
     actorIds: string[];
     steps: Step[];
   }): Promise<void> {
-    if (!this.store) {
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
 
-    const existingIndex = this.store.useCases.findIndex((uc) => uc.id === id);
+    const existingIndex = project.useCases.findIndex((uc) => uc.id === id);
 
     // If mainActor not provided, use first actor or create a default one
     const actualMainActorId = mainActorId || actorIds[0] || "undefined";
@@ -222,24 +232,27 @@ export class JsonProjectStoreLegacy {
     };
 
     if (existingIndex >= 0) {
-      this.store.useCases[existingIndex] = useCase;
+      project.useCases[existingIndex] = useCase;
     } else {
-      this.store.useCases.push(useCase);
+      project.useCases.push(useCase);
     }
 
-    this.store.updatedAt = new Date().toISOString();
-    await this.writeStore(this.store);
+    project.updatedAt = new Date().toISOString();
+    this.store!.updatedAt = new Date().toISOString();
+    await this.writeStore(this.store!);
   }
 
   // Get a specific use case
   getUseCase(useCaseId: string): UseCase | null {
-    if (!this.store) return null;
-    return this.store.useCases.find((uc) => uc.id === useCaseId) || null;
+    const project = this.getCurrentProject();
+    if (!project) return null;
+    return project.useCases.find((uc) => uc.id === useCaseId) || null;
   }
 
   // Get all use cases
   getAllUseCases(): UseCase[] {
-    return this.store?.useCases || [];
+    const project = this.getCurrentProject();
+    return project?.useCases || [];
   }
 
   // Get all steps for a specific use case
@@ -250,14 +263,36 @@ export class JsonProjectStoreLegacy {
 
   // Delete a use case
   async deleteUseCase(useCaseId: string): Promise<boolean> {
+    const project = this.getCurrentProject();
+    if (!project) return false;
+
+    const initialLength = project.useCases.length;
+    project.useCases = project.useCases.filter((uc) => uc.id !== useCaseId);
+
+    if (project.useCases.length !== initialLength) {
+      project.updatedAt = new Date().toISOString();
+      this.store!.updatedAt = new Date().toISOString();
+      await this.writeStore(this.store!);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Delete a project
+  async deleteProject(projectId: string): Promise<boolean> {
     if (!this.store) return false;
 
-    const initialLength = this.store.useCases.length;
-    this.store.useCases = this.store.useCases.filter(
-      (uc) => uc.id !== useCaseId
-    );
+    if (this.store.projects[projectId]) {
+      delete this.store.projects[projectId];
 
-    if (this.store.useCases.length !== initialLength) {
+      // If deleting current project, switch to another or null
+      if (this.store.currentProjectId === projectId) {
+        const remainingProjects = Object.keys(this.store.projects);
+        this.store.currentProjectId =
+          remainingProjects.length > 0 ? remainingProjects[0] : null;
+      }
+
       this.store.updatedAt = new Date().toISOString();
       await this.writeStore(this.store);
       return true;
@@ -268,83 +303,95 @@ export class JsonProjectStoreLegacy {
 
   // Get project summary
   async getProjectSummary() {
-    if (!this.store) return null;
+    const project = this.getCurrentProject();
+    if (!project) return null;
 
-    const uniqueActors = await this.getAllActors();
+    const uniqueActors = project.actors;
 
     return {
-      id: this.store.id,
-      name: this.store.name,
-      description: this.store.description,
-      createdAt: this.store.createdAt,
-      updatedAt: this.store.updatedAt,
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
       stats: {
-        totalUseCases: this.store.useCases.length,
+        totalUseCases: project.useCases.length,
         totalActors: uniqueActors.length,
-        totalSteps: this.store.useCases.reduce(
+        totalSteps: project.useCases.reduce(
           (sum, uc) => sum + uc.steps.length,
-          0
+          0,
         ),
       },
-      path: this.storePath,
     };
   }
+
   async log(message: string): Promise<void> {
-    if (!this.logPath) {
-      throw new Error("Log path not set");
+    if (!this.store) {
+      throw new Error("Store not initialized");
     }
-    await fs.appendFile(
-      this.logPath,
-      `[${new Date().toISOString()}] ${message}\n`,
-      "utf-8"
-    );
+    await firebaseService.addLog("legacy", this.store.id, message);
   }
 
   // Private helper methods
   private async writeStore(store: Store): Promise<void> {
-    if (!this.storePath || !this.logPath) {
-      throw new Error("Store path not set. Call initProject first.");
+    if (!store.id) {
+      throw new Error("Store ID not set. Call initStore first.");
     }
     await this.log(`writing store: ${JSON.stringify(store)}`);
-    await fs.writeFile(this.storePath, JSON.stringify(store, null, 2), "utf-8");
+    await firebaseService.setDocument(this.collectionName, store.id, store);
   }
 
   private generateId(): string {
-    return `store_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
 
 // New session-scoped version
 export class JsonProjectStore {
-  private storePath: string | null = null;
   private store: Store | null = null;
-  public logPath: string | null = null;
-  private readonly baseDir: string;
+  private readonly collectionName = "stores";
   private readonly sessionId: string;
+  private loadPromise: Promise<boolean> | null = null;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
-    // Each session gets its own directory
-    this.baseDir = path.join(
-      os.homedir(),
-      "Documents",
-      "mcp-thesis-projects",
-      sessionId
-    );
+    // Start loading asynchronously but don't block constructor
+    this.loadPromise = this.loadStore(this.sessionId);
   }
 
-  // Initialize a new project store
-  async initProject(name: string, description: string): Promise<string> {
-    // Sanitize project name for filename
-    const sanitizedName = name
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
-    this.storePath = path.join(this.baseDir, `${sanitizedName}.json`);
-    this.logPath = path.join(this.baseDir, `${sanitizedName}.log`);
+  // Ensure store is loaded from Firestore or initialized
+  private async ensureStore(): Promise<void> {
+    if (this.store) {
+      return; // Already initialized
+    }
 
-    const store: Store = {
-      id: this.generateId(),
+    // Wait for initial load attempt
+    if (this.loadPromise) {
+      await this.loadPromise;
+      this.loadPromise = null;
+    }
+
+    // If still no store, create empty one (will be saved on first write)
+    if (!this.store) {
+      this.store = {
+        id: this.sessionId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        projects: {},
+        currentProjectId: null,
+      };
+      console.log("Store initialized in memory for session:", this.sessionId);
+    }
+  }
+
+  // Initialize a new project within the store
+  async initProject(name: string, description: string): Promise<string> {
+    await this.ensureStore();
+
+    const projectId = this.generateId();
+
+    const project: Project = {
+      id: projectId,
       name,
       description,
       createdAt: new Date().toISOString(),
@@ -353,107 +400,82 @@ export class JsonProjectStore {
       useCases: [],
     };
 
-    await fs.mkdir(this.baseDir, { recursive: true });
-    await this.writeStore(store);
-    this.store = store;
+    this.store!.projects[projectId] = project;
+    this.store!.currentProjectId = projectId;
+    this.store!.updatedAt = new Date().toISOString();
 
-    return this.storePath;
+    console.log("init project", { project, store: this.store });
+    // First write - this will create the store in Firestore
+    await this.writeStore(this.store!);
+
+    return projectId;
   }
 
-  // Load existing project store by path
-  async loadProject(projectPath: string): Promise<boolean> {
+  // Load existing store by sessionId
+  async loadStore(sessionId: string): Promise<boolean> {
     try {
-      const content = await fs.readFile(projectPath, "utf-8");
-      this.store = JSON.parse(content) as Store;
-      this.storePath = projectPath;
-      // Set log path based on the store path
-      this.logPath = projectPath.replace(/\.json$/, ".log");
-      return true;
+      const doc = await firebaseService.getDocument(
+        this.collectionName,
+        sessionId,
+      );
+      if (doc) {
+        this.store = doc as Store;
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
   }
 
-  // Load project by name
-  async loadProjectByName(name: string): Promise<boolean> {
-    const projectPath = await this.findProjectByName(name);
-    if (projectPath) {
-      return await this.loadProject(projectPath);
+  // Switch to a specific project
+  async switchToProject(projectId: string): Promise<boolean> {
+    await this.ensureStore();
+
+    if (this.store!.projects[projectId]) {
+      this.store!.currentProjectId = projectId;
+      this.store!.updatedAt = new Date().toISOString();
+      await this.writeStore(this.store!);
+      return true;
     }
+
     return false;
   }
 
-  // Find project by name (utility function)
-  async findProjectByName(name: string): Promise<string | null> {
-    try {
-      await fs.access(this.baseDir);
-      const files = await fs.readdir(this.baseDir);
+  // Load project by name (within this session)
+  async loadProjectByName(name: string): Promise<boolean> {
+    await this.ensureStore();
 
-      for (const file of files) {
-        if (file.endsWith(".json")) {
-          const filePath = path.join(this.baseDir, file);
-          try {
-            const content = await fs.readFile(filePath, "utf-8");
-            const store = JSON.parse(content) as Store;
+    const project = Object.values(this.store!.projects).find(
+      (p) => p.name.toLowerCase() === name.toLowerCase(),
+    );
 
-            // Match by exact name (case-insensitive)
-            if (store.name.toLowerCase() === name.toLowerCase()) {
-              return filePath;
-            }
-          } catch {
-            // Skip invalid JSON files
-            continue;
-          }
-        }
-      }
-      return null;
-    } catch {
-      return null;
+    if (project) {
+      return await this.switchToProject(project.id);
     }
+
+    return false;
   }
 
-  // List all projects in the directory
+  // List all projects in this session
   async listAllProjects(): Promise<
     Array<{
       name: string;
-      path: string;
+      id: string;
       createdAt: string;
       description: string;
     }>
   > {
-    try {
-      await fs.access(this.baseDir);
-      const files = await fs.readdir(this.baseDir);
-      const projects: Array<{
-        name: string;
-        path: string;
-        createdAt: string;
-        description: string;
-      }> = [];
+    await this.ensureStore();
 
-      for (const file of files) {
-        if (file.endsWith(".json")) {
-          const filePath = path.join(this.baseDir, file);
-          try {
-            const content = await fs.readFile(filePath, "utf-8");
-            const store = JSON.parse(content) as Store;
-            projects.push({
-              name: store.name,
-              path: filePath,
-              createdAt: store.createdAt,
-              description: store.description,
-            });
-          } catch {
-            // Skip invalid JSON files
-            continue;
-          }
-        }
-      }
+    const projects = Object.values(this.store!.projects).map((p) => ({
+      name: p.name,
+      id: p.id,
+      createdAt: p.createdAt,
+      description: p.description,
+    }));
 
-      return projects.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    } catch {
-      return [];
-    }
+    return projects.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   // Get store data
@@ -461,46 +483,71 @@ export class JsonProjectStore {
     return this.store;
   }
 
-  // Get project root path
-  getProjectRoot(): string | null {
-    return this.storePath ? path.dirname(this.storePath) : null;
+  // Get current project
+  getCurrentProject(): Project | null {
+    if (!this.store || !this.store.currentProjectId) {
+      return null;
+    }
+    return this.store.projects[this.store.currentProjectId] || null;
   }
 
-  // Add an actor to the project
+  // Get store ID (sessionId)
+  getStoreId(): string | null {
+    return this.store?.id || null;
+  }
+
+  // Get current project ID
+  getProjectId(): string | null {
+    return this.store?.currentProjectId || null;
+  }
+
+  // Add an actor to the current project
   async addActor(newActors: Actor[]): Promise<void> {
-    if (!this.store) {
+    await this.ensureStore();
+    
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
-    const actors = await this.getAllActors();
+
+    const actors = project.actors;
     for (const actor of newActors) {
       if (!actors.some((a) => a.actor_id === actor.actor_id)) {
-        this.store.actors.push(actor);
+        project.actors.push(actor);
       }
     }
-    this.store.updatedAt = new Date().toISOString();
-    await this.writeStore(this.store);
+
+    project.updatedAt = new Date().toISOString();
+    this.store!.updatedAt = new Date().toISOString();
+    await this.writeStore(this.store!);
   }
 
   // Get an actor by id
   async getActor(actorId: string): Promise<Actor | null> {
-    if (!this.store) {
+    await this.ensureStore();
+    
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
-    return this.store.actors.find((a) => a.actor_id === actorId) || null;
+    return project.actors.find((a) => a.actor_id === actorId) || null;
   }
 
   // Get all actors
   async getAllActors(): Promise<Actor[]> {
-    if (!this.store) {
+    await this.ensureStore();
+    
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
-    return this.store.actors;
+    return project.actors;
   }
 
   // Add or update a use case
@@ -519,13 +566,16 @@ export class JsonProjectStore {
     actorIds: string[];
     steps: Step[];
   }): Promise<void> {
-    if (!this.store) {
+    await this.ensureStore();
+    
+    const project = this.getCurrentProject();
+    if (!project) {
       throw new Error(
-        "Store not initialized. Call initProject or loadProject first."
+        "No active project. Call initProject or switchToProject first.",
       );
     }
 
-    const existingIndex = this.store.useCases.findIndex((uc) => uc.id === id);
+    const existingIndex = project.useCases.findIndex((uc) => uc.id === id);
 
     // If mainActor not provided, use first actor or create a default one
     const actualMainActorId = mainActorId || actorIds[0] || "undefined";
@@ -540,24 +590,27 @@ export class JsonProjectStore {
     };
 
     if (existingIndex >= 0) {
-      this.store.useCases[existingIndex] = useCase;
+      project.useCases[existingIndex] = useCase;
     } else {
-      this.store.useCases.push(useCase);
+      project.useCases.push(useCase);
     }
 
-    this.store.updatedAt = new Date().toISOString();
-    await this.writeStore(this.store);
+    project.updatedAt = new Date().toISOString();
+    this.store!.updatedAt = new Date().toISOString();
+    await this.writeStore(this.store!);
   }
 
   // Get a specific use case
   getUseCase(useCaseId: string): UseCase | null {
-    if (!this.store) return null;
-    return this.store.useCases.find((uc) => uc.id === useCaseId) || null;
+    const project = this.getCurrentProject();
+    if (!project) return null;
+    return project.useCases.find((uc) => uc.id === useCaseId) || null;
   }
 
   // Get all use cases
   getAllUseCases(): UseCase[] {
-    return this.store?.useCases || [];
+    const project = this.getCurrentProject();
+    return project?.useCases || [];
   }
 
   // Get all steps for a specific use case
@@ -568,16 +621,40 @@ export class JsonProjectStore {
 
   // Delete a use case
   async deleteUseCase(useCaseId: string): Promise<boolean> {
-    if (!this.store) return false;
+    await this.ensureStore();
+    
+    const project = this.getCurrentProject();
+    if (!project) return false;
 
-    const initialLength = this.store.useCases.length;
-    this.store.useCases = this.store.useCases.filter(
-      (uc) => uc.id !== useCaseId
-    );
+    const initialLength = project.useCases.length;
+    project.useCases = project.useCases.filter((uc) => uc.id !== useCaseId);
 
-    if (this.store.useCases.length !== initialLength) {
-      this.store.updatedAt = new Date().toISOString();
-      await this.writeStore(this.store);
+    if (project.useCases.length !== initialLength) {
+      project.updatedAt = new Date().toISOString();
+      this.store!.updatedAt = new Date().toISOString();
+      await this.writeStore(this.store!);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Delete a project
+  async deleteProject(projectId: string): Promise<boolean> {
+    await this.ensureStore();
+
+    if (this.store!.projects[projectId]) {
+      delete this.store!.projects[projectId];
+
+      // If deleting current project, switch to another or null
+      if (this.store!.currentProjectId === projectId) {
+        const remainingProjects = Object.keys(this.store!.projects);
+        this.store!.currentProjectId =
+          remainingProjects.length > 0 ? remainingProjects[0] : null;
+      }
+
+      this.store!.updatedAt = new Date().toISOString();
+      await this.writeStore(this.store!);
       return true;
     }
 
@@ -586,48 +663,46 @@ export class JsonProjectStore {
 
   // Get project summary
   async getProjectSummary() {
-    if (!this.store) return null;
+    await this.ensureStore();
+    
+    const project = this.getCurrentProject();
+    if (!project) return null;
 
-    const uniqueActors = await this.getAllActors();
+    const uniqueActors = project.actors;
 
     return {
-      id: this.store.id,
-      name: this.store.name,
-      description: this.store.description,
-      createdAt: this.store.createdAt,
-      updatedAt: this.store.updatedAt,
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
       stats: {
-        totalUseCases: this.store.useCases.length,
+        totalUseCases: project.useCases.length,
         totalActors: uniqueActors.length,
-        totalSteps: this.store.useCases.reduce(
+        totalSteps: project.useCases.reduce(
           (sum, uc) => sum + uc.steps.length,
-          0
+          0,
         ),
       },
-      path: this.storePath,
+      sessionId: this.sessionId,
     };
   }
+
   async log(message: string): Promise<void> {
-    if (!this.logPath) {
-      throw new Error("Log path not set");
-    }
-    await fs.appendFile(
-      this.logPath,
-      `[${new Date().toISOString()}] ${message}\n`,
-      "utf-8"
-    );
+    await this.ensureStore();
+    await firebaseService.addLog(this.sessionId, this.store!.id, message);
   }
 
   // Private helper methods
   private async writeStore(store: Store): Promise<void> {
-    if (!this.storePath || !this.logPath) {
-      throw new Error("Store path not set. Call initProject first.");
+    if (!store.id) {
+      throw new Error("Store ID not set.");
     }
     await this.log(`writing store: ${JSON.stringify(store)}`);
-    await fs.writeFile(this.storePath, JSON.stringify(store, null, 2), "utf-8");
+    await firebaseService.setDocument(this.collectionName, store.id, store);
   }
 
   private generateId(): string {
-    return `store_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }

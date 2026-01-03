@@ -30,18 +30,10 @@ export function registerProjectTools(
               type: "text" as const,
               text: `✅ Project initialized successfully!
 
-**Path:** ${path}
+**Project ID:** ${path}
 **Name:** ${name}
-**Log Path:** ${projectStore.logPath}
 
-Project structure created:
-- README.md (project documentation)
-- project.json (metadata)
-- use-cases/ (store use case descriptions)
-- diagrams/ (generated PlantUML diagrams)
-- entities/ (actors, systems, classes)
-
-You can now add use cases with the 'addUseCase' tool.`,
+Project has been created in Firestore. You can now add use cases with the 'addUseCase' tool.`,
             },
           ],
         };
@@ -185,7 +177,7 @@ You can now add use cases with the 'addUseCase' tool.`,
             (p, idx) =>
               `${idx + 1}. **${p.name}**\n   - Created: ${new Date(
                 p.createdAt
-              ).toLocaleDateString()}\n   - Path: ${p.path}\n - Description: ${
+              ).toLocaleDateString()}\n   - ID: ${p.id}\n   - Description: ${
                 p.description
               }`
           )
@@ -247,7 +239,7 @@ You can now add use cases with the 'addUseCase' tool.`,
 **Description:** ${summary.description}
 **Created:** ${summary.createdAt}
 **Updated:** ${summary.updatedAt}
-**Path:** ${summary.path}
+**Project ID:** ${summary.id}
 
 **Statistics:**
 - Total Use Cases: ${summary.stats.totalUseCases}
@@ -301,6 +293,107 @@ You can now add use cases with the 'addUseCase' tool.`,
           },
         ],
       };
+    }
+  );
+
+  // Switch to project
+  server.registerTool(
+    "switchToProject",
+    {
+      title: "Switch to Project",
+      description: "Switch to a different project within the current session",
+      inputSchema: {
+        projectId: z.string().describe("Project ID to switch to"),
+      },
+    },
+    async ({ projectId }) => {
+      try {
+        const success = await projectStore.switchToProject(projectId);
+
+        if (success) {
+          const summary = await projectStore.getProjectSummary();
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `✅ Switched to project "${summary?.name}"!\n\n📊 Summary:\n- Use Cases: ${summary?.stats.totalUseCases}\n- Actors: ${summary?.stats.totalActors}\n- Steps: ${summary?.stats.totalSteps}`,
+              },
+            ],
+          };
+        } else {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `❌ Project with ID "${projectId}" not found. Use 'listAllProjects' to see available projects.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Delete project
+  server.registerTool(
+    "deleteProject",
+    {
+      title: "Delete Project",
+      description: "Delete a project from the current session",
+      inputSchema: {
+        projectId: z.string().describe("Project ID to delete"),
+      },
+    },
+    async ({ projectId }) => {
+      try {
+        const success = await projectStore.deleteProject(projectId);
+
+        if (success) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `✅ Project deleted successfully!`,
+              },
+            ],
+          };
+        } else {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `❌ Project with ID "${projectId}" not found.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          ],
+          isError: true,
+        };
+      }
     }
   );
 }

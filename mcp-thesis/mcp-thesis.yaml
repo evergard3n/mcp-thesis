@@ -1,0 +1,44 @@
+registry:
+  mcp-thesis:
+    description: "FRSL MCP Server"
+    title: "FRSL MCP"
+    type: "streamable_http"
+
+    # Point to your local server
+    url: "http://localhost:3006/mcp"
+
+    # List the tools your server provides
+    tools:
+      # Project tools
+      - name: "initProject"
+      - name: "loadProjectByName"
+      - name: "findProjectByName"
+      - name: "listAllProjects"
+      - name: "getProjectInfo"
+      - name: "viewProjectUseCases"
+      # Use case tools
+      - name: "extractUseCase"
+      - name: "validateUseCase"
+      - name: "improveUseCase"
+      - name: "useCaseToUML"
+
+    # Add environment variables (optional)
+    # env:
+    #   - name: "PORT"
+    #     value: "3006"
+    #   - name: "GEMINI"
+
+    # Configuration schema (optional)
+    # config:
+    #   - name: "my-dev-server"
+    #     description: "Server configuration"
+    #     type: "object"
+    #     properties:
+    #       timeout:
+    #         type: "number"
+    #         default: 30000
+
+    # Metadata
+    metadata:
+      category: "development"
+      tags: ["local", "dev", "http"]

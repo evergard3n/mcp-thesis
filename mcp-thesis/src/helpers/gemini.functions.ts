@@ -2,15 +2,14 @@ import { GoogleGenAI } from "@google/genai";
 import z from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-// The client gets the API key from the environment variable `GEMINI_API_KEY`.
+// The client must provide the API key via request headers.
 
 class GeminiFunctions {
   private ai: any;
 
-  constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
+  constructor(apiKey: string) {
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY environment variable is not set");
+      throw new Error("Gemini API key is required");
     }
     this.ai = new GoogleGenAI({ apiKey });
   }
@@ -56,4 +55,4 @@ class GeminiFunctions {
   }
 }
 
-export default new GeminiFunctions();
+export { GeminiFunctions };
