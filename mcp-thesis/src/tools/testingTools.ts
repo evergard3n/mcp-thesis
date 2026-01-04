@@ -7,6 +7,9 @@ import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.function
 import {
   generateFlatUseCase,
   improveUseCase,
+  refineWithConstrainedAnswers,
+  refineWithHybridAnswers,
+  extractFlowsFromOpenEndedAnswers,
 } from "../services/usecase.service.js";
 import {
   validateUseCaseWithFeedback,
@@ -18,9 +21,11 @@ import {
   generateMultipleChoiceQuestions,
   generateMultipleChoiceQuestionsWithScores,
   expertAnswerMultipleChoice,
+  generateHybridQuestions,
+  expertAnswerOpenEndedQuestions,
 } from "../validators/llm.validator.js";
-import { refineWithConstrainedAnswers } from "../services/usecase.service.js";
 import { evaluateUseCase } from "../evaluators/three-tier.evaluator.js";
+import { analyzeGaps } from "../analyzers/gap.analyzer.js";
 
 export function registerTestingTools(
   server: McpServer,
@@ -39,7 +44,11 @@ export function registerTestingTools(
             testCaseId: z.string(),
             domain: z.string(),
             vagueSummary: z.string(),
-            detailedDescription: z.string(),
+            detailedDescription: z
+              .string()
+              .describe(
+                "Expert-level description, just contain flows, not detailed description"
+              ),
             groundTruthJson: z.string(),
             complexity: z.enum(["simple", "medium", "complex"]).optional(),
             notes: z.string().optional(),
@@ -120,7 +129,153 @@ export function registerTestingTools(
     }
   );
 
-  // Tool 2: runCOVEComparison
+  // Tool 2: runFrameworkComparison (NEW: Framework vs Baseline)
+  server.registerTool(
+    "runFrameworkComparison",
+    {
+      title: "Framework vs Baseline Comparison",
+      description:
+        "Compare framework (gap analysis + hybrid questions) against baseline LLM extraction and oracle. When being called, will generate a new baseline and use it for both conditions A and B",
+      inputSchema: {
+        datasetPath: z.string(),
+        // baseline: genUseCaseSchema.describe(
+        //   "The baseline we get from extractUseCase tool"
+        // ),
+        testCaseIds: z.array(z.string()).optional(),
+        includeIntermediateResults: z.boolean().optional(),
+      },
+    },
+    async ({ datasetPath, testCaseIds, includeIntermediateResults }) => {
+      const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
+      const testCases = testCaseIds
+        ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
+        : dataset.testCases;
+
+      const results = [];
+
+      for (const tc of testCases) {
+        console.log(`Testing ${tc.id}...`);
+
+        // Condition A: Baseline (Pre-generated, no framework)
+        console.log(`  Using pre-generated baseline...`);
+        // baseline is already loaded above
+
+        // Condition B: Framework (Same baseline → Gap Analysis → Hybrid Questions → Refinement)
+        console.log(`  Framework with gap analysis...`);
+
+        // Step 1: Use the SAME baseline as Condition A (no regeneration)
+        const draft = await generateFlatUseCase({
+          description: tc.inputs.vague,
+          geminiFunctions: geminiFunctions,
+        });
+
+        // Step 2: Validate and analyze gaps
+        const validation = await validateUseCaseWithFeedback(draft, {
+          projectStore,
+        });
+        const gapAnalysis = await analyzeGaps(
+          draft,
+          validation.score!,
+          tc.inputs.vague
+        );
+
+        // Step 3: Generate hybrid questions (MC + open-ended)
+        const hybridQuestions = await generateHybridQuestions(
+          gapAnalysis,
+          draft,
+          tc.inputs.vague,
+          formatValidationForLLM(validation),
+          geminiFunctions
+        );
+
+        // Step 4: Expert answers questions (simulated using detailed description)
+        const mcAnswers =
+          hybridQuestions.mcQuestions.length > 0
+            ? await expertAnswerMultipleChoice(
+                hybridQuestions.mcQuestions,
+                tc.inputs.detailed,
+                tc.domain,
+                geminiFunctions
+              )
+            : [];
+
+        const openEndedAnswers =
+          hybridQuestions.openEndedQuestions.length > 0
+            ? await expertAnswerOpenEndedQuestions(
+                hybridQuestions.openEndedQuestions,
+                tc.inputs.detailed,
+                tc.domain,
+                geminiFunctions
+              )
+            : [];
+
+        // Step 5: Refine with hybrid answers
+        const framework = await refineWithHybridAnswers(
+          tc.inputs.vague,
+          draft,
+          hybridQuestions.mcQuestions,
+          mcAnswers,
+          openEndedAnswers,
+          geminiFunctions
+        );
+
+        // Condition C: Oracle (Detailed → LLM → Done, upper bound)
+        // console.log(`  Oracle extraction...`);
+        // const oracle = await generateFlatUseCase({
+        //   description: tc.inputs.detailed,
+        //   geminiFunctions: geminiFunctions,
+        // });
+
+        // as oracle is just the ground truth, we don't need to generate it
+
+        results.push({
+          testCaseId: tc.id,
+          conditionA_Baseline: draft,
+          conditionB_Framework: framework,
+          conditionC_Oracle: tc.groundTruth,
+          groundTruth: tc.groundTruth,
+          intermediateData: includeIntermediateResults
+            ? {
+                gapAnalysis: {
+                  missingExceptionFlows: gapAnalysis.missingExceptionFlows,
+                  missingAlternativeFlows: gapAnalysis.missingAlternativeFlows,
+                  totalGaps: gapAnalysis.gaps.length,
+                  highPriorityGaps: gapAnalysis.gaps.filter(
+                    (g) => g.severity === "high"
+                  ).length,
+                  completenessScore: gapAnalysis.completenessScore,
+                },
+                hybridQuestions: {
+                  mcCount: hybridQuestions.mcQuestions.length,
+                  openEndedCount: hybridQuestions.openEndedQuestions.length,
+                  questions: hybridQuestions,
+                },
+                answers: {
+                  mcAnswers,
+                  openEndedAnswers,
+                },
+              }
+            : undefined,
+        });
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const outputPath = `test-data/results/framework-comparison-${timestamp}.json`;
+      await writeFile(outputPath, JSON.stringify(results, null, 2));
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Framework comparison complete: ${results.length} test cases\nResults: ${outputPath}`,
+          },
+        ],
+        structuredContent: { results, outputPath },
+      };
+    }
+  );
+
+  // Tool 3: runCOVEComparison (KEEP for backward compatibility)
   server.registerTool(
     "runCOVEComparison",
     {
@@ -301,40 +456,61 @@ export function registerTestingTools(
           });
         }
 
-        // Run HITL - Step 1: Generator extracts from vague input
+        // Run HITL with Hybrid Questions - Step 1: Generator extracts from vague input
         const draft = await generateFlatUseCase({
           description: tc.inputs.vague,
           geminiFunctions: geminiFunctions,
         });
 
-        // Step 2: Validate and get MC questions with scores
+        // Step 2: Validate and analyze gaps
         const validation = await validateUseCaseWithFeedback(draft, {
           projectStore,
         });
         const formattedFeedback = formatValidationForLLM(validation);
 
-        const mcQuestions = await generateMultipleChoiceQuestionsWithScores(
-          tc.inputs.vague,
+        const gapAnalysis = await analyzeGaps(
           draft,
-          formattedFeedback,
           validation.score!,
+          tc.inputs.vague
+        );
+
+        // Step 3: Generate hybrid questions (MC + open-ended)
+        const hybridQuestions = await generateHybridQuestions(
+          gapAnalysis,
+          draft,
+          tc.inputs.vague,
+          formattedFeedback,
           geminiFunctions
         );
 
-        // Step 3: Expert answers (simulating human)
-        const answers = await expertAnswerMultipleChoice(
-          mcQuestions,
-          tc.inputs.detailed,
-          tc.domain,
-          geminiFunctions
-        );
+        // Step 4: Expert answers (simulating human)
+        const mcAnswers =
+          hybridQuestions.mcQuestions.length > 0
+            ? await expertAnswerMultipleChoice(
+                hybridQuestions.mcQuestions,
+                tc.inputs.detailed,
+                tc.domain,
+                geminiFunctions
+              )
+            : [];
 
-        // Step 4: Constrained refinement
-        const hitlUseCase = await refineWithConstrainedAnswers(
+        const openEndedAnswers =
+          hybridQuestions.openEndedQuestions.length > 0
+            ? await expertAnswerOpenEndedQuestions(
+                hybridQuestions.openEndedQuestions,
+                tc.inputs.detailed,
+                tc.domain,
+                geminiFunctions
+              )
+            : [];
+
+        // Step 5: Hybrid refinement
+        const hitlUseCase = await refineWithHybridAnswers(
           tc.inputs.vague,
           draft,
-          mcQuestions,
-          answers,
+          hybridQuestions.mcQuestions,
+          mcAnswers,
+          openEndedAnswers,
           geminiFunctions
         );
 
@@ -342,10 +518,26 @@ export function registerTestingTools(
           testCaseId: tc.id,
           conditionC_COVEDetailed: coveDetailed,
           conditionD_HITL: hitlUseCase,
-          hitlQuestions: mcQuestions.map((q, i) => ({
-            question: q.question,
-            answer: answers[i]?.selectedOption,
-          })),
+          hitlQuestions: {
+            mc: hybridQuestions.mcQuestions.map((q, i) => ({
+              question: q.question,
+              answer: mcAnswers[i]?.selectedOption,
+            })),
+            openEnded: hybridQuestions.openEndedQuestions.map((q, i) => ({
+              question: q.question,
+              answer: openEndedAnswers[i]?.answer,
+              confidence: openEndedAnswers[i]?.confidence,
+            })),
+          },
+          gapAnalysis: {
+            missingExceptionFlows: gapAnalysis.missingExceptionFlows,
+            missingAlternativeFlows: gapAnalysis.missingAlternativeFlows,
+            totalGaps: gapAnalysis.gaps.length,
+            highPriorityGaps: gapAnalysis.gaps.filter(
+              (g) => g.severity === "high"
+            ).length,
+            completenessScore: gapAnalysis.completenessScore,
+          },
           groundTruth: tc.groundTruth,
         });
       }
@@ -396,7 +588,8 @@ export function registerTestingTools(
           if (
             key === "testCaseId" ||
             key === "groundTruth" ||
-            key === "hitlQuestions"
+            key === "hitlQuestions" ||
+            key === "intermediateData"
           )
             continue;
 

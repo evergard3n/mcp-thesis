@@ -305,3 +305,165 @@ ${qaContext}
     schema: genUseCaseSchema,
   });
 }
+
+/**
+ * Extracts exception and alternative flows from open-ended answers.
+ * Uses LLM to parse free-text answers into structured flows.
+ *
+ * @param answers - The open-ended answers from human expert
+ * @param baseUseCase - The base use case to add flows to
+ * @param geminiFunctions - Gemini functions for LLM calls
+ * @returns Array of new flows extracted from answers
+ */
+export async function extractFlowsFromOpenEndedAnswers(
+  answers: Array<{ questionId: string; answer: string; confidence?: string }>,
+  baseUseCase: GenUseCase,
+  geminiFunctions: GeminiOpenRouterFunctions
+): Promise<import("../interfaces/usecase.interface.new.js").GenFlow[]> {
+  const { z } = await import("zod");
+  const flowSchema = z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(["MAIN", "ALTERNATIVE", "EXCEPTION"]),
+      parentFlow: z.string().optional(),
+      fromStepIndex: z.number().optional(),
+      condition: z.string().optional(),
+      steps: z.array(
+        z.object({
+          index: z.number(),
+          actor: z.string(),
+          target: z.string().optional(),
+          description: z.string(),
+        })
+      ),
+    })
+  );
+
+  const answersContext = answers
+    .map(
+      (a, i) => `
+Answer ${i + 1} (ID: ${a.questionId}):
+${a.answer}
+Confidence: ${a.confidence || "medium"}
+`
+    )
+    .join("\n---\n");
+
+  const prompt = `
+<task>
+Extract exception and alternative flows from the expert's answers.
+Each answer describes a scenario that should become a new flow in the use case.
+</task>
+
+<baseUseCase>
+${JSON.stringify(baseUseCase, null, 2)}
+</baseUseCase>
+
+<expertAnswers>
+${answersContext}
+</expertAnswers>
+
+<instructions>
+For each answer:
+1. Identify if it describes an EXCEPTION flow (error, failure) or ALTERNATIVE flow (different valid path)
+2. Generate a unique flow ID (e.g., "EXT_2a" for exception from step 2, "ALT_3a" for alternative from step 3)
+3. Determine which MAIN flow step this branches from (fromStepIndex)
+4. Extract the branching condition from the answer
+5. Break down the answer into sequential steps with actors and descriptions
+
+Guidelines:
+- Steps within each flow start at index 1
+- Each step must have: index, actor, description
+- Add target if actor interacts with another actor or system
+- Keep descriptions concise (1 sentence per step)
+- Condition should clearly state when this flow is taken
+
+Example flow structure:
+{
+  "id": "EXT_2a",
+  "kind": "EXCEPTION",
+  "parentFlow": "MAIN",
+  "fromStepIndex": 2,
+  "condition": "Box ID does not match transport company registered IDs",
+  "steps": [
+    {
+      "index": 1,
+      "actor": "Receiving Agent",
+      "target": "Transport Company",
+      "description": "Rejects the box and notifies transport company of mismatch"
+    }
+  ]
+}
+
+Return an array of flows extracted from the answers.
+If an answer doesn't describe a clear flow, skip it.
+</instructions>
+  `;
+
+  return geminiFunctions.generateStructured({
+    prompt,
+    schema: flowSchema,
+  });
+}
+
+/**
+ * Refines a use case using hybrid answers (both MC and open-ended).
+ * Applies MC answers for clarifications and integrates new flows from open-ended answers.
+ *
+ * @param originalDescription - Original vague description
+ * @param baseUseCase - The base use case to refine
+ * @param mcQuestions - Multiple choice questions
+ * @param mcAnswers - Multiple choice answers
+ * @param openEndedAnswers - Open-ended answers for exception flows
+ * @param geminiFunctions - Gemini functions for LLM calls
+ * @returns Refined use case with integrated flows
+ */
+export async function refineWithHybridAnswers(
+  originalDescription: string,
+  baseUseCase: GenUseCase,
+  mcQuestions: Array<{
+    id: string;
+    question: string;
+    options: string[];
+    context: string;
+  }>,
+  mcAnswers: Array<{
+    questionId: string;
+    selectedOption: string;
+    reasoning?: string;
+  }>,
+  openEndedAnswers: Array<{
+    questionId: string;
+    answer: string;
+    confidence?: string;
+  }>,
+  geminiFunctions: GeminiOpenRouterFunctions
+): Promise<GenUseCase> {
+  // Step 1: Apply MC answers for clarifications (if any)
+  let refined = baseUseCase;
+  if (mcQuestions.length > 0 && mcAnswers.length > 0) {
+    refined = await refineWithConstrainedAnswers(
+      originalDescription,
+      baseUseCase,
+      mcQuestions,
+      mcAnswers,
+      geminiFunctions
+    );
+  }
+
+  // Step 2: Extract new flows from open-ended answers
+  const newFlows = await extractFlowsFromOpenEndedAnswers(
+    openEndedAnswers,
+    refined,
+    geminiFunctions
+  );
+
+  // Step 3: Integrate new flows
+  const combinedFlows = [...refined.flows, ...newFlows];
+
+  // Return refined use case with all flows
+  return {
+    ...refined,
+    flows: combinedFlows,
+  };
+}

@@ -33,11 +33,7 @@ class SessionServer {
   private geminiFunctions: GeminiOpenRouterFunctions;
   public readonly sessionId: string;
 
-  constructor(
-    sessionId: string,
-    geminiApiKey: string,
-    openrouterApiKey: string
-  ) {
+  constructor(sessionId: string) {
     this.sessionId = sessionId;
     this.mcpServer = new McpServer({
       name: "mcp-thesis",
@@ -46,8 +42,19 @@ class SessionServer {
       title: "MCP Thesis",
       websiteUrl: "https://github.com/yourusername/mcp-thesis",
     });
+    console.log("OPENROUTER_API_KEY", OPENROUTER_API_KEY);
     // Create session-scoped project store
     this.projectStore = new JsonProjectStore(sessionId);
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const openrouterApiKey = OPENROUTER_API_KEY;
+    if (!geminiApiKey) {
+      console.log("GEMINI_API_KEY is not set");
+      throw new Error("GEMINI_API_KEY is not set");
+    }
+    if (!openrouterApiKey) {
+      console.log("OPENROUTER_API_KEY is not set");
+      throw new Error("OPENROUTER_API_KEY is not set");
+    }
     // Create session-scoped GeminiFunctions singleton
     this.geminiFunctions = new GeminiOpenRouterFunctions(
       geminiApiKey,
@@ -103,42 +110,39 @@ app.post("/mcp", async (req, res) => {
   } else if (isInitializeRequest(req.body)) {
     // New initialization request - create new session
     // Extract Gemini API key from header
-    const geminiApiKey = req.headers["x-gemini-api-key"] as string | undefined;
+    // const geminiApiKey = req.headers["x-gemini-api-key"] as string | undefined;
 
-    if (!geminiApiKey) {
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: "Missing required header: x-gemini-api-key",
-        },
-        id: null,
-      });
-      return;
-    }
+    // if (!geminiApiKey) {
+    //   res.status(400).json({
+    //     jsonrpc: "2.0",
+    //     error: {
+    //       code: -32000,
+    //       message: "Missing required header: x-gemini-api-key",
+    //     },
+    //     id: null,
+    //   });
+    //   return;
+    // }
 
-    // Get OpenRouter API key from environment
-    if (!OPENROUTER_API_KEY) {
-      res.status(500).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32001,
-          message: "Server configuration error: OPENROUTER_API_KEY not set",
-        },
-        id: null,
-      });
-      return;
-    }
+    // // Get OpenRouter API key from environment
+    // if (!OPENROUTER_API_KEY) {
+    //   res.status(500).json({
+    //     jsonrpc: "2.0",
+    //     error: {
+    //       code: -32001,
+    //       message: "Server configuration error: OPENROUTER_API_KEY not set",
+    //     },
+    //     id: null,
+    //   });
+    //   return;
+    // }
 
     // Generate sessionId upfront so we can create the server immediately
     const newSessionId = sessionId || randomUUID();
+    console.log("newSessionId", newSessionId);
 
     // Create session-scoped server instance with API keys
-    const server = new SessionServer(
-      newSessionId,
-      geminiApiKey,
-      OPENROUTER_API_KEY
-    );
+    const server = new SessionServer(newSessionId);
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => newSessionId,
@@ -149,9 +153,9 @@ app.post("/mcp", async (req, res) => {
           transport,
         };
       },
-      // enableDnsRebindingProtection: true,
-      // allowedHosts: ["*"],
-      // allowedOrigins: ["*"],
+      enableDnsRebindingProtection: false,
+      allowedHosts: ["*"],
+      allowedOrigins: ["*"],
     });
 
     // Connect server to transport BEFORE handling requests

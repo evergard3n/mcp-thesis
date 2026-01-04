@@ -1,0 +1,263 @@
+[
+  {
+    "testCaseId": "MO1",
+    "conditionA_COVEVague": {
+      "name": "Receive Delivered Box",
+      "summary": "The Receiving Agent accepts a delivered box, validates its identity, records its arrival, unpacks it, and transfers bags to the Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Transport Company",
+        "Registration Operator"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Transport Company",
+              "description": "Delivers a box to the Receiving Agent."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Accepts the delivered box."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "description": "Validates the identity of the box."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "description": "Records the box and bag arrival into the Nighttime Receiving Registry Software."
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "description": "Unpacks the box."
+            },
+            {
+              "index": 6,
+              "actor": "Receiving Agent",
+              "description": "Places bags onto a cart."
+            },
+            {
+              "index": 7,
+              "actor": "Receiving Agent",
+              "description": "Moves the cart with bags to the Registration Operator."
+            },
+            {
+              "index": 8,
+              "actor": "Receiving Agent",
+              "description": "The bags are ready for subsequent processing by the Registration Operator."
+            }
+          ]
+        },
+        {
+          "id": "SIGN_DELIVERY_FORM",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Signs a paper delivery form."
+            }
+          ]
+        }
+      ]
+    },
+    "conditionB_COVEDetailed": {
+      "name": "MO1. Register arrival of a box",
+      "summary": "The Receiving Agent (RA) receives a box from a Transport Company, validates its ID, registers its arrival and contents into the system, and then moves the contents to the Registration Operator (RO).",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Nightime Receiving Registry Software",
+        "Transport Company Delivery Person",
+        "Registration Operator"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Receives and opens box (box ID, bags with bag IDs) from TransportCompany TC."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Validates box ID with TC registered IDs."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "description": "May sign a paper form for the delivery person."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "target": "Nightime Receiving Registry Software",
+              "description": "Registers arrival and contents into the 'Nightime Receiving Registry Software' system, providing RA ID, date, time, box ID, Transport Company. It also provides the person's name (if delivery person's), bag IDs (if available) or total count of bags, and estimated value (if available)."
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "description": "Removes bags from the box, puts them onto a cart, and takes them to the Registration Operator."
+            }
+          ]
+        },
+        {
+          "id": "2a_BoxIdMismatch",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "The RA performs actions to address the ID mismatch, such as contacting a supervisor or the transport company."
+            }
+          ]
+        },
+        {
+          "id": "4a_FireAlarm",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Ceases current work and follows emergency procedures."
+            },
+            {
+              "index": 2,
+              "actor": "Nightime Receiving Registry Software",
+              "description": "Registration is interrupted."
+            }
+          ]
+        },
+        {
+          "id": "4b_ComputerDown",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Nightime Receiving Registry Software",
+              "description": "Registration is interrupted due to system unavailability."
+            }
+          ]
+        }
+      ]
+    },
+    "groundTruth": {
+      "name": "Register Arrival of a Box",
+      "summary": "Receiving Agent receives a box from a transport company, validates it, registers the arrival in the system, and prepares it for the Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Registration Operator",
+        "Transport Company",
+        "System"
+      ],
+      "preconditions": [
+        "Transport company has delivered the box",
+        "Nighttime Receiving Registry Software is operational",
+        "Receiving Agent is on duty"
+      ],
+      "postconditions": [
+        "Box arrival is registered in the system",
+        "Bags are prepared on cart for Registration Operator",
+        "Delivery is documented"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Receives and opens box (box id, bags with bag ids) from TransportCompany"
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Validates box id with TC registered ids"
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Signs paper form for delivery person (optional)"
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Registers arrival into system with: RA id, date, time, box id, TransportCompany, person name, number of bags with bag ids, estimated value"
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "target": "Registration Operator",
+              "description": "Removes bags from box, puts onto cart, and takes to Registration Operator"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Box id does not match transport company registered ids",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Rejects the box and notifies transport company of mismatch"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Fire alarm goes off and interrupts registration",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Stops registration process and follows fire safety procedures"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Computer goes down during registration",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Leaves the box and contents on the desk and waits for computer to come back up"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

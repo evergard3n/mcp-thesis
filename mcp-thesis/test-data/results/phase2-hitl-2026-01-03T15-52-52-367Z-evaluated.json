@@ -1,0 +1,107 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "MO1",
+      "evaluations": {
+        "conditionC_COVEDetailed": {
+          "totalFlows": 4,
+          "breakdown": {
+            "grounded": 3,
+            "logical": 1,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 0.925,
+            "discoveryRate": 1,
+            "precision": 1,
+            "f1Score": 1
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Every step in the MAIN flow is explicitly mentioned in both the vague and detailed descriptions. The flow covers the actions of receiving, validating, optionally signing, registering, and preparing for the registration operator.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "2a_BoxIdMismatch",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The detailed description mentions '2a. box id does not match transport company', indicating an extension for this scenario. While the specific actions of 'contacting a supervisor or the transport company' are not explicitly stated, they are a logical and common response to such a discrepancy in a logistics context.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "4a_FireAlarm",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The detailed description explicitly lists '4a. fire alarm goes off and interrupts registration' as an extension. The steps of ceasing work and registration interruption are direct consequences of this stated event.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "4b_ComputerDown",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The detailed description explicitly lists '4b. computer goes down' as an extension and specifically mentions 'leave the money on the desk and wait for computer to come back up'. The interruption of registration due to system unavailability is a direct and explicit consequence.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        },
+        "conditionD_HITL": {
+          "totalFlows": 2,
+          "breakdown": {
+            "grounded": 2,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.25,
+            "precision": 1,
+            "f1Score": 0.4
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Every step in the MAIN flow is explicitly covered in both the vague and detailed descriptions regarding the RA accepting, validating, recording, unpacking, and moving bags to the RO.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "SIGN_DELIVERY_FORM",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The single step 'RA optionally signs a paper delivery form' is explicitly mentioned in the vague description and detailed step 3.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionC_COVEDetailed": {
+      "avgQuality": 0.925,
+      "avgDiscovery": 1,
+      "avgF1": 1
+    },
+    "conditionD_HITL": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.25,
+      "avgF1": 0.4
+    }
+  }
+}

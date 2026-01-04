@@ -1,0 +1,622 @@
+[
+  {
+    "testCaseId": "MO1",
+    "conditionA_Baseline": {
+      "name": "Receive Delivered Box",
+      "summary": "The Receiving Agent accepts a delivered box, validates its identity, records its arrival, unpacks it, and transfers contents to a Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Transport Company",
+        "Nighttime Receiving Registry Software",
+        "Registration Operator"
+      ],
+      "preconditions": [
+        "A box has been delivered by the Transport Company."
+      ],
+      "postconditions": [
+        "Box and bag arrival is recorded in the Nighttime Receiving Registry Software.",
+        "Bags are placed on a cart and moved to the Registration Operator."
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Accepts a delivered box from the Transport Company."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Validates the box identity."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "target": "Nighttime Receiving Registry Software",
+              "description": "Records box and bag arrival into the Nighttime Receiving Registry Software."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "description": "Unpacks the box."
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "description": "Places bags onto a cart."
+            },
+            {
+              "index": 6,
+              "actor": "Receiving Agent",
+              "target": "Registration Operator",
+              "description": "Moves bags on the cart to the Registration Operator for processing."
+            }
+          ]
+        },
+        {
+          "id": "SIGN_DELIVERY_FORM",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Signs a paper delivery form."
+            }
+          ]
+        }
+      ]
+    },
+    "conditionB_Framework": {
+      "name": "Receive Delivered Box",
+      "summary": "The Receiving Agent accepts a delivered box, validates its identity, records its arrival, unpacks it, and transfers contents to a Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Transport Company",
+        "Nighttime Receiving Registry Software",
+        "Registration Operator"
+      ],
+      "preconditions": [
+        "A box has been delivered by the Transport Company."
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Accepts a delivered box from the Transport Company."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Scans the box's barcode and compares it to internal system records containing TC registered IDs for incoming shipments."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "target": "Nighttime Receiving Registry Software",
+              "description": "Records the RA id, date, time, box id, and TransportCompany into the Nighttime Receiving Registry Software."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "description": "Unpacks the box."
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "description": "Places bags onto a cart."
+            },
+            {
+              "index": 6,
+              "actor": "Receiving Agent",
+              "target": "Registration Operator",
+              "description": "Moves bags on the cart to the Registration Operator for processing."
+            }
+          ]
+        },
+        {
+          "id": "SIGN_DELIVERY_FORM",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Signs a paper delivery form."
+            }
+          ]
+        },
+        {
+          "id": "EXT_2a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "The box ID does not match expectations (box ID does not match transport company).",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Notifies the delivery person from the Transport Company of the discrepancy."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Does not accept the box."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "description": "Provides documentation of the refusal to the delivery person."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "description": "Records the refusal in a manual log."
+            }
+          ]
+        },
+        {
+          "id": "ALT_SIGN_DELIVERY_FORM",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "TC's policy allows electronic confirmation OR no paper manifest is provided by TC.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Signs an electronic confirmation (e.g., scanner signature)."
+            },
+            {
+              "index": 2,
+              "actor": "Nighttime Receiving Registry Software",
+              "description": "System registration (step 4) serves as the primary proof of delivery."
+            }
+          ]
+        },
+        {
+          "id": "EXT_3b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 3,
+          "condition": "Nighttime Receiving Registry Software is unavailable.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Records the box ID, date, time, and TC on a contingency log sheet."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Waits for the computer to come back up."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "description": "Inputs all accumulated manual entries into the Nighttime Receiving Registry Software once the system is restored."
+            }
+          ]
+        },
+        {
+          "id": "EXT_4d",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "A discrepancy in bag count or condition is found during unpacking.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Immediately stops processing the box."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Notifies the delivery person (if still present)."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "description": "Notifies the Department Supervisor (DS)."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "description": "Documents the exact discrepancy."
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "description": "Takes photographic evidence if bags are damaged."
+            },
+            {
+              "index": 6,
+              "actor": "Receiving Agent",
+              "description": "Creates a manual incident report."
+            },
+            {
+              "index": 7,
+              "actor": "Receiving Agent",
+              "description": "Notifies the Transport Company for investigation."
+            },
+            {
+              "index": 8,
+              "actor": "Receiving Agent",
+              "description": "Segregates the box contents until resolution."
+            }
+          ]
+        }
+      ]
+    },
+    "conditionC_Oracle": {
+      "name": "Register Arrival of a Box",
+      "summary": "Receiving Agent receives a box from a transport company, validates it, registers the arrival in the system, and prepares it for the Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Registration Operator",
+        "Transport Company",
+        "System"
+      ],
+      "preconditions": [
+        "Transport company has delivered the box",
+        "Nighttime Receiving Registry Software is operational",
+        "Receiving Agent is on duty"
+      ],
+      "postconditions": [
+        "Box arrival is registered in the system",
+        "Bags are prepared on cart for Registration Operator",
+        "Delivery is documented"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Receives and opens box (box id, bags with bag ids) from TransportCompany"
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Validates box id with TC registered ids"
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Signs paper form for delivery person (optional)"
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Registers arrival into system with: RA id, date, time, box id, TransportCompany, person name, number of bags with bag ids, estimated value"
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "target": "Registration Operator",
+              "description": "Removes bags from box, puts onto cart, and takes to Registration Operator"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Box id does not match transport company registered ids",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Rejects the box and notifies transport company of mismatch"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Fire alarm goes off and interrupts registration",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Stops registration process and follows fire safety procedures"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Computer goes down during registration",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Leaves the box and contents on the desk and waits for computer to come back up"
+            }
+          ]
+        }
+      ]
+    },
+    "groundTruth": {
+      "name": "Register Arrival of a Box",
+      "summary": "Receiving Agent receives a box from a transport company, validates it, registers the arrival in the system, and prepares it for the Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Registration Operator",
+        "Transport Company",
+        "System"
+      ],
+      "preconditions": [
+        "Transport company has delivered the box",
+        "Nighttime Receiving Registry Software is operational",
+        "Receiving Agent is on duty"
+      ],
+      "postconditions": [
+        "Box arrival is registered in the system",
+        "Bags are prepared on cart for Registration Operator",
+        "Delivery is documented"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Receives and opens box (box id, bags with bag ids) from TransportCompany"
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Validates box id with TC registered ids"
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Signs paper form for delivery person (optional)"
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Registers arrival into system with: RA id, date, time, box id, TransportCompany, person name, number of bags with bag ids, estimated value"
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "target": "Registration Operator",
+              "description": "Removes bags from box, puts onto cart, and takes to Registration Operator"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Box id does not match transport company registered ids",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Rejects the box and notifies transport company of mismatch"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Fire alarm goes off and interrupts registration",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Stops registration process and follows fire safety procedures"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Computer goes down during registration",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "description": "Leaves the box and contents on the desk and waits for computer to come back up"
+            }
+          ]
+        }
+      ]
+    },
+    "intermediateData": {
+      "gapAnalysis": {
+        "missingExceptionFlows": true,
+        "missingAlternativeFlows": true,
+        "totalGaps": 8,
+        "highPriorityGaps": 2,
+        "completenessScore": 0
+      },
+      "hybridQuestions": {
+        "mcCount": 4,
+        "openEndedCount": 4,
+        "questions": {
+          "mcQuestions": [
+            {
+              "id": "Q1",
+              "question": "What specifically constitutes 'validates the box identity' for the Receiving Agent?",
+              "options": [
+                "Cross-referencing a manifest provided by the Transport Company.",
+                "Scanning a barcode on the box and verifying it against an internal database.",
+                "Visually inspecting the box for tamper-evidence and matching a delivery number.",
+                "Confirming the delivery address and recipient name on the box."
+              ],
+              "context": "Step 2 of the main flow: 'Validates the box identity.'"
+            },
+            {
+              "id": "Q2",
+              "question": "When does the Receiving Agent decide to 'optionally sign a paper delivery form'?",
+              "options": [
+                "Only if the Transport Company requests a signature.",
+                "If the box contains high-value items.",
+                "When the Nighttime Receiving Registry Software is offline.",
+                "Based on an internal policy for specific types of deliveries."
+              ],
+              "context": "Alternative flow 'SIGN_DELIVERY_FORM': 'optionally signs a paper delivery form'."
+            },
+            {
+              "id": "Q3",
+              "question": "What information about the box and bag arrival is recorded into the Nighttime Receiving Registry Software?",
+              "options": [
+                "Only the box ID and the number of bags.",
+                "Box ID, arrival timestamp, and condition of the box.",
+                "Box ID, Transport Company name, and Receiving Agent's identifier.",
+                "Box ID, bag count, delivery manifest number, and signature status."
+              ],
+              "context": "Step 3 of the main flow: 'Records box and bag arrival into the Nighttime Receiving Registry Software.'"
+            },
+            {
+              "id": "Q4",
+              "question": "What is the expected state of the bags when they are moved to the Registration Operator?",
+              "options": [
+                "Still inside the original delivery box.",
+                "Individually labeled and placed into a new container.",
+                "Placed directly onto a cart, grouped by box.",
+                "Counted and sealed into new, standardized facility bags."
+              ],
+              "context": "Step 5 and 6 of the main flow: 'Places bags onto a cart, and moves them to the Registration Operator.'"
+            }
+          ],
+          "openEndedQuestions": [
+            {
+              "id": "gap_exception_step2_validation_failure",
+              "question": "What happens if the Receiving Agent validates the box identity (Step 2) and finds that it does not match expectations (e.g., wrong box, damaged, incorrect manifest)?",
+              "context": {
+                "step": "Validates the box identity.",
+                "patternType": "validation_failure",
+                "whyAsking": "The current use case states that the Receiving Agent 'Validates the box identity' but doesn't specify what occurs if this validation fails. This is a critical exception flow that needs to be documented."
+              },
+              "answerGuidance": "Please describe the entire exception flow: What actions does the Receiving Agent take? Does it involve the Transport Company or other actors? What is the resolution or next step in this scenario?"
+            },
+            {
+              "id": "gap_alternative_skip_paper_form",
+              "question": "The flow describes 'optionally signs a paper delivery form.' Under what specific conditions is signing the paper delivery form either required or optional, and when can it be skipped entirely?",
+              "context": {
+                "step": "optionally signs a paper delivery form",
+                "patternType": "alternative_path_condition",
+                "whyAsking": "The current description notes the paper delivery form as 'optional.' We need to understand the criteria that determine whether this step is performed or not, to define clear alternative paths."
+              },
+              "answerGuidance": "Please specify the conditions (e.g., type of delivery, agreement with TC, system status) that dictate when the paper form is signed, and when it is not. If not signed, what is the alternative proof of delivery?"
+            },
+            {
+              "id": "gap_exception_software_unavailability",
+              "question": "What should the Receiving Agent do if the 'Nighttime Receiving Registry Software' (Step 3) is unavailable or encounters an error when attempting to record the box and bag arrival?",
+              "context": {
+                "step": "Records box and bag arrival into the Nighttime Receiving Registry Software.",
+                "patternType": "system_unavailability",
+                "whyAsking": "System unavailability or errors are common exceptions in real-world scenarios. The current flow assumes successful interaction with the software, but we need a plan for when it fails."
+              },
+              "answerGuidance": "Describe the contingency plan for software failure: Are manual records kept? Is there a retry mechanism? Who is notified, and what steps are taken to ensure the information is eventually recorded?"
+            },
+            {
+              "id": "gap_exception_missing_bags",
+              "question": "What happens if, after unpacking the box (Step 4), the Receiving Agent discovers that there are fewer or more bags than expected, or if bags are damaged?",
+              "context": {
+                "step": "Unpacks the box, places bags onto a cart",
+                "patternType": "content_discrepancy",
+                "whyAsking": "The current flow assumes a perfect match between expected and actual contents. Discrepancies in quantity or condition are common exceptions that require a defined handling procedure."
+              },
+              "answerGuidance": "Detail the actions taken by the Receiving Agent: Is there an investigation? Is the Transport Company contacted? How is this discrepancy documented and resolved?"
+            }
+          ],
+          "metadata": {
+            "totalGaps": 8,
+            "highPriorityGaps": 2,
+            "completenessScore": 0
+          }
+        }
+      },
+      "answers": {
+        "mcAnswers": [
+          {
+            "questionId": "Q1",
+            "selectedOption": "B",
+            "reasoning": "While the detailed description states 'RA validates box id with TC registered ids', a common and efficient method for this in a logistics setting is scanning a barcode and comparing it to an internal system containing TC registered IDs for incoming shipments. This aligns with modern registry practices for speed and accuracy."
+          },
+          {
+            "questionId": "Q2",
+            "selectedOption": "A",
+            "reasoning": "The detailed description states 'RA maybe signs paper form for delivery person', which implies the request for a signature comes from the delivery person or their company. The RA would sign if the Transport Company requires it, as is common practice in logistics."
+          },
+          {
+            "questionId": "Q3",
+            "selectedOption": "C",
+            "reasoning": "The detailed description explicitly lists: 'RA id, date, time, box id, TransportCompany' as information stored by the system. This directly includes the Receiving Agent's identifier, the box ID, and the Transport Company name."
+          },
+          {
+            "questionId": "Q4",
+            "selectedOption": "C",
+            "reasoning": "The detailed description states: 'RA removes bags from box, puts onto cart, takes to RO.' This indicates the bags are placed directly onto a cart after removal from the box, with no mention of re-packaging or new containers at this stage."
+          }
+        ],
+        "openEndedAnswers": [
+          {
+            "questionId": "gap_exception_step2_validation_failure",
+            "answer": "If the box ID does not match expectations (2a. box id does not match transport company), the RA immediately notifies the delivery person from the TransportCompany (TC) of the discrepancy. The RA does not accept the box, provides documentation of the refusal to the delivery person, and records the refusal in a manual log. TC is responsible for resolving the issue with the sender.",
+            "confidence": "high"
+          },
+          {
+            "questionId": "gap_alternative_skip_paper_form",
+            "answer": "The paper delivery form is required if the TransportCompany (TC) explicitly mandates it as their proof of delivery, or if the Nighttime Receiving Registry Software is unavailable, serving as a manual backup. It can be skipped if TC's policy allows electronic confirmation (e.g., scanner signature) or if no paper manifest is provided by TC. If skipped, the system registration (step 4) serves as the primary proof of delivery.",
+            "confidence": "medium"
+          },
+          {
+            "questionId": "gap_exception_software_unavailability",
+            "answer": "If the 'Nighttime Receiving Registry Software' is unavailable (4b. computer goes down), the RA is instructed to leave the money on the desk and wait for the computer to come back up. This implies a manual recording of the box ID, date, time, and TC on a contingency log sheet while waiting. Once the system is restored, the RA will then input all accumulated manual entries into the software.",
+            "confidence": "high"
+          },
+          {
+            "questionId": "gap_exception_missing_bags",
+            "answer": "If a discrepancy in bag count or condition is found, the RA immediately stops processing the box and notifies the delivery person (if still present) and the Department Supervisor (DS). The RA documents the exact discrepancy, takes photographic evidence if bags are damaged, and creates a manual incident report. This information is then used to notify the TransportCompany for investigation, and the box contents are segregated until resolution.",
+            "confidence": "medium"
+          }
+        ]
+      }
+    }
+  }
+]

@@ -8,6 +8,7 @@ import {
 import openrouterFunction from "../helpers/openrouter.function.js";
 import { analysisSchema } from "../schemas/analysis.schema.js";
 import { UseCaseTermScore } from "./flat.validator.js";
+import { GapAnalysis } from "../analyzers/gap.analyzer.js";
 
 export const COVE_LLM_QUESTIONS: string[] = [
   "Is the use-case name meaningful and unambiguous?",
@@ -435,3 +436,270 @@ Return 3-5 questions maximum.
     schema: mcSchema,
   });
 }
+
+/**
+ * Interface for open-ended questions targeting exception flow discovery
+ */
+export interface OpenEndedQuestion {
+  id: string;
+  question: string;
+  context: {
+    step?: string;
+    patternType?: string;
+    whyAsking: string;
+  };
+  answerGuidance: string;
+}
+
+/**
+ * Interface for open-ended answer
+ */
+export interface OpenEndedAnswer {
+  questionId: string;
+  answer: string;
+  confidence?: string;
+}
+
+/**
+ * Combined hybrid questions structure
+ */
+export interface HybridQuestions {
+  mcQuestions: Array<{
+    id: string;
+    question: string;
+    options: string[];
+    context: string;
+  }>;
+  openEndedQuestions: OpenEndedQuestion[];
+  metadata: {
+    totalGaps: number;
+    highPriorityGaps: number;
+    completenessScore: number;
+  };
+}
+
+/**
+ * Generates hybrid questions combining multiple choice for clarifications
+ * and open-ended questions for exception flow discovery.
+ *
+ * @param gapAnalysis - The gap analysis identifying what's missing
+ * @param useCase - The current use case
+ * @param originalDescription - Original description
+ * @param validationFeedback - Formatted validation feedback
+ * @param geminiFunctions - Gemini functions for LLM calls
+ * @returns Hybrid questions with both MC and open-ended
+ */
+export async function generateHybridQuestions(
+  gapAnalysis: GapAnalysis,
+  useCase: GenUseCase,
+  originalDescription: string,
+  validationFeedback: string,
+  geminiFunctions: GeminiOpenRouterFunctions
+): Promise<HybridQuestions> {
+  // 1. Generate MC questions for general clarifications (if needed)
+  const mcQuestions =
+    gapAnalysis.completenessScore < 0.8
+      ? await generateMultipleChoiceQuestions(
+          originalDescription,
+          useCase,
+          validationFeedback,
+          geminiFunctions
+        )
+      : [];
+
+  // 2. Generate open-ended questions targeting specific gaps
+  const openEndedQuestions = await generateOpenEndedQuestionsFromGaps(
+    gapAnalysis,
+    useCase,
+    originalDescription,
+    geminiFunctions
+  );
+
+  return {
+    mcQuestions,
+    openEndedQuestions,
+    metadata: {
+      totalGaps: gapAnalysis.gaps.length,
+      highPriorityGaps: gapAnalysis.gaps.filter((g) => g.severity === "high")
+        .length,
+      completenessScore: gapAnalysis.completenessScore,
+    },
+  };
+}
+
+/**
+ * Generates open-ended questions specifically targeting exception flow discovery
+ * based on gap analysis.
+ *
+ * @param gapAnalysis - The gap analysis result
+ * @param useCase - The current use case
+ * @param originalDescription - Original description
+ * @param geminiFunctions - Gemini functions for LLM calls
+ * @returns Array of open-ended questions
+ */
+async function generateOpenEndedQuestionsFromGaps(
+  gapAnalysis: GapAnalysis,
+  useCase: GenUseCase,
+  originalDescription: string,
+  geminiFunctions: GeminiOpenRouterFunctions
+): Promise<OpenEndedQuestion[]> {
+  const openEndedSchema = z.array(
+    z.object({
+      id: z.string(),
+      question: z.string(),
+      context: z.object({
+        step: z.string().optional(),
+        patternType: z.string().optional(),
+        whyAsking: z.string(),
+      }),
+      answerGuidance: z.string(),
+    })
+  );
+
+  // Build gap context for the LLM
+  const gapContext = gapAnalysis.gaps
+    .filter((g) => g.severity === "high" || g.severity === "medium")
+    .map((gap, i) => {
+      let gapDesc = `${i + 1}. [${gap.severity.toUpperCase()}] ${gap.description}`;
+      if (gap.relatedStep !== undefined) {
+        const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
+        const step = mainFlow?.steps.find((s) => s.index === gap.relatedStep);
+        if (step) {
+          gapDesc += `\n   Related step: "${step.description}"`;
+        }
+      }
+      return gapDesc;
+    })
+    .join("\n");
+
+  const prompt = `
+<task>
+Generate 3-5 specific open-ended questions to discover exception flows and alternative paths.
+These questions should help fill the gaps identified in the current use case.
+</task>
+
+<originalDescription>
+${originalDescription}
+</originalDescription>
+
+<currentUseCase>
+${JSON.stringify(useCase, null, 2)}
+</currentUseCase>
+
+<identifiedGaps>
+${gapContext}
+</identifiedGaps>
+
+<guidelines>
+Generate questions that:
+
+1. Target EXCEPTION FLOWS (error conditions, failures, invalid inputs)
+   Example: "What happens if the box ID validation fails?"
+   
+2. Target ALTERNATIVE FLOWS (different valid paths, optional steps)
+   Example: "Are there cases where the signature step can be skipped?"
+
+3. Target SYSTEM FAILURES (unavailability, timeouts, crashes)
+   Example: "What should happen if the registration system goes down?"
+
+4. Are SPECIFIC and ANSWERABLE
+   - Reference specific steps or actors
+   - Ask about concrete scenarios
+   - Guide toward describing flows, not just outcomes
+
+5. Provide ANSWER GUIDANCE
+   - Tell the expert HOW to structure their answer
+   - Example: "Describe the exception flow: What does the actor do? How is it resolved?"
+
+Format each question with:
+- id: Unique identifier (e.g., "gap_exception_step2")
+- question: The specific question
+- context.whyAsking: Brief explanation of why this matters
+- context.step: The related step description (if applicable)
+- context.patternType: Type of gap (e.g., "validation_failure", "system_unavailability")
+- answerGuidance: Instructions for how to answer
+
+Prioritize high-severity gaps first. Return 3-5 questions maximum.
+</guidelines>
+  `;
+
+  return geminiFunctions.generateStructured({
+    prompt,
+    schema: openEndedSchema,
+  });
+}
+
+/**
+ * Simulates an expert answering open-ended questions using detailed knowledge.
+ * Used for testing the framework with ground truth data.
+ *
+ * @param questions - The open-ended questions to answer
+ * @param detailedDescription - The detailed description with full knowledge
+ * @param domain - The domain context
+ * @param geminiFunctions - Gemini functions for LLM calls
+ * @returns Array of answers with confidence levels
+ */
+export async function expertAnswerOpenEndedQuestions(
+  questions: OpenEndedQuestion[],
+  detailedDescription: string,
+  domain: string,
+  geminiFunctions: GeminiOpenRouterFunctions
+): Promise<OpenEndedAnswer[]> {
+  const answerSchema = z.array(
+    z.object({
+      questionId: z.string(),
+      answer: z.string(),
+      confidence: z.string(),
+    })
+  );
+
+  const prompt = `
+<role>
+You are a Senior Business Analyst with expertise in ${domain}.
+You have complete knowledge about this use case from the detailed description.
+</role>
+
+<detailedDescription>
+${detailedDescription}
+</detailedDescription>
+
+<questions>
+${questions
+  .map(
+    (q, i) => `
+Question ${i + 1} (ID: ${q.id}):
+${q.question}
+
+Context: ${q.context.whyAsking}
+${q.context.step ? `Related to: ${q.context.step}` : ""}
+
+How to answer: ${q.answerGuidance}
+`
+  )
+  .join("\n---\n")}
+</questions>
+
+<instructions>
+For each question:
+1. If the detailed description explicitly mentions this scenario, describe it completely
+2. If not explicitly mentioned, use domain expertise to provide a reasonable answer
+3. Structure your answer according to the guidance provided
+4. For exception/alternative flows, describe:
+   - What triggers this flow
+   - What steps the actors take
+   - How it ends (resumes, terminates, etc.)
+5. Set confidence level:
+   - "high" if answer is in detailed description
+   - "medium" if inferred from domain knowledge
+   - "low" if making reasonable assumption
+
+Keep answers concise but complete (2-4 sentences for each flow).
+</instructions>
+  `;
+
+  return geminiFunctions.generateStructured({
+    prompt,
+    schema: answerSchema,
+  });
+}
+
