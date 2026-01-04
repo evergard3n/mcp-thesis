@@ -1,0 +1,224 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "RL1",
+      "evaluations": {
+        "conditionA_Baseline": {
+          "totalFlows": 1,
+          "breakdown": {
+            "grounded": 1,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "All steps of the 'MAIN' flow are explicitly mentioned in both the vague summary and the detailed description. The sequence of actions aligns perfectly.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        },
+        "conditionB_EnhancedHITL": {
+          "totalFlows": 18,
+          "breakdown": {
+            "grounded": 12,
+            "logical": 2,
+            "hallucinations": 4
+          },
+          "scores": {
+            "qualityScore": 0.7444444444444445,
+            "discoveryRate": 0.5217391304347826,
+            "precision": 0.7777777777777778,
+            "f1Score": 0.62453531598513
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The MAIN flow directly corresponds to the 'Vague' description and the 'Main Success Scenario' in the 'Detailed' description, covering all core steps of loss information capture, validation, and saving.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_1a",
+              "category": "hallucination",
+              "score": 0,
+              "reasoning": "The condition 'Policy number, insured\\'s name, or date of incident are incomplete, invalid, or missing required fields' and the subsequent steps are not explicitly mentioned in the detailed description or its extensions. '1a' in the detailed description handles a specific case of policy mismatch, not general invalid input.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_7a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While not directly specified as EXT_7a, a general validation failure and warning to the user is implied by the 'System validates changes' (1c1), 'System warns Clerk' (1c1a1, 1c2) and especially 'System warns Clerk it cannot accept the loss without...' (6a1) conditions. It's a reasonable and common error handling mechanism in such systems.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_2a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly mirrored in '6a2. System warns Clerk it cannot assign claim number without required fields (claim line, date of loss, policy number or insured name): System directs Clerk to fields that require entry.', which addresses the consequence of incomplete basic loss information.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly described in '2c. System detects possible duplicate claim' and its sub-steps '2c1. System displays a list of possible duplicate claims...' and '2c2. Clerk selects and views a claim...'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_1b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '1b. Using search details, System could not find a policy:' and '1b1. Clerk returns to loss and enters available data'. The implied 'Fails to populate policy information' is a direct consequence of 'could not find a policy'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_7b",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Similar to EXT_7a, a general validation failure and warning is a logical extension. While not explicitly EXT_7b, the detailed description includes instances of the system warning the clerk for various validation issues (e.g., 1c1a1, 1c2, 6a1).",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This directly maps to '2c2a. Clerk finds that the claim is a duplicate: 2c2a1. Clerk opens duplicate claim from list of claims for editing...'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a_2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This directly maps to '2c2a1. ...Clerk may delete any data in previously saved.'",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a_3",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This directly maps to '2c2b. Clerk finds that the claim is not a duplicate: Clerk returns to loss and completes it.'",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_5a",
+              "category": "hallucination",
+              "score": 0,
+              "reasoning": "There is no mention in the detailed description or extensions about a scenario where 'no adjusters are available' or the system prompts the clerk to select an alternative. The closest is the assignment of a 'default adjuster' if one isn't entered.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_5a_ALT",
+              "category": "hallucination",
+              "score": 0,
+              "reasoning": "Similar to EXT_5a, there is no mention of the system allowing a save as incomplete specifically because no suitable adjusters exist. The 'save without marking complete' (6a1a) is a general option, not tied to adjuster availability.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_5a_ALT_2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The condition 'A timeout occurs as in 6b1' directly points to '6b. Timeout: ... handling adjuster has still not been entered: 6b1. System assigns default adjuster'. The alternative 'no suitable alternative adjusters exist' is not explicitly mentioned but the consequence of assigning a default adjuster is grounded.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_8c",
+              "category": "hallucination",
+              "score": 0,
+              "reasoning": "A hypothetical step 8 and a 'validation equivalent to a duplicate claim check fails' is not mentioned. The duplicate check is at step 2, and its outcomes are clearly defined.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_6a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '6a. Clerk confirms they are finished without completing minimum information:' and '6a1. System warns Clerk it cannot accept the loss without date of loss, insured name or policy number and handling adjuster:' and '6a2. System warns Clerk it cannot assign claim number without required fields...'. The action 'Clerk decides to continue entering loss' is in '6a1a'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_6a1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly described in '6a. Clerk confirms they are finished without completing minimum information:', with the warning in '6a1' and the Clerk's choice '6a1a. ...decides to save without marking complete'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_6a2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly described in '6a. Clerk confirms they are finished without completing minimum information:', with the warning in '6a1' and the Clerk's choice '6a1b. Clerk insists on existing without entering minimum information: System discards any intermediate saves and exits.'",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_5b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '6b. Timeout: ... handling adjuster has still not been entered: 6b1. System assigns default adjuster'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionA_Baseline": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    },
+    "conditionB_EnhancedHITL": {
+      "avgQuality": 0.7444444444444445,
+      "avgDiscovery": 0.5217391304347826,
+      "avgF1": 0.62453531598513
+    }
+  }
+}

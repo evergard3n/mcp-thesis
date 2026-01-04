@@ -948,7 +948,3 @@ server.registerTool(
 - 10 cases × 1 condition = 60 calls for Phase 2
 - 20 results × 3 flows avg × 1 eval = 60 calls for evaluation
 - **Total: ~240 API calls**
-
-**Optimize:**
-
-- Use Gemini Flash for evaluation (cheaper)

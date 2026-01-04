@@ -1,0 +1,918 @@
+[
+  {
+    "testCaseId": "RL1",
+    "conditionA_Baseline": {
+      "name": "Capture Loss Information",
+      "summary": "The Clerk captures loss information in a claims system, including policy details, loss information, claim-specific details, and coverage info, then assigns an adjuster. The system validates and saves the data.",
+      "mainActor": "Clerk",
+      "actors": [
+        "Clerk",
+        "System"
+      ],
+      "postconditions": [
+        "Loss information is successfully captured and saved in the claims system.",
+        "An adjuster is assigned to the claim."
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Enters policy details into the claims system."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Enters basic loss information."
+            },
+            {
+              "index": 3,
+              "actor": "Clerk",
+              "description": "Enters claim-specific details."
+            },
+            {
+              "index": 4,
+              "actor": "Clerk",
+              "description": "Enters coverage information."
+            },
+            {
+              "index": 5,
+              "actor": "Clerk",
+              "description": "Assigns an adjuster to the claim."
+            },
+            {
+              "index": 6,
+              "actor": "Clerk",
+              "description": "Confirms completion of data entry."
+            },
+            {
+              "index": 7,
+              "actor": "System",
+              "description": "Validates the entered data for accuracy and completeness."
+            },
+            {
+              "index": 8,
+              "actor": "System",
+              "description": "Checks for duplicate claims."
+            },
+            {
+              "index": 9,
+              "actor": "System",
+              "description": "Automatically saves the loss information."
+            }
+          ]
+        }
+      ]
+    },
+    "conditionB_EnhancedHITL": {
+      "name": "Capture Loss Information",
+      "summary": "The Clerk captures loss information in a claims system, including policy details, loss information, claim-specific details, and coverage info, then assigns an adjuster. The system validates and saves the data.",
+      "mainActor": "Clerk",
+      "actors": [
+        "Clerk",
+        "System"
+      ],
+      "postconditions": [
+        "Loss information is successfully captured and saved in the claims system.",
+        "An adjuster is assigned to the claim."
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Enters policy details into the claims system."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Enters basic loss information."
+            },
+            {
+              "index": 3,
+              "actor": "Clerk",
+              "description": "Enters claim-specific details."
+            },
+            {
+              "index": 4,
+              "actor": "Clerk",
+              "description": "Enters coverage information."
+            },
+            {
+              "index": 5,
+              "actor": "Clerk",
+              "description": "Assigns an adjuster to the claim."
+            },
+            {
+              "index": 6,
+              "actor": "Clerk",
+              "description": "Confirms completion of data entry."
+            },
+            {
+              "index": 7,
+              "actor": "System",
+              "description": "Validates the entered data for accuracy and completeness."
+            },
+            {
+              "index": 8,
+              "actor": "System",
+              "description": "Checks for duplicate claims."
+            },
+            {
+              "index": 9,
+              "actor": "System",
+              "description": "Automatically saves the loss information."
+            }
+          ]
+        },
+        {
+          "id": "EXT_1a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "Policy number, insured's name, or date of incident are incomplete, invalid, or missing required fields.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Cannot find a policy based on the provided policy number, insured's name, or date of incident."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Re-enters the data or provides more details."
+            }
+          ]
+        },
+        {
+          "id": "EXT_7a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 7,
+          "condition": "Validation of entered data fails.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns the Clerk and directs them to the fields requiring correction."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Corrects the data and resubmits it."
+            }
+          ]
+        },
+        {
+          "id": "EXT_2a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Basic loss information entered in step 2 is incomplete, invalid, or missing required fields.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Prevents the assignment of a claim number."
+            },
+            {
+              "index": 2,
+              "actor": "System",
+              "description": "Highlights missing or invalid fields."
+            },
+            {
+              "index": 3,
+              "actor": "Clerk",
+              "description": "Completes the mandatory fields for basic loss information."
+            }
+          ]
+        },
+        {
+          "id": "ALT_8a",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "The system detects possible duplicate claims.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Displays a list of possible duplicate claims from within the loss database."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Selects and views a claim from this list to determine if it is a duplicate."
+            },
+            {
+              "index": 3,
+              "actor": "Clerk",
+              "description": "Opens the potential duplicate claim for editing or returns to complete the current loss."
+            }
+          ]
+        },
+        {
+          "id": "EXT_1b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "Data submitted in step 1 (policy number, name, date of incident) is incomplete or invalid.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Fails to populate policy information."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Returns to the loss to enter available data or correct the previously entered information."
+            },
+            {
+              "index": 3,
+              "actor": "Clerk",
+              "description": "Provides valid data or acknowledges no match."
+            }
+          ]
+        },
+        {
+          "id": "EXT_7b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 7,
+          "condition": "A general validation fails.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns the Clerk, indicating the specific fields that require correction."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Chooses to correct the data or potentially saves the loss without completion, if allowed."
+            }
+          ]
+        },
+        {
+          "id": "ALT_8a_1",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "Validation confirms a claim is a duplicate.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Opens the duplicate claim for editing."
+            }
+          ]
+        },
+        {
+          "id": "ALT_8a_2",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "Validation confirms a claim is a duplicate and is to be deleted.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Deletes data."
+            }
+          ]
+        },
+        {
+          "id": "ALT_8a_3",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "The system detects a possible duplicate claim, but it is not a duplicate.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Returns to complete the current loss."
+            }
+          ]
+        },
+        {
+          "id": "EXT_5a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 5,
+          "condition": "No adjusters are available at Step 5.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Prompts the Clerk to select an alternative adjuster."
+            }
+          ]
+        },
+        {
+          "id": "EXT_5a_ALT",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "EXT_5a",
+          "fromStepIndex": 1,
+          "condition": "No suitable alternative adjusters exist.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Allows the Clerk to save the loss as incomplete."
+            }
+          ]
+        },
+        {
+          "id": "EXT_5a_ALT_2",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "EXT_5a",
+          "fromStepIndex": 1,
+          "condition": "A timeout occurs as in 6b1, or no suitable alternative adjusters exist.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Assigns a default adjuster."
+            }
+          ]
+        },
+        {
+          "id": "EXT_8c",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "Validation equivalent to a duplicate claim check fails at hypothetical step 8.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Displays a list of possible issues or duplicate claims."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Selects a valid option from the list or returns to correct the data."
+            }
+          ]
+        },
+        {
+          "id": "EXT_6a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 6,
+          "condition": "The Clerk confirms completion of data entry without completing minimum information.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns the Clerk that it cannot accept the loss without specific required fields (date of loss, insured name or policy number, and handling adjuster) or cannot assign a claim number without required fields (claim line, date of loss, policy number, or insured name), directing them to the missing fields."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Chooses to continue entering the loss."
+            }
+          ]
+        },
+        {
+          "id": "ALT_6a1",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 6,
+          "condition": "The Clerk confirms completion of data entry without completing minimum information and chooses to save without completion.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns the Clerk that it cannot accept the loss without specific required fields (date of loss, insured name or policy number, and handling adjuster) or cannot assign a claim number without required fields (claim line, date of loss, policy number, or insured name), directing them to the missing fields."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Chooses to save without marking it complete."
+            }
+          ]
+        },
+        {
+          "id": "ALT_6a2",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 6,
+          "condition": "The Clerk confirms completion of data entry without completing minimum information and insists on exiting.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns the Clerk that it cannot accept the loss without specific required fields (date of loss, insured name or policy number, and handling adjuster) or cannot assign a claim number without required fields (claim line, date of loss, policy number, or insured name), directing them to the missing fields."
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Insists on exiting."
+            },
+            {
+              "index": 3,
+              "actor": "System",
+              "description": "Discards any intermediate saves and exits."
+            }
+          ]
+        },
+        {
+          "id": "EXT_5b",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 5,
+          "condition": "A timeout occurs before an adjuster is entered.",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Assigns a default adjuster."
+            }
+          ]
+        }
+      ]
+    },
+    "iterativeRefinement": {
+      "totalIterations": 5,
+      "totalQuestionsAsked": 10,
+      "iterations": [
+        {
+          "iteration": 1,
+          "questionsAsked": 6,
+          "overallConfidence": 0.3443333333333334,
+          "highPriorityCount": 4,
+          "questions": [
+            "What happens if the data submitted in step 1 is incomplete, invalid, or missing required fields?",
+            "What happens if the validation in step 7 fails? (Validates the entered data for accuracy and completeness.)",
+            "What happens if the data submitted in step 2 is incomplete, invalid, or missing required fields?",
+            "How specifically is \"Checks for duplicate claims.\" performed in step 8? What are the detailed actions?",
+            "What happens if the data submitted in step 1 is incomplete, invalid, or missing required fields?",
+            "What happens if the validation in step 7 fails? (Validates the entered data for accuracy and completeness.)"
+          ],
+          "answers": [
+            "The detailed description does not explicitly state what happens if the data submitted in step 1 is incomplete, invalid, or missing required fields. Based on domain expertise, if the policy number or insured's name and date of incident are incomplete or invalid, the System would likely be unable to find a policy. This would lead to the 1b. extension where the System cannot find a policy and the Clerk would re-enter the data or provide more details.",
+            "The detailed description does not contain a step 7 or any validation step that explicitly states what happens if it fails. However, the system does have validation in step 6a that covers minimum information. If validation were to fail generally, the System would likely warn the Clerk and direct them to the fields requiring correction, similar to 6a2, allowing the Clerk to correct the data and resubmit.",
+            "The detailed description does not explicitly state what happens if the basic loss information in step 2 is incomplete, invalid, or missing required fields. Based on domain expertise, the System would likely prevent the assignment of a claim number until all mandatory fields for basic loss information are correctly provided. It would typically highlight the missing or invalid fields, prompting the Clerk to complete them before proceeding, similar to the warning in 6a2.",
+            "The detailed description does not contain a step 8. However, step 2c describes how the system detects possible duplicate claims: \"System displays a list of possible duplicate claims from within loss database.\" The Clerk then selects and views a claim from this list to determine if it is a duplicate, either opening it for editing or returning to complete the current loss.",
+            "If data submitted in step 1 (policy number, name, date of incident) is incomplete or invalid, the System would likely fail to populate policy information, leading to extension 1b. The Clerk would then return to the loss to enter available data or correct the previously entered information. This would effectively resolve by the Clerk providing valid data or acknowledging no match.",
+            "The detailed description does not explicitly include a step 7 or a general 'validation failure' scenario. However, based on similar warning scenarios in extensions 6a1 and 6a2, if a validation were to fail, the System would warn the Clerk, indicating the specific fields that require correction. The Clerk would then either choose to correct the data or potentially save the loss without completion, if allowed."
+          ]
+        },
+        {
+          "iteration": 2,
+          "questionsAsked": 2,
+          "overallConfidence": 0.6347499999999999,
+          "highPriorityCount": 1,
+          "questions": [
+            "What happens if the validation in step 8 fails? (Checks for duplicate claims.)",
+            "What happens if no resources (agents, slots, capacity) are available at step 5?"
+          ],
+          "answers": [
+            "The detailed description does not contain a step 8. Assuming this refers to step 2c, where the System detects a possible duplicate claim: if validation confirms a claim is a duplicate, the Clerk can open the duplicate for editing or delete data. If it's not a duplicate, the Clerk returns to complete the current loss. This is explicitly covered in steps 2c1 through 2c2b.",
+            "If no adjusters are available at Step 5, the System would likely prompt the Clerk to select an alternative. If no suitable alternatives exist, the System might allow the Clerk to save the loss as incomplete, or assign a default adjuster if a timeout occurs as in 6b1. The description 6b1 only refers to timeout, not lack of resources."
+          ]
+        },
+        {
+          "iteration": 3,
+          "questionsAsked": 1,
+          "overallConfidence": 0.657,
+          "highPriorityCount": 1,
+          "questions": [
+            "What happens if the validation in step 8 fails? (Checks for duplicate claims.)"
+          ],
+          "answers": [
+            "This specific scenario (validation in a hypothetical step 8 failing) is not explicitly detailed in the provided use case. However, based on the established patterns for validation failures and duplicate checks (Extension 2c and 2d), if a validation equivalent to a duplicate claim check were to fail, the System would likely display a list of possible issues or duplicate claims. The Clerk would then either select a valid option from the list or return to correct the data, similar to how duplicate claim checks are handled."
+          ]
+        },
+        {
+          "iteration": 4,
+          "questionsAsked": 1,
+          "overallConfidence": 0.6800625,
+          "highPriorityCount": 0,
+          "questions": [
+            "What happens if the validation in step 6 fails? (Confirms completion of data entry.)"
+          ],
+          "answers": [
+            "When the Clerk confirms they are finished without completing minimum information (trigger), the System warns the Clerk that it cannot accept the loss without specific required fields (date of loss, insured name or policy number, and handling adjuster) or cannot assign a claim number without required fields (claim line, date of loss, policy number, or insured name), directing them to the missing fields. The Clerk can then choose to continue entering the loss, save without marking it complete, or insist on exiting, in which case the System discards any intermediate saves and exits. Alternatively, the System may assign a default adjuster if a timeout occurs before one is entered."
+          ]
+        }
+      ]
+    },
+    "groundTruth": {
+      "name": "Register Loss",
+      "summary": "Clerk captures loss information in claims system through flexible data entry, with system validation, duplicate detection, and automatic saving",
+      "mainActor": "Clerk",
+      "actors": [
+        "Clerk",
+        "System",
+        "Agent"
+      ],
+      "preconditions": [
+        "Clerk already logged in"
+      ],
+      "postconditions": [
+        "Loss information is captured and stored",
+        "Acknowledgement sent to agent",
+        "Claim number assigned"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Enters insured's policy number or name and date of incident"
+            },
+            {
+              "index": 2,
+              "actor": "System",
+              "description": "Populates available policy information and indicates claim is matched to policy"
+            },
+            {
+              "index": 3,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Enters basic loss information"
+            },
+            {
+              "index": 4,
+              "actor": "System",
+              "description": "Confirms no existing competing claims and assigns claim number"
+            },
+            {
+              "index": 5,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Continues entering loss information specific to claim line"
+            },
+            {
+              "index": 6,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Has System pull other coverage information from other computer systems"
+            },
+            {
+              "index": 7,
+              "actor": "Clerk",
+              "description": "Selects and assigns an adjuster"
+            },
+            {
+              "index": 8,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Confirms they are finished"
+            },
+            {
+              "index": 9,
+              "actor": "System",
+              "description": "Saves loss and triggers acknowledgement to be sent to agent"
+            }
+          ]
+        },
+        {
+          "id": "EXT_ANY_POWER_FAILURE",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "condition": "Power failure during loss capture",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Autosaves intermittently at transaction commit points"
+            }
+          ]
+        },
+        {
+          "id": "EXT_ANY_NOT_OUR_COMPANY",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "condition": "Claim is not for our company to handle",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Indicates claim is entered only for recording purposes and continues or ends loss"
+            }
+          ]
+        },
+        {
+          "id": "EXT_1_POLICY_MISMATCH",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "Found policy information does not match the insured's information",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Enters correct policy number or insured name and asks System to populate with new policy index information"
+            }
+          ]
+        },
+        {
+          "id": "EXT_1_POLICY_NOT_FOUND",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "Using search details, System could not find a policy",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Returns to loss and enters available data"
+            }
+          ]
+        },
+        {
+          "id": "EXT_1_POLICY_CHANGED",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "Clerk changed policy number, date of loss or claim line after initial policy match",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Validates changes, populates loss with correct policy information, validates and indicates claim is matched to policy"
+            },
+            {
+              "index": 2,
+              "actor": "System",
+              "description": "Warns Clerk to re-evaluate coverage"
+            }
+          ]
+        },
+        {
+          "id": "EXT_1c1_CANNOT_VALIDATE",
+          "kind": "EXCEPTION",
+          "parentFlow": "EXT_1_POLICY_CHANGED",
+          "fromStepIndex": 1,
+          "condition": "System cannot validate policy match",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns Clerk"
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Finds the policy using the search details for policy"
+            }
+          ]
+        },
+        {
+          "id": "EXT_1_RESTART_LOSS",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 1,
+          "condition": "Clerk wants to restart a loss which has been interrupted, saved or needs completion",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Finds a loss using search details for loss"
+            },
+            {
+              "index": 2,
+              "actor": "System",
+              "description": "Opens it for editing"
+            }
+          ]
+        },
+        {
+          "id": "ALT_2-5_CHANGE_LINE_NO_DATA",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Clerk changes claim line previously entered and no line specific data has been entered",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Presents appropriate line specific sections of loss based on new claim line"
+            }
+          ]
+        },
+        {
+          "id": "ALT_2-5_CHANGE_LINE_WITH_DATA",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Clerk changes claim line previously entered and there is data in some line specific fields",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns that data exists and asks Clerk to either cancel changes or proceed with new claim line"
+            }
+          ]
+        },
+        {
+          "id": "ALT_2-5b1a_CANCEL",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "ALT_2-5_CHANGE_LINE_WITH_DATA",
+          "fromStepIndex": 1,
+          "condition": "Clerk cancels change",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Continues with the loss"
+            }
+          ]
+        },
+        {
+          "id": "ALT_2-5b1b_PROCEED",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "ALT_2-5_CHANGE_LINE_WITH_DATA",
+          "fromStepIndex": 1,
+          "condition": "Clerk insists on new claim line",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Blanks out line specific data but keeps all basic claim level data"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2_DUPLICATE_DETECTED",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "System detects possible duplicate claim",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Displays a list of possible duplicate claims from loss database"
+            },
+            {
+              "index": 2,
+              "actor": "Clerk",
+              "description": "Selects and views a claim from the list"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2c2a_IS_DUPLICATE",
+          "kind": "EXCEPTION",
+          "parentFlow": "EXT_2_DUPLICATE_DETECTED",
+          "fromStepIndex": 2,
+          "condition": "Clerk finds that the claim is a duplicate",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Opens duplicate claim from list for editing if not yet marked completed and may delete previously saved data"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2c2b_NOT_DUPLICATE",
+          "kind": "EXCEPTION",
+          "parentFlow": "EXT_2_DUPLICATE_DETECTED",
+          "fromStepIndex": 2,
+          "condition": "Clerk finds that the claim is not a duplicate",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Returns to loss and completes it"
+            }
+          ]
+        },
+        {
+          "id": "EXT_2_INFO_CHANGED_AFTER_CHECK",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Preliminary loss information is changed after initial duplicate claim check is done",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Performs duplicate claim check again"
+            }
+          ]
+        },
+        {
+          "id": "ALT_2-6_SAVE_ANYTIME",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 2,
+          "condition": "Clerk needs to save loss before completion",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "target": "System",
+              "description": "Has System save the loss for completion at a later time"
+            }
+          ]
+        },
+        {
+          "id": "EXT_4-5_COVERAGE_CHANGED",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 4,
+          "condition": "Claim line or loss description are changed after coverage was reviewed",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns Clerk to re-evaluate coverage"
+            }
+          ]
+        },
+        {
+          "id": "EXT_6_INCOMPLETE_MIN_INFO",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "Clerk confirms finished without completing minimum information",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns Clerk it cannot accept loss without date of loss, insured name or policy number and handling adjuster"
+            }
+          ]
+        },
+        {
+          "id": "ALT_6a1a_CONTINUE",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "EXT_6_INCOMPLETE_MIN_INFO",
+          "fromStepIndex": 1,
+          "condition": "Clerk decides to continue or save without marking complete",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Clerk",
+              "description": "Continues entering loss or saves without marking complete"
+            }
+          ]
+        },
+        {
+          "id": "ALT_6a1b_INSIST_EXIT",
+          "kind": "ALTERNATIVE",
+          "parentFlow": "EXT_6_INCOMPLETE_MIN_INFO",
+          "fromStepIndex": 1,
+          "condition": "Clerk insists on exiting without entering minimum information",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Discards any intermediate saves and exits"
+            }
+          ]
+        },
+        {
+          "id": "EXT_6_MISSING_REQUIRED",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "Missing required fields for claim number assignment",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Warns Clerk it cannot assign claim number without required fields and directs to fields requiring entry"
+            }
+          ]
+        },
+        {
+          "id": "EXT_6_TIMEOUT",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "fromStepIndex": 8,
+          "condition": "Timeout: System decides to commit but handling adjuster not entered",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Assigns default adjuster"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

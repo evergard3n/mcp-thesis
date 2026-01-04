@@ -23,9 +23,11 @@ import {
   expertAnswerMultipleChoice,
   generateHybridQuestions,
   expertAnswerOpenEndedQuestions,
+  generateAdaptiveQuestions,
 } from "../validators/llm.validator.js";
 import { evaluateUseCase } from "../evaluators/three-tier.evaluator.js";
 import { analyzeGaps } from "../analyzers/gap.analyzer.js";
+import { rankAllUncertainties } from "../evaluators/uncertainty.ranker.js";
 
 export function registerTestingTools(
   server: McpServer,
@@ -260,7 +262,7 @@ export function registerTestingTools(
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const outputPath = `test-data/results/framework-comparison-${timestamp}.json`;
+      const outputPath = `test-data/results/raw/framework-comparison-${timestamp}.json`;
       await writeFile(outputPath, JSON.stringify(results, null, 2));
 
       return {
@@ -370,7 +372,7 @@ export function registerTestingTools(
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const outputPath = `test-data/results/phase1-cove-${timestamp}.json`;
+      const outputPath = `test-data/results/raw/phase1-cove-${timestamp}.json`;
       await writeFile(outputPath, JSON.stringify(results, null, 2));
 
       return {
@@ -389,168 +391,160 @@ export function registerTestingTools(
   server.registerTool(
     "runHITLComparison",
     {
-      title: "Run HITL vs COVE Comparison",
-      description: "Compare constrained HITL against COVE with detailed input",
+      title: "Run Enhanced HITL Framework",
+      description:
+        "Compare baseline vs enhanced iterative HITL framework with priority ranking",
       inputSchema: {
         datasetPath: z.string(),
-        phase1ResultsPath: z
-          .string()
-          .optional()
-          .describe("Reuse COVE-Detailed results from Phase 1"),
         testCaseIds: z.array(z.string()).optional(),
       },
     },
-    async ({ datasetPath, phase1ResultsPath, testCaseIds }) => {
+    async ({ datasetPath, testCaseIds }) => {
       const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
       const testCases = testCaseIds
         ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
         : dataset.testCases;
 
-      // Load COVE-Detailed results from Phase 1 if provided
-      let phase1Results = null;
-      if (phase1ResultsPath) {
-        phase1Results = JSON.parse(await readFile(phase1ResultsPath, "utf-8"));
-      }
-
       const results = [];
 
       for (const tc of testCases) {
-        console.log(`Testing ${tc.id} with HITL...`);
+        console.log(`Testing ${tc.id} with Enhanced HITL...`);
 
-        // Get COVE-Detailed from Phase 1 or re-run
-        let coveDetailed;
-        if (phase1Results) {
-          const phase1Result = phase1Results.find(
-            (r: any) => r.testCaseId === tc.id
-          );
-          coveDetailed = phase1Result?.conditionB_COVEDetailed;
-        }
-
-        if (!coveDetailed) {
-          // Re-run if not found
-          const extracted = await generateFlatUseCase({
-            description: tc.inputs.detailed,
-            geminiFunctions: geminiFunctions,
-          });
-
-          const validation = await validateUseCaseWithFeedback(extracted, {
-            projectStore,
-          });
-          const questions = await generateLLMQuestions(
-            tc.inputs.detailed,
-            extracted,
-            formatValidationForLLM(validation),
-            geminiFunctions
-          );
-          const answers = await answerLLMQuestions({
-            originalDescription: tc.inputs.detailed,
-            baseUseCase: extracted,
-            questions,
-            geminiFunctions: geminiFunctions,
-          });
-          coveDetailed = await improveUseCase({
-            originalDescription: tc.inputs.detailed,
-            baseUseCase: extracted,
-            answers,
-            geminiFunctions: geminiFunctions,
-          });
-        }
-
-        // Run HITL with Hybrid Questions - Step 1: Generator extracts from vague input
-        const draft = await generateFlatUseCase({
+        // Run Enhanced HITL with Iterative Refinement
+        // Step 1: Generate initial draft from vague input (this is the baseline)
+        const baseline = await generateFlatUseCase({
           description: tc.inputs.vague,
           geminiFunctions: geminiFunctions,
         });
 
-        // Step 2: Validate and analyze gaps
-        const validation = await validateUseCaseWithFeedback(draft, {
-          projectStore,
-        });
-        const formattedFeedback = formatValidationForLLM(validation);
+        console.log(`  Baseline generated, starting iterative refinement...`);
 
-        const gapAnalysis = await analyzeGaps(
-          draft,
-          validation.score!,
-          tc.inputs.vague
+        // Clone baseline for iterative refinement
+        let currentUseCase = JSON.parse(JSON.stringify(baseline));
+
+        const MAX_QUESTIONS = 20;
+        const MAX_ITERATIONS = 5;
+        let iteration = 0;
+        let totalQuestionsAsked = 0;
+        const allQuestions: string[] = [];
+        const allIterations: any[] = [];
+
+        // Iterative refinement loop
+        while (
+          iteration < MAX_ITERATIONS &&
+          totalQuestionsAsked < MAX_QUESTIONS
+        ) {
+          iteration++;
+          console.log(`  Iteration ${iteration}...`);
+
+          // Step 2: Validate and analyze gaps
+          const validation = await validateUseCaseWithFeedback(currentUseCase, {
+            projectStore,
+          });
+
+          const gapAnalysis = await analyzeGaps(
+            currentUseCase,
+            validation.score!,
+            tc.inputs.vague
+          );
+
+          // Step 3: Uncertainty analysis and priority ranking
+          const uncertaintyAnalysis = rankAllUncertainties(
+            currentUseCase,
+            validation.score!,
+            gapAnalysis
+          );
+
+          // Stopping condition: high confidence and no high-priority gaps
+          if (
+            uncertaintyAnalysis.overallConfidence > 0.85 &&
+            uncertaintyAnalysis.highPriorityCount === 0
+          ) {
+            console.log(
+              `  Stopping: High confidence (${uncertaintyAnalysis.overallConfidence.toFixed(
+                2
+              )}) and no high-priority items`
+            );
+            break;
+          }
+
+          // Step 4: Generate adaptive questions based on priorities
+          const adaptiveQuestions = await generateAdaptiveQuestions(
+            uncertaintyAnalysis.stepPriorities,
+            uncertaintyAnalysis.flowUncertainties,
+            allQuestions,
+            Math.min(6, MAX_QUESTIONS - totalQuestionsAsked)
+          );
+
+          if (adaptiveQuestions.length === 0) {
+            console.log(`  Stopping: No more questions to ask`);
+            break;
+          }
+
+          console.log(`  Generated ${adaptiveQuestions.length} questions`);
+
+          // Step 5: Expert answers (simulating human)
+          const answers = await expertAnswerOpenEndedQuestions(
+            adaptiveQuestions,
+            tc.inputs.detailed,
+            tc.domain,
+            geminiFunctions
+          );
+
+          // Step 6: Refine use case with answers
+          currentUseCase = await refineWithHybridAnswers(
+            tc.inputs.vague,
+            currentUseCase,
+            [], // No MC questions in iterative mode
+            [],
+            answers,
+            geminiFunctions
+          );
+
+          // Track iteration data
+          allIterations.push({
+            iteration,
+            questionsAsked: adaptiveQuestions.length,
+            overallConfidence: uncertaintyAnalysis.overallConfidence,
+            highPriorityCount: uncertaintyAnalysis.highPriorityCount,
+            questions: adaptiveQuestions.map((q) => q.question),
+            answers: answers.map((a) => a.answer),
+          });
+
+          totalQuestionsAsked += adaptiveQuestions.length;
+          allQuestions.push(...adaptiveQuestions.map((q) => q.question));
+        }
+
+        console.log(
+          `  Completed ${iteration} iterations, ${totalQuestionsAsked} total questions`
         );
 
-        // Step 3: Generate hybrid questions (MC + open-ended)
-        const hybridQuestions = await generateHybridQuestions(
-          gapAnalysis,
-          draft,
-          tc.inputs.vague,
-          formattedFeedback,
-          geminiFunctions
-        );
-
-        // Step 4: Expert answers (simulating human)
-        const mcAnswers =
-          hybridQuestions.mcQuestions.length > 0
-            ? await expertAnswerMultipleChoice(
-                hybridQuestions.mcQuestions,
-                tc.inputs.detailed,
-                tc.domain,
-                geminiFunctions
-              )
-            : [];
-
-        const openEndedAnswers =
-          hybridQuestions.openEndedQuestions.length > 0
-            ? await expertAnswerOpenEndedQuestions(
-                hybridQuestions.openEndedQuestions,
-                tc.inputs.detailed,
-                tc.domain,
-                geminiFunctions
-              )
-            : [];
-
-        // Step 5: Hybrid refinement
-        const hitlUseCase = await refineWithHybridAnswers(
-          tc.inputs.vague,
-          draft,
-          hybridQuestions.mcQuestions,
-          mcAnswers,
-          openEndedAnswers,
-          geminiFunctions
-        );
+        const hitlUseCase = currentUseCase;
 
         results.push({
           testCaseId: tc.id,
-          conditionC_COVEDetailed: coveDetailed,
-          conditionD_HITL: hitlUseCase,
-          hitlQuestions: {
-            mc: hybridQuestions.mcQuestions.map((q, i) => ({
-              question: q.question,
-              answer: mcAnswers[i]?.selectedOption,
-            })),
-            openEnded: hybridQuestions.openEndedQuestions.map((q, i) => ({
-              question: q.question,
-              answer: openEndedAnswers[i]?.answer,
-              confidence: openEndedAnswers[i]?.confidence,
-            })),
-          },
-          gapAnalysis: {
-            missingExceptionFlows: gapAnalysis.missingExceptionFlows,
-            missingAlternativeFlows: gapAnalysis.missingAlternativeFlows,
-            totalGaps: gapAnalysis.gaps.length,
-            highPriorityGaps: gapAnalysis.gaps.filter(
-              (g) => g.severity === "high"
-            ).length,
-            completenessScore: gapAnalysis.completenessScore,
+          conditionA_Baseline: baseline,
+          conditionB_EnhancedHITL: hitlUseCase,
+          iterativeRefinement: {
+            totalIterations: iteration,
+            totalQuestionsAsked,
+            iterations: allIterations,
           },
           groundTruth: tc.groundTruth,
         });
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const outputPath = `test-data/results/phase2-hitl-${timestamp}.json`;
+      const outputPath = `test-data/results/raw/enhanced-hitl-${timestamp}.json`;
       await writeFile(outputPath, JSON.stringify(results, null, 2));
 
       return {
         content: [
           {
             type: "text" as const,
-            text: `HITL comparison complete: ${results.length} test cases\nResults: ${outputPath}`,
+            text: `Enhanced HITL comparison complete: ${results.length} test cases
+Baseline vs Enhanced HITL (with iterative refinement)
+Results: ${outputPath}`,
           },
         ],
         structuredContent: { results, outputPath },
@@ -589,7 +583,8 @@ export function registerTestingTools(
             key === "testCaseId" ||
             key === "groundTruth" ||
             key === "hitlQuestions" ||
-            key === "intermediateData"
+            key === "intermediateData" ||
+            key === "iterativeRefinement"
           )
             continue;
 
@@ -630,7 +625,9 @@ export function registerTestingTools(
         };
       }
 
-      const outputPath = resultsPath.replace(".json", "-evaluated.json");
+      // Extract filename from resultsPath and save to evaluated folder
+      const filename = resultsPath.split("/").pop() || "";
+      const outputPath = `test-data/results/evaluated/${filename}`;
       await writeFile(
         outputPath,
         JSON.stringify({ evaluations, summary }, null, 2)

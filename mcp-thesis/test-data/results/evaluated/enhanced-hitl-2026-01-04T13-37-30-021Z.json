@@ -1,0 +1,494 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "RL1",
+      "evaluations": {
+        "conditionA_Baseline": {
+          "totalFlows": 6,
+          "breakdown": {
+            "grounded": 6,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The flow directly describes the main activities of the Clerk and System as outlined in the Vague and Detailed descriptions. Steps 1-6 are explicitly detailed in the 'Main Success Scenario'. Steps 7-10 align with 'Clerk confirms completion' and 'System stores the loss, triggers acknowledgment actions, and ensures the claim is ready for further processing'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "AlternativeFlow1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description explicitly states: 'The Clerk may pause... entries as needed until confirming completion'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description explicitly states: 'The Clerk may... save... entries as needed until confirming completion'. The detailed description also includes '2f. Clerk can save the loss any time before completion of steps 2 through 6'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow3",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description explicitly states: 'The Clerk may... resume... entries as needed until confirming completion'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow4",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description explicitly states: 'The Clerk may... correct... entries as needed until confirming completion'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow5",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description explicitly states: 'The Clerk may... revise entries as needed until confirming completion'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            }
+          ]
+        },
+        "conditionB_EnhancedHITL": {
+          "totalFlows": 43,
+          "breakdown": {
+            "grounded": 26,
+            "logical": 16,
+            "hallucinations": 1
+          },
+          "scores": {
+            "qualityScore": 0.8651162790697675,
+            "discoveryRate": 0.6086956521739131,
+            "precision": 0.9767441860465116,
+            "f1Score": 0.75
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly maps to the 'Main Success Scenario' described in the detailed text, covering all steps from Clerk's entry to System's final processing. It also aligns with the vague summary's description of capturing and registering loss info.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "AlternativeFlow1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary states: 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This flow directly reflects the 'pause' action.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary states: 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This flow directly reflects the 'save' action. Additionally, '2f. Clerk can save the loss any time' in detailed spec reinforces this.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow3",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary states: 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This flow directly reflects the 'resume' action.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow4",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary states: 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This flow directly reflects the 'correct' action.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "AlternativeFlow5",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary states: 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This flow directly reflects the 'revise' action.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_2a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While not explicitly stated as 'data submitted in step 2 is incomplete/invalid', the detailed text mentions 'System asymptotically validates data'. If data is incomplete or invalid, it's logical for the system to display an error and highlight fields. Step 6a1 in the detailed description ('System warns Clerk it cannot accept the loss without date of loss, insured name or policy number and handling adjuster: System directs Clerk to fields that require entry') implies this behavior, but not specific to step 2 as an EXCEPTION.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The detailed text mentions 'System asynchronously validates data'. If validation fails, it's logical for the system to notify the Clerk and highlighting problematic entries is a common UI practice. '1c1a1. System warns Clerk' and '6a1. System warns Clerk' hints at this kind of behavior, but not as a specific exception for step 3 validation failure.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_4a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Step 4 of the main success scenario is 'Clerk has System pull other coverage information from other computer systems.' The prompt condition is 'The System or an external system becomes unavailable during step 5' which refers to the same action indirectly. The detailed text uses 'pull other coverage information' in step 4 main scenario, which implies an interaction with other systems. It is logical to expect an error message if those systems are unavailable. This is consistent with the general theme of handling system reliability for external integrations.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_4a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If an external system is unavailable, retrying the action later is a logical user response. This is not explicitly stated but is a common user behavior when system errors occur.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_4b",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If external information is not critical, proceeding without it is a logical option, although not explicitly stated for this specific step. The 'detailed description' has '2b1. Clerk indicates to System that claim is entered \"only for recording purposes\" and either continues or ends loss.' which indicates proceeding without certain information is a possibility.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_4c",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary states 'The Clerk may pause, save... as needed'. The detailed description states '2f. Clerk can save the loss any time before completion'. If an error occurs that prevents completion, saving for later is a direct action supported by the requirements.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_6a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Step 6 in the main scenario is 'Clerk confirms they are finished, System saves and triggers acknowledgement be sent to agent.' If the system fails during saving or triggering acknowledgment, it's logical for it to report an error and attempt rollback to maintain data integrity. While not explicitly mentioned for these specific steps, the 'a. Power failure during loss capture: a1. System autosaves intermittently' implies system resilience and recovery, making rollback a logical extension.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If a system failure occurs during saving, reattempting the save is a logical user action, even if not explicitly stated.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6b",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If a system failure persists, contacting support is a logical next step for the Clerk, though not explicitly mentioned in the provided text.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_1a_condition_5",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly addressed by '1a. Found policy information does not match the insured's information' in the 'Extensions' section of the detailed description. The condition correctly describes the scenario.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_1b_condition_6",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly addressed by '1b. Using search details, System could not find a policy' in the 'Extensions' section of the detailed description. The condition correctly describes the scenario.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_COND_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly addressed by '1a. Found policy information does not match the insured's information' and its step '1a1. Clerk enters correct policy number or insured name and asks System to populate with new policy index information.' in the detailed description. The steps align with 1a1.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_COND_2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow aligns with '1b. Using search details, System could not find a policy' and its step '1b1. Clerk returns to loss and enters available data.' in the detailed description. The steps align with 1b1.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_COND_4",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly described in '4-5a. Either, claim line or loss description are changed after coverage was reviewed by Clerk: 4-5a1. System warns Clerk to re-evaluate coverage.' in the detailed description.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_COND_4_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Step 4 of the main scenario is 'Clerk has System pull other coverage information from other computer systems.' An unavailability/failure during this step is a direct exception. The vague summary mentions 'retrieves related coverage information'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_COND_4_1_1",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "This is a logical consequence of a system error—retrying the action is a common user behavior. Not explicitly stated.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_COND_4_1_2",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Manually gathering information and entering it is a logical workaround if an automated retrieval fails, implying the clerk has knowledge to do so. Not explicitly stated for this scenario, but 'Clerk enters available policy and incident details' from the main vague summary indicates manual entry of details is part of the process.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_COND_4_1_3",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary mentions 'The Clerk may pause, save... as needed'. The detailed description states '2f. Clerk can save the loss any time before completion'. This is a direct action available to the clerk when encountering an issue.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_COND_5_1",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Step 5 of the main success scenario is 'Clerk selects and assigns an adjuster.' If no adjusters are available, it's logical for the System to inform the Clerk. '6b. Timeout: ...handling adjuster has still not been entered: 6b1. System assigns default adjuster' implies adjusters might not always be available or assigned, suggesting a lack of availability is a real scenario. However, the system simply assigns a default, it doesn't explicitly prompt the Clerk that no adjusters are available.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_COND_5_1_1",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If no adjusters are immediately available, waiting is a logical option, although not explicitly stated.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_COND_5_1_2",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If no free adjusters are available, selecting one with more capacity is a logical workaround, implying the Clerk has this capability. Not explicitly stated.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_COND_5_1_3",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The detailed description states '6b. Timeout: ...handling adjuster has still not been entered: 6b1. System assigns default adjuster'. This explicitly mentions system assigning a default adjuster when one isn't entered, which relates to unavailability/missing assignment. Also, 'System supports adjuster assignment' from vague implies default assignment is a possibility.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_COND_6_1",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Step 6 of the main scenario involves confirmation and further processing implies a final check. If validation fails, alerting the Clerk and allowing correction is logical. This is supported by '6a1. System warns Clerk it cannot accept the loss without date of loss, insured name or policy number and handling adjuster: System directs Clerk to fields that require entry' in the detailed description, which is a pre-finalization validation.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_1a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '1a. Found policy information does not match the insured's information' and its substep '1a1. Clerk enters correct policy number or insured name and asks System to populate with new policy index information.' in the detailed description. The steps are clearly derived.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_1b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '1b. Using search details, System could not find a policy' and its substep '1b1. Clerk returns to loss and enters available data.' in the detailed description. The steps are clearly derived.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_2a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '2-5a. Clerk changes claim line previously entered and no line specific data has been entered: 2-5a1. System presents appropriate line specific sections of loss based on Clerk entering a different claim line.' in the detailed text.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_3a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow directly corresponds to '4-5a. Either, claim line or loss description are changed after coverage was reviewed by Clerk: 4-5a1. System warns Clerk to re-evaluate coverage.' in the detailed text.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_4a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Step 4 of the main success scenario is 'Clerk has System pull other coverage information from other computer systems.' An unavailability/failure of the system during this is a direct exception. The vague summary states 'retrieves related coverage information'. While the autosave is a logical addition ('a. Power failure during loss capture: a1. System autosaves intermittently') and resuming work (1d. Clerk wants to restart a loss) is mentioned, the prompt's steps go a bit further than what's explicitly detailed for this specific error.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_5a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Step 5 of the main success scenario is 'Clerk selects and assigns an adjuster.' If no resources are available (e.g., adjusters), it's logical for the System to notify the Clerk. '6b. Timeout: ...handling adjuster has still not been entered: 6b1. System assigns default adjuster' suggests a scenario where an adjuster may not be readily assigned, hinting at potential unavailability, but it doesn't explicitly state 'no resources available' as notification.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5a_1",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If no resources are available, waiting is a logical action for the Clerk. Not explicitly stated in the detailed description.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5a_2",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "If no resources are available, selecting a default or alternative adjuster is a logical workaround, assuming such options are provided by the system. '6b1. System assigns default adjuster' is a System action, but Clerk choosing it as an alternative is not explicitly described.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5a_3",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague summary mentions 'The Clerk may pause, save... as needed'. The detailed description states '2f. Clerk can save the loss any time before completion'. This is a direct action available to the clerk when encountering an issue with assignment and wanting to complete later.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_7a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Step 6 of the main scenario is 'Clerk confirms they are finished, System saves and triggers acknowledgement'. This implies a final validation before saving. The condition and steps are strongly supported by '6a. Clerk confirms they are finished without completing minimum information: 6a1. System warns Clerk it cannot accept the loss without date of loss, insured name or policy number and handling adjuster: 6a1a. Clerk decides to continue entering loss or decides to save without marking complete.' in the detailed description.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_7a_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly supported by '6a1a. Clerk decides to continue entering loss or decides to save without marking complete' in the detailed description, which is an alternative after a validation warning about missing minimum information.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_1a_repopulate",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly described in '1a. Found policy information does not match the insured's information: 1a1. Clerk enters correct policy number or insured name and asks System to populate with new policy index information.' from the detailed description.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_1a_manual_entry",
+              "category": "hallucination",
+              "score": 0,
+              "reasoning": "The detailed description mentions '1b1. Clerk returns to loss and enters available data.' as an outcome if a policy is not found initially ('1b. Using search details, System could not find a policy'). However, it does not state that 'a policy is not found following correction' as a branch of 1a. If a correction in 1a fails to find a policy, it would likely revert to a 1b-like scenario (policy not found), not a separate branch as described here. This specific combination is not in the text.",
+              "inVagueSummary": false,
+              "inDetailedDescription": false,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_2a_new_claim_line",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly described in '2-5a. Clerk changes claim line previously entered and no line specific data has been entered: 2-5a1. System presents appropriate line specific sections of loss based on Clerk entering a different claim line.' in the detailed text.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionA_Baseline": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    },
+    "conditionB_EnhancedHITL": {
+      "avgQuality": 0.8651162790697675,
+      "avgDiscovery": 0.6086956521739131,
+      "avgF1": 0.75
+    }
+  }
+}

@@ -352,7 +352,8 @@ Confidence: ${a.confidence || "medium"}
   const prompt = `
 <task>
 Extract exception and alternative flows from the expert's answers.
-Each answer describes a scenario that should become a new flow in the use case.
+IMPORTANT: A single answer may describe MULTIPLE flows or NESTED exceptions.
+Carefully analyze each answer to identify all distinct scenarios.
 </task>
 
 <baseUseCase>
@@ -365,11 +366,40 @@ ${answersContext}
 
 <instructions>
 For each answer:
-1. Identify if it describes an EXCEPTION flow (error, failure) or ALTERNATIVE flow (different valid path)
-2. Generate a unique flow ID (e.g., "EXT_2a" for exception from step 2, "ALT_3a" for alternative from step 3)
-3. Determine which MAIN flow step this branches from (fromStepIndex)
-4. Extract the branching condition from the answer
-5. Break down the answer into sequential steps with actors and descriptions
+1. Identify if it describes one or MULTIPLE scenarios
+2. For each scenario, determine if it's an EXCEPTION flow (error, failure) or ALTERNATIVE flow (different valid path)
+3. Generate a unique flow ID (e.g., "EXT_2a" for exception from step 2, "ALT_3a" for alternative from step 3)
+4. Determine which flow step this branches from (fromStepIndex and parentFlow)
+5. Extract the branching condition from the answer
+6. Break down the scenario into sequential steps with actors and descriptions
+
+CRITICAL PATTERNS TO DETECT:
+
+1. **Multi-Flow Answers**: Look for phrases like:
+   - "First scenario..., Second scenario..."
+   - "If X happens..., but if Y happens..."
+   - "Another exception is..."
+   - Multiple distinct conditions mentioned
+
+2. **Nested Exceptions**: Look for exceptions within exception handling:
+   - "If the retry fails..."
+   - "If no response within timeout..."
+   - "If the alternative also fails..."
+   - For nested exceptions, set parentFlow to the parent EXCEPTION flow ID
+
+3. **Temporal Exceptions**: Look for "at any time" scenarios:
+   - "At any time, system goes down..."
+   - "Throughout the process, if X happens..."
+   - For these, omit fromStepIndex (global exceptions)
+
+4. **Post-Completion Scenarios**: Look for actions after completion:
+   - "After closing, if..."
+   - "Claim can be reopened when..."
+   - Set fromStepIndex to the final step
+
+5. **Conditional Chaining**: Look for sequential conditions:
+   - "After step X, if Y, then if Z..."
+   - Create separate flows with appropriate parent references
 
 Guidelines:
 - Steps within each flow start at index 1
@@ -377,8 +407,10 @@ Guidelines:
 - Add target if actor interacts with another actor or system
 - Keep descriptions concise (1 sentence per step)
 - Condition should clearly state when this flow is taken
+- For nested exceptions, parentFlow should reference the parent exception ID (not "MAIN")
+- For temporal exceptions, omit fromStepIndex
 
-Example flow structure:
+Example 1 - Simple Exception:
 {
   "id": "EXT_2a",
   "kind": "EXCEPTION",
@@ -395,8 +427,46 @@ Example flow structure:
   ]
 }
 
-Return an array of flows extracted from the answers.
+Example 2 - Nested Exception:
+{
+  "id": "EXT_1a2a",
+  "kind": "EXCEPTION",
+  "parentFlow": "EXT_1a",
+  "fromStepIndex": 2,
+  "condition": "Claimant does not supply information within time period",
+  "steps": [
+    {
+      "index": 1,
+      "actor": "Adjuster",
+      "target": "System",
+      "description": "Closes claim due to non-response"
+    }
+  ]
+}
+
+Example 3 - Temporal Exception (no fromStepIndex):
+{
+  "id": "EXT_ANY_SYSTEM_DOWN",
+  "kind": "EXCEPTION",
+  "parentFlow": "MAIN",
+  "condition": "At any time, System goes down",
+  "steps": [
+    {
+      "index": 1,
+      "actor": "System",
+      "description": "System group repairs system"
+    },
+    {
+      "index": 2,
+      "actor": "System",
+      "description": "System resumes operation"
+    }
+  ]
+}
+
+Return an array of ALL flows extracted from the answers.
 If an answer doesn't describe a clear flow, skip it.
+IMPORTANT: Extract ALL distinct flows from each answer, not just one.
 </instructions>
   `;
 

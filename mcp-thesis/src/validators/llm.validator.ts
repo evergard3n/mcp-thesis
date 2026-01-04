@@ -560,7 +560,9 @@ async function generateOpenEndedQuestionsFromGaps(
   const gapContext = gapAnalysis.gaps
     .filter((g) => g.severity === "high" || g.severity === "medium")
     .map((gap, i) => {
-      let gapDesc = `${i + 1}. [${gap.severity.toUpperCase()}] ${gap.description}`;
+      let gapDesc = `${i + 1}. [${gap.severity.toUpperCase()}] ${
+        gap.description
+      }`;
       if (gap.relatedStep !== undefined) {
         const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
         const step = mainFlow?.steps.find((s) => s.index === gap.relatedStep);
@@ -703,3 +705,203 @@ Keep answers concise but complete (2-4 sentences for each flow).
   });
 }
 
+/**
+ * Generates adaptive questions based on priority rankings
+ * Combines step priorities, flow uncertainties, and gap analysis
+ */
+export async function generateAdaptiveQuestions(
+  stepPriorities: Array<{
+    stepIndex: number;
+    flowId: string;
+    description: string;
+    uncertaintyScore: number;
+    criticalityScore: number;
+    priorityScore: number;
+    priorityRank: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+    uncertaintyReasons: string[];
+    relatedGaps: Array<{
+      type: string;
+      severity: string;
+      description: string;
+      suggestedQuestion?: string;
+    }>;
+  }>,
+  flowUncertainties: Array<{
+    flowId: string;
+    flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
+    conditionSpecificity: number;
+    hasCondition: boolean;
+    uncertaintyScore: number;
+    uncertaintyReasons: string[];
+  }>,
+  previousQuestions: string[],
+  maxQuestions: number = 6
+): Promise<OpenEndedQuestion[]> {
+  const questions: OpenEndedQuestion[] = [];
+  const askedAbout = new Set<string>();
+
+  // Track what we've already asked about in previous iterations
+  for (const prevQ of previousQuestions) {
+    const stepMatch = prevQ.match(/step (\d+)/i);
+    if (stepMatch) {
+      askedAbout.add(`step-${stepMatch[1]}`);
+    }
+    const flowMatch = prevQ.match(/flow ([A-Z_0-9]+)/i);
+    if (flowMatch) {
+      askedAbout.add(`flow-${flowMatch[1]}`);
+    }
+  }
+
+  // 1. Process top priority steps (CRITICAL and HIGH)
+  const topSteps = stepPriorities
+    .filter((p) => p.priorityRank === "CRITICAL" || p.priorityRank === "HIGH")
+    .slice(0, 8); // Consider top 8
+
+  for (const priority of topSteps) {
+    if (questions.length >= maxQuestions) break;
+
+    const stepKey = `step-${priority.stepIndex}`;
+    if (askedAbout.has(stepKey)) continue;
+
+    // Generate question based on uncertainty type
+    if (priority.uncertaintyReasons.includes("Vague or unclear action")) {
+      questions.push({
+        id: `clarify-step-${priority.stepIndex}`,
+        question: `How specifically is "${priority.description}" performed in step ${priority.stepIndex}? What are the detailed actions?`,
+        context: {
+          step: `Step ${priority.stepIndex}`,
+          patternType: "clarification",
+          whyAsking: `This step is critical (criticality: ${priority.criticalityScore.toFixed(
+            2
+          )}) but lacks clarity. Specific details are needed.`,
+        },
+        answerGuidance:
+          "Describe the specific actions, tools, or procedures used in this step.",
+      });
+      askedAbout.add(stepKey);
+    } else if (
+      priority.uncertaintyReasons.includes("No exception handling") &&
+      priority.relatedGaps.length > 0
+    ) {
+      const gap = priority.relatedGaps[0];
+      questions.push({
+        id: `exception-step-${priority.stepIndex}`,
+        question:
+          gap.suggestedQuestion ||
+          `What happens if step ${priority.stepIndex} fails or encounters an error? Describe all possible exception scenarios.`,
+        context: {
+          step: `Step ${priority.stepIndex}`,
+          patternType: gap.type,
+          whyAsking: `Critical step without exception handling. Gap severity: ${gap.severity}`,
+        },
+        answerGuidance:
+          "Describe each exception scenario: what triggers it, what steps are taken, and how it resolves.",
+      });
+      askedAbout.add(stepKey);
+    } else if (
+      priority.uncertaintyReasons.includes("Missing actor or target")
+    ) {
+      questions.push({
+        id: `complete-step-${priority.stepIndex}`,
+        question: `For step ${priority.stepIndex} ("${priority.description}"): Who performs this action? What system or entity is the target?`,
+        context: {
+          step: `Step ${priority.stepIndex}`,
+          patternType: "incomplete_step",
+          whyAsking: "Missing actor or target information for a critical step",
+        },
+        answerGuidance:
+          "Specify the actor performing the action and the target entity or system involved.",
+      });
+      askedAbout.add(stepKey);
+    }
+  }
+
+  // 2. Process flow-level uncertainties (top 3)
+  const uncertainFlows = flowUncertainties
+    .filter((f) => f.uncertaintyScore > 0.5)
+    .sort((a, b) => b.uncertaintyScore - a.uncertaintyScore)
+    .slice(0, 3);
+
+  for (const flowUnc of uncertainFlows) {
+    if (questions.length >= maxQuestions) break;
+
+    const flowKey = `flow-${flowUnc.flowId}`;
+    if (askedAbout.has(flowKey)) continue;
+
+    if (flowUnc.flowKind !== "MAIN" && flowUnc.conditionSpecificity < 0.5) {
+      questions.push({
+        id: `condition-${flowUnc.flowId}`,
+        question: `When exactly does ${flowUnc.flowId} occur? Provide specific conditions and triggers.`,
+        context: {
+          patternType: "uncertain_conditions",
+          whyAsking: `Flow ${flowUnc.flowId} has a vague condition. Need specific trigger details.`,
+        },
+        answerGuidance:
+          "Specify the exact condition that triggers this flow, including any relevant values, states, or events.",
+      });
+      askedAbout.add(flowKey);
+    } else if (flowUnc.flowKind !== "MAIN" && !flowUnc.hasCondition) {
+      questions.push({
+        id: `missing-condition-${flowUnc.flowId}`,
+        question: `What triggers ${flowUnc.flowId}? Describe the condition that causes this flow to execute.`,
+        context: {
+          patternType: "uncertain_conditions",
+          whyAsking: `Flow ${flowUnc.flowId} is missing a condition entirely.`,
+        },
+        answerGuidance:
+          "Describe the condition that causes this flow to execute, including what triggers it and when it occurs.",
+      });
+      askedAbout.add(flowKey);
+    }
+  }
+
+  // 3. Add gap-based questions for remaining slots
+  const remainingGaps = stepPriorities
+    .flatMap((p) => p.relatedGaps)
+    .filter((g) => g.severity === "high" || g.severity === "medium")
+    .filter((g) => {
+      // Check if we haven't asked about this gap type yet
+      const gapKey = `gap-${g.type}`;
+      if (askedAbout.has(gapKey)) return false;
+      askedAbout.add(gapKey);
+      return true;
+    })
+    .slice(0, maxQuestions - questions.length);
+
+  for (const gap of remainingGaps) {
+    if (questions.length >= maxQuestions) break;
+
+    if (gap.suggestedQuestion) {
+      questions.push({
+        id: `gap-${gap.type}`,
+        question: gap.suggestedQuestion,
+        context: {
+          patternType: gap.type,
+          whyAsking: gap.description,
+        },
+        answerGuidance:
+          "Describe the scenario: what triggers it, what steps are taken, and how it resolves or integrates with the main flow.",
+      });
+    }
+  }
+
+  // Sort by priority (CRITICAL steps first, then HIGH)
+  const priorityMap = new Map(
+    stepPriorities.map((p) => [`step-${p.stepIndex}`, p.priorityScore])
+  );
+
+  return questions
+    .sort((a, b) => {
+      const aStepMatch = a.id.match(/step-(\d+)/);
+      const bStepMatch = b.id.match(/step-(\d+)/);
+
+      if (aStepMatch && bStepMatch) {
+        const aPriority = priorityMap.get(`step-${aStepMatch[1]}`) || 0;
+        const bPriority = priorityMap.get(`step-${bStepMatch[1]}`) || 0;
+        return bPriority - aPriority;
+      }
+
+      return 0;
+    })
+    .slice(0, maxQuestions);
+}
