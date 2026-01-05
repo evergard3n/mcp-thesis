@@ -19,16 +19,51 @@ export type GapType =
   | "missing_environmental_interruptions"
   | "missing_technology_variations";
 
+type DecisionIntent =
+  | "failure_handling"
+  | "validation_handling"
+  | "alternative_path"
+  | "resource_availability"
+  | "post_completion"
+  | "contextual";
+
+//Decision-critical gaps (PHẢI HỎI)
+export type Tier1 = [
+  "missing_exception_flows",
+  "missing_alternative_flows",
+  "uncertain_conditions",
+  "missing_nested_exceptions"
+];
+
+//Completeness gaps (CÂN NHẮC)
+export type Tier2 = [
+  "missing_validation_handling",
+  "missing_system_failure_handling",
+  "missing_temporal_exceptions",
+  "missing_post_completion_scenarios",
+  "missing_data_quality_handling"
+];
+
+//Contextual / environmental gaps (THƯỜNG KHÔNG HỎI)
+export type Tier3 = [
+  "incomplete_actors",
+  "missing_resource_availability",
+  "missing_environmental_interruptions",
+  "missing_technology_variations"
+];
+
 /**
  * Analysis result for a single gap
  */
 export interface Gap {
   type: GapType;
   severity: "high" | "medium" | "low";
+  dangerousness?: "critical" | "safe";
   description: string;
   relatedStep?: number;
   relatedFlow?: string;
   suggestedQuestion?: string;
+  decisionIntent?: DecisionIntent;
 }
 
 /**
@@ -43,6 +78,27 @@ export interface GapAnalysis {
   priorityGaps: GapType[]; // ordered by importance
   completenessScore: number; // 0-1 estimate of how complete the use case is
 }
+
+const GAP_TO_INTENT: Record<GapType, DecisionIntent> = {
+  missing_exception_flows: "failure_handling",
+  missing_system_failure_handling: "failure_handling",
+  missing_nested_exceptions: "failure_handling",
+  missing_temporal_exceptions: "failure_handling",
+
+  missing_validation_handling: "validation_handling",
+  missing_data_quality_handling: "validation_handling",
+  uncertain_conditions: "validation_handling",
+
+  missing_alternative_flows: "alternative_path",
+  missing_technology_variations: "alternative_path",
+
+  missing_resource_availability: "resource_availability",
+
+  missing_post_completion_scenarios: "post_completion",
+
+  missing_environmental_interruptions: "contextual",
+  incomplete_actors: "contextual",
+};
 
 /**
  * Detects missing temporal/async exceptions that can occur at any time
@@ -79,6 +135,7 @@ function detectTemporalExceptions(
     if (!hasGlobalException) {
       gaps.push({
         type: "missing_temporal_exceptions",
+        decisionIntent: GAP_TO_INTENT["missing_temporal_exceptions"],
         severity: "high",
         description:
           "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
@@ -124,6 +181,7 @@ function detectNestedExceptions(
     if (!hasNestedExceptions && exceptionFlows.length > 0) {
       gaps.push({
         type: "missing_nested_exceptions",
+        decisionIntent: GAP_TO_INTENT["missing_nested_exceptions"],
         severity: "medium",
         description:
           "Description mentions timeout or non-response scenarios but no nested exception flows found.",
@@ -168,6 +226,7 @@ function detectResourceAvailability(
       if (!hasResourceException) {
         gaps.push({
           type: "missing_resource_availability",
+          decisionIntent: GAP_TO_INTENT["missing_resource_availability"],
           severity: "high",
           description: `Step ${step.index} involves resource assignment but has no exception for resource unavailability.`,
           relatedStep: step.index,
@@ -196,6 +255,7 @@ function detectResourceAvailability(
   if (hasResourceMention && gaps.length === 0) {
     gaps.push({
       type: "missing_resource_availability",
+      decisionIntent: GAP_TO_INTENT["missing_resource_availability"],
       severity: "medium",
       description:
         "Description mentions resource availability issues but no related exception flows found.",
@@ -236,6 +296,7 @@ function detectPostCompletionScenarios(
     if (!hasPostCompletionFlow) {
       gaps.push({
         type: "missing_post_completion_scenarios",
+        decisionIntent: GAP_TO_INTENT["missing_post_completion_scenarios"],
         severity: "medium",
         description: `Step ${lastStep.index} closes the process but has no flows for post-completion scenarios.`,
         relatedStep: lastStep.index,
@@ -262,6 +323,7 @@ function detectPostCompletionScenarios(
   if (hasReopenMention && gaps.length === 0) {
     gaps.push({
       type: "missing_post_completion_scenarios",
+      decisionIntent: GAP_TO_INTENT["missing_post_completion_scenarios"],
       severity: "high",
       description:
         "Description mentions post-completion actions but no related flows found.",
@@ -311,6 +373,7 @@ function detectDataQualityIssues(
       if (!hasDataQualityException) {
         gaps.push({
           type: "missing_data_quality_handling",
+          decisionIntent: GAP_TO_INTENT["missing_data_quality_handling"],
           severity: "high",
           description: `Step ${step.index} involves data submission but has no exception for incomplete or invalid data.`,
           relatedStep: step.index,
@@ -362,6 +425,7 @@ function detectEnvironmentalInterruptions(
     if (!hasEnvironmentalException) {
       gaps.push({
         type: "missing_environmental_interruptions",
+        decisionIntent: GAP_TO_INTENT["missing_environmental_interruptions"],
         severity: "medium",
         description:
           "Description mentions environmental or external interruptions but no related exception flows found.",
@@ -409,6 +473,7 @@ function detectTechnologyVariations(
     if (alternativeFlows.length === 0 && mainFlow) {
       gaps.push({
         type: "missing_technology_variations",
+        decisionIntent: GAP_TO_INTENT["missing_technology_variations"],
         severity: "low",
         description:
           "Description mentions different technology or implementation methods but no alternative flows found.",
@@ -444,6 +509,7 @@ export async function analyzeGaps(
   if (missingExceptionFlows) {
     gaps.push({
       type: "missing_exception_flows",
+      decisionIntent: GAP_TO_INTENT["missing_exception_flows"],
       severity: "high",
       description:
         "No exception flows found. Real-world scenarios need error handling.",
@@ -457,6 +523,7 @@ export async function analyzeGaps(
   if (missingAlternativeFlows) {
     gaps.push({
       type: "missing_alternative_flows",
+      decisionIntent: GAP_TO_INTENT["missing_alternative_flows"],
       severity: "medium",
       description:
         "No alternative flows found. Consider different valid paths to the same goal.",
@@ -485,6 +552,7 @@ export async function analyzeGaps(
         if (!hasExceptionFromStep) {
           gaps.push({
             type: "missing_validation_handling",
+            decisionIntent: GAP_TO_INTENT["missing_validation_handling"],
             severity: "high",
             description: `Step ${step.index} performs validation but has no exception flow for validation failure.`,
             relatedStep: step.index,
@@ -509,6 +577,7 @@ export async function analyzeGaps(
         if (!hasExceptionFromStep) {
           gaps.push({
             type: "missing_system_failure_handling",
+            decisionIntent: GAP_TO_INTENT["missing_system_failure_handling"],
             severity: "high",
             description: `Step ${step.index} interacts with ${step.target} but has no exception flow for system failures.`,
             relatedStep: step.index,
@@ -529,6 +598,7 @@ export async function analyzeGaps(
       incompleteActors.push(actor);
       gaps.push({
         type: "incomplete_actors",
+        decisionIntent: GAP_TO_INTENT["incomplete_actors"],
         severity: "low",
         description: `Actor '${actor}' is declared but never appears in any step.`,
         suggestedQuestion: `What role does ${actor} play in this use case?`,
@@ -545,6 +615,7 @@ export async function analyzeGaps(
       uncertainConditions.push(flow.id);
       gaps.push({
         type: "uncertain_conditions",
+        decisionIntent: GAP_TO_INTENT["uncertain_conditions"],
         severity: "medium",
         description: `Flow '${flow.id}' has a weak or missing condition.`,
         relatedFlow: flow.id,
@@ -574,7 +645,12 @@ export async function analyzeGaps(
   // 12. NEW: Detect technology variations
   gaps.push(...detectTechnologyVariations(useCase, originalDescription));
 
-  // 13. Priority ordering (high severity first, then by type importance)
+  // 13. Mark dangerousness for each gap
+  for (const gap of gaps) {
+    gap.dangerousness = isDangerousGap(gap, useCase) ? "critical" : "safe";
+  }
+
+  // 14. Priority ordering (high severity first, then by type importance)
   const priorityGaps: GapType[] = [];
   const typeOrder: GapType[] = [
     "missing_exception_flows",
@@ -711,4 +787,159 @@ export function formatGapAnalysis(analysis: GapAnalysis): string {
   }
 
   return parts.join("\n");
+}
+
+/**
+ * Determines if a gap is dangerous (critical) or safe
+ * A gap is CRITICAL if:
+ * - It's a Tier 1 gap (decision-critical)
+ * - It's a Tier 2 gap with HIGH severity
+ * - It affects a step without downstream resolution or exception handling
+ *
+ * A gap is SAFE if:
+ * - It's handled by downstream steps (retry/escalate/compensate)
+ * - It has an exception flow already
+ * - It's only about logging/monitoring/notifications
+ */
+function isDangerousGap(gap: Gap, useCase: GenUseCase): boolean {
+  // Tier 1 gaps are ALWAYS critical (decision-critical)
+  const tier1Types: GapType[] = [
+    "missing_exception_flows",
+    "missing_alternative_flows",
+    "uncertain_conditions",
+    "missing_nested_exceptions",
+  ];
+
+  if (tier1Types.includes(gap.type)) {
+    return true;
+  }
+
+  // Tier 2 gaps with HIGH severity are critical
+  const tier2Types: GapType[] = [
+    "missing_validation_handling",
+    "missing_system_failure_handling",
+    "missing_temporal_exceptions",
+    "missing_post_completion_scenarios",
+    "missing_data_quality_handling",
+  ];
+
+  if (tier2Types.includes(gap.type) && gap.severity === "high") {
+    return true;
+  }
+
+  // Check if gap is about logging/monitoring → SAFE
+  if (gap.description.match(/log|notify|monitor|record|track/i)) {
+    return false;
+  }
+
+  // If gap affects a specific step, check downstream resolution
+  if (gap.relatedStep !== undefined) {
+    const downstreamHandled = checkDownstreamResolution(gap, useCase);
+    if (downstreamHandled) {
+      return false; // SAFE because handled downstream
+    }
+  }
+
+  // Default: gaps with HIGH severity are critical
+  return gap.severity === "high";
+}
+
+/**
+ * Checks if a gap is resolved by downstream steps or exception flows
+ * Returns TRUE if the issue is handled later in the process
+ */
+function checkDownstreamResolution(gap: Gap, useCase: GenUseCase): boolean {
+  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
+  if (!mainFlow) return false;
+
+  const stepIndex = gap.relatedStep!;
+  const stepPosition = mainFlow.steps.findIndex((s) => s.index === stepIndex);
+  if (stepPosition === -1) return false;
+
+  // 1. Check if there's already an exception flow from this step
+  const hasExceptionFlow = useCase.flows.some(
+    (f) =>
+      f.kind === "EXCEPTION" &&
+      f.fromStepIndex === stepIndex &&
+      f.parentFlow === "MAIN"
+  );
+
+  if (hasExceptionFlow) {
+    return true; // Already has exception handling
+  }
+
+  // 2. Check if downstream steps handle the issue
+  for (let i = stepPosition + 1; i < mainFlow.steps.length; i++) {
+    const step = mainFlow.steps[i];
+    const desc = step.description.toLowerCase();
+
+    // Look for recovery/compensation actions
+    if (
+      desc.match(
+        /retry|re-try|escalat|abort|cancel|compensat|rollback|revert|alternate|recover|handle error|resolve|fix/i
+      )
+    ) {
+      return true; // Handled by downstream step
+    }
+  }
+
+  // 3. Check if there's a global exception handler
+  const hasGlobalException = useCase.flows.some(
+    (f) =>
+      f.kind === "EXCEPTION" &&
+      (f.fromStepIndex === undefined || f.fromStepIndex === null)
+  );
+
+  if (hasGlobalException) {
+    return true; // Global exception handler exists
+  }
+
+  return false; // Not resolved downstream
+}
+
+export function clusterGaps(gaps: Gap[]): Map<string, Gap[]> {
+  const clusters = new Map<string, Gap[]>();
+
+  for (const gap of gaps) {
+    const key = `${gap.decisionIntent}:${
+      gap.relatedStep ?? gap.relatedFlow ?? "global"
+    }`;
+    if (!clusters.has(key)) clusters.set(key, []);
+    clusters.get(key)!.push(gap);
+  }
+
+  return clusters;
+}
+
+export function formatGapCluster(
+  clusterKey: string,
+  gaps: Gap[],
+  useCase: GenUseCase
+): string {
+  const [intent, location] = clusterKey.split(":");
+
+  let description = `**${intent.toUpperCase()} at ${location}**\n`;
+
+  // Add step context if available
+  if (location.startsWith("step-")) {
+    const stepIndex = parseInt(location.split("-")[1]);
+    const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
+    const step = mainFlow?.steps.find((s) => s.index === stepIndex);
+    if (step) {
+      description += `Step ${stepIndex}: "${step.description}"\n`;
+    }
+  }
+
+  // List all gap types in cluster
+  description += `Missing:\n`;
+  gaps.forEach((gap, i) => {
+    description += `  ${
+      i + 1
+    }. [${gap.severity.toUpperCase()}] ${gap.type.replace(/_/g, " ")}\n`;
+    if (gap.description) {
+      description += `     ${gap.description}\n`;
+    }
+  });
+
+  return description;
 }

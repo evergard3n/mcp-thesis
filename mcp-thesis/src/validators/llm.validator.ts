@@ -8,7 +8,11 @@ import {
 import openrouterFunction from "../helpers/openrouter.function.js";
 import { analysisSchema } from "../schemas/analysis.schema.js";
 import { UseCaseTermScore } from "./flat.validator.js";
-import { GapAnalysis } from "../analyzers/gap.analyzer.js";
+import {
+  GapAnalysis,
+  clusterGaps,
+  formatGapCluster,
+} from "../analyzers/gap.analyzer.js";
 
 export const COVE_LLM_QUESTIONS: string[] = [
   "Is the use-case name meaningful and unambiguous?",
@@ -557,27 +561,35 @@ async function generateOpenEndedQuestionsFromGaps(
   );
 
   // Build gap context for the LLM
-  const gapContext = gapAnalysis.gaps
-    .filter((g) => g.severity === "high" || g.severity === "medium")
-    .map((gap, i) => {
-      let gapDesc = `${i + 1}. [${gap.severity.toUpperCase()}] ${
-        gap.description
-      }`;
-      if (gap.relatedStep !== undefined) {
-        const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-        const step = mainFlow?.steps.find((s) => s.index === gap.relatedStep);
-        if (step) {
-          gapDesc += `\n   Related step: "${step.description}"`;
-        }
-      }
-      return gapDesc;
-    })
-    .join("\n");
+  // CLUSTERING: Group related gaps by intent and location
+  const highMediumGaps = gapAnalysis.gaps.filter(
+    (g) => g.severity === "high" || g.severity === "medium"
+  );
+
+  const clusters = clusterGaps(highMediumGaps);
+
+  // Format clusters for LLM prompt
+  const gapContext: string[] = [];
+  let clusterIndex = 1;
+
+  for (const [clusterKey, clusterGaps] of clusters.entries()) {
+    gapContext.push(
+      `\nCluster ${clusterIndex}: ${formatGapCluster(
+        clusterKey,
+        clusterGaps,
+        useCase
+      )}`
+    );
+    clusterIndex++;
+  }
 
   const prompt = `
 <task>
 Generate 3-5 specific open-ended questions to discover exception flows and alternative paths.
 These questions should help fill the gaps identified in the current use case.
+
+IMPORTANT: Gaps are clustered by decision intent and location. Each cluster may contain multiple related gaps.
+Generate ONE consolidated question per cluster that addresses ALL gaps in that cluster.
 </task>
 
 <originalDescription>
@@ -588,40 +600,47 @@ ${originalDescription}
 ${JSON.stringify(useCase, null, 2)}
 </currentUseCase>
 
-<identifiedGaps>
-${gapContext}
-</identifiedGaps>
+<identifiedGapClusters>
+${gapContext.join("\n")}
+</identifiedGapClusters>
 
 <guidelines>
 Generate questions that:
 
-1. Target EXCEPTION FLOWS (error conditions, failures, invalid inputs)
+1. ADDRESS ENTIRE CLUSTERS (not individual gaps)
+   - If cluster has multiple failure handling gaps → Ask about ALL failure scenarios
+   - Example: "What error conditions can occur at step 2? Describe handling for:
+               • Validation failures
+               • System unavailability  
+               • Data quality issues"
+
+2. Target EXCEPTION FLOWS (error conditions, failures, invalid inputs)
    Example: "What happens if the box ID validation fails?"
    
-2. Target ALTERNATIVE FLOWS (different valid paths, optional steps)
+3. Target ALTERNATIVE FLOWS (different valid paths, optional steps)
    Example: "Are there cases where the signature step can be skipped?"
 
-3. Target SYSTEM FAILURES (unavailability, timeouts, crashes)
+4. Target SYSTEM FAILURES (unavailability, timeouts, crashes)
    Example: "What should happen if the registration system goes down?"
 
-4. Are SPECIFIC and ANSWERABLE
+5. Are SPECIFIC and ANSWERABLE
    - Reference specific steps or actors
    - Ask about concrete scenarios
    - Guide toward describing flows, not just outcomes
 
-5. Provide ANSWER GUIDANCE
+6. Provide ANSWER GUIDANCE
    - Tell the expert HOW to structure their answer
-   - Example: "Describe the exception flow: What does the actor do? How is it resolved?"
+   - Example: "Describe each exception flow: What triggers it? What steps are taken? How is it resolved?"
 
 Format each question with:
-- id: Unique identifier (e.g., "gap_exception_step2")
-- question: The specific question
-- context.whyAsking: Brief explanation of why this matters
+- id: Unique identifier (e.g., "cluster_failure_handling_step2")
+- question: The consolidated question addressing the cluster
+- context.whyAsking: Brief explanation of why this cluster matters
 - context.step: The related step description (if applicable)
-- context.patternType: Type of gap (e.g., "validation_failure", "system_unavailability")
+- context.patternType: The decision intent of the cluster (e.g., "failure_handling", "validation_handling")
 - answerGuidance: Instructions for how to answer
 
-Prioritize high-severity gaps first. Return 3-5 questions maximum.
+Prioritize high-severity gap clusters first. Return 3-5 questions maximum (one per important cluster).
 </guidelines>
   `;
 

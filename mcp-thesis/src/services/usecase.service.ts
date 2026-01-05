@@ -1,6 +1,7 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.functions.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
+import { convertToFRSL } from "../model/convertToFRSL.js";
 
 export async function generateFlatUseCase({
   description,
@@ -536,4 +537,13 @@ export async function refineWithHybridAnswers(
     ...refined,
     flows: combinedFlows,
   };
+}
+
+export async function genFRSL(prompt: string) {
+  const genUseCase = await generateFlatUseCase({
+    description: prompt,
+    geminiFunctions: null as any,
+  });
+  const frslUseCase = convertToFRSL(genUseCase);
+  return frslUseCase;
 }

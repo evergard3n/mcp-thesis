@@ -22,6 +22,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "crypto";
 import { OPENROUTER_API_KEY } from "./helpers/env.js";
 import { GeminiOpenRouterFunctions } from "./helpers/gemini-openrouter.functions.js";
+import { registerFrslTool } from "./tools/genFRSLTool.js";
 
 /**
  * Session-scoped MCP Server wrapper
@@ -72,6 +73,7 @@ class SessionServer {
       this.projectStore,
       this.geminiFunctions
     );
+    registerFrslTool(this.mcpServer, this.projectStore);
   }
 
   async connect(transport: StreamableHTTPServerTransport): Promise<void> {
