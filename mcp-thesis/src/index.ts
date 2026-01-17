@@ -1,6 +1,24 @@
 #!/usr/bin/env node
 
+// Check if stdio mode BEFORE dotenv loads PORT
+// When stdin is piped (not a TTY), we're in stdio mode
+const isStdioMode =
+  typeof process.stdin.isTTY === "undefined" || process.stdin.isTTY === false;
+
+// If stdio mode, delete PORT to prevent dotenv from enabling HTTP
+if (isStdioMode) {
+  delete process.env.PORT;
+}
+
 import "dotenv/config";
+
+// Redirect all console output to stderr in stdio mode to keep stdout clean for JSON-RPC
+if (isStdioMode) {
+  const originalError = console.error;
+  console.log = (...args: any[]) => originalError("[LOG]", ...args);
+  console.error = (...args: any[]) => originalError("[ERROR]", ...args);
+  console.warn = (...args: any[]) => originalError("[WARN]", ...args);
+}
 
 /**
  * This is a template MCP server that implements a simple notes system.
@@ -13,6 +31,7 @@ import "dotenv/config";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import express from "express";
 import { JsonProjectStore } from "./stores/projectStore.js";
 import { registerProjectTools } from "./tools/projectTools.js";
@@ -95,7 +114,6 @@ const sessions: {
 // >();
 
 const app = express();
-app.use(express.json());
 
 app.get("/ping", async (req, res) => {
   res.status(200).send("pong");
@@ -193,65 +211,29 @@ app.get("/mcp", async (req, res) => {
   await sessions[sessionId].transport.handleRequest(req, res);
 });
 
-// app.post("/mcp", async (req, res) => {
+// Start server in appropriate mode (isStdioMode already defined at top)
+if (isStdioMode) {
+  // STDIO MODE - for MCP Inspector and Claude Desktop
+  const server = new SessionServer("stdio-session");
+  const transport = new StdioServerTransport();
 
-//   const transport = new StreamableHTTPServerTransport({
-//     sessionIdGenerator: () => randomUUID(),
-//     onsessioninitialized: async (sessionId) => {
-//       // Create server when session is initialized
-//       const server = new SessionServer(sessionId);
-//       await server.connect(transport);
-
-//       transports.set(sessionId, { server, transport });
-//     },
-//   });
-
-//   transport.onclose = () => {
-//     if (transport.sessionId) {
-//       transports.delete(transport.sessionId);
-//     }
-//   };
-
-//   await transport.handleRequest(req, res, req.body);
-// });
-
-// app.get("/mcp", async (req, res) => {
-//   // StreamableHTTPServerTransport should handle session lookup internally
-//   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-
-//   if (!sessionId || !transports.has(sessionId)) {
-//     res.status(400).send("Invalid or missing session ID");
-//     return;
-//   }
-
-//   const { transport } = transports.get(sessionId)!;
-//   await transport.handleRequest(req, res);
-// });
-
-const port = parseInt(process.env.PORT || "3006");
-app
-  .listen(port, () => {
-    console.log(
-      `${new Date().toISOString()} Demo MCP Server running on http://localhost:${port}/mcp`
-    );
-  })
-  .on("error", (error) => {
-    console.error("Server error:", error);
+  server.connect(transport as any).catch((error) => {
+    console.error("Failed to start STDIO server:", error);
     process.exit(1);
   });
+} else {
+  // HTTP MODE - for web clients
+  const port = parseInt(process.env.PORT || "3006");
+  app
+    .listen(port, () => {
+      console.log(
+        `${new Date().toISOString()} MCP Server running on http://localhost:${port}/mcp`
+      );
+    })
+    .on("error", (error) => {
+      console.error("Server error:", error);
+      process.exit(1);
+    });
+}
 
-// export default {
-//   fetch(request: Request, env: Env, ctx: ExecutionContext) {
-//     const url = new URL(request.url);
-
-//     if (url.pathname === "/sse" || url.pathname === "/sse/message") {
-//       return server.serveSSE("/sse").fetch(request, env, ctx);
-//     }
-
-//     if (url.pathname === "/mcp") {
-//       return MyMCP.serve("/mcp").fetch(request, env, ctx);
-//     }
-
-//     return new Response("Not found", { status: 404 });
-//   },
-// };
+app.use(express.json());

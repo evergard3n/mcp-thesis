@@ -6,6 +6,5 @@ temp
 *.lock
 package-lock.json
 
-/model
 /scripts
 /docs

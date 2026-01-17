@@ -1,0 +1,224 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "RL1",
+      "evaluations": {
+        "conditionA_Baseline": {
+          "totalFlows": 1,
+          "breakdown": {
+            "grounded": 1,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Every step in this flow is directly and explicitly mentioned in both the vague and detailed descriptions, forming the core process of registering a loss.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        },
+        "conditionB_EnhancedHITL": {
+          "totalFlows": 18,
+          "breakdown": {
+            "grounded": 12,
+            "logical": 6,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 0.8999999999999999,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The MAIN flow directly correlates with the detailed description of the 'Register Loss' process.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_2a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly addressed by '2d. Preliminary loss information is changed after initial duplicate claim check is done: 2d1. System performs duplicate claim check again.' and the general idea of correcting entry in the vague summary.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While the vague summary mentions 'System asynchronously validates data' and the detailed mentions 'System validates changes' (1c1), a specific explicit flow for data validation failure during step 3 is not fully detailed as a separate extension, but it's a logical consequence of validation.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_2b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This aligns with '6a2. System warns Clerk it cannot assign claim number without required fields (claim line, date of loss, policy number or insured name): System directs Clerk to fields that require entry.'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_2c1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is covered by '6a1a. Clerk decides to continue entering loss or decides to save without marking complete.'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_2c2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is covered by '6a1b. Clerk insists on existing without entering minimum information: System discards any intermediate saves and exits.'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is covered by '6b. Timeout: Clerk has saved the loss temporarily, intending to return, System decides it is time to commit and log the loss, but handling adjuster has still not been entered: 6b1. System assigns default adjuster' and the main success scenario step 5 'Clerk selects and assigns an adjuster'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_MAIN_2_5a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This directly corresponds to '2c. System detects possible duplicate claim: 2c1. System displays a list of possible duplicate claims from within loss database.'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_MAIN_2_8a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While 'System supports adjuster assignment' is mentioned (main success scenario step 5) and 'System assigns default adjuster' (6b1), an explicit alternative prompt is not detailed, but it's a logical user interaction when an expected resource is unavailable.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_MAIN_2_8b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This directly aligns with '6b1. System assigns default adjuster'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_MAIN_2_8c",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is covered by '2f. Clerk can save the loss any time before completion of steps 2 through 6: 2f1. Clerk has System save the loss for completion at a later time.' and the fact that adjuster assignment is step 5, meaning it could be saved prior.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3a_validation_failure",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While 'asynchronously validates data' is mentioned, specific steps for a validation failure at step 3 as an explicit exception flow are not provided, but it's a logical outcome of validation.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a_save_without_adjuster",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is covered by '2f. Clerk can save the loss any time before completion of steps 2 through 6: 2f1. Clerk has System save the loss for completion at a later time.' and adjuster assignment is step 5.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_8b_escalate_or_default_adjuster",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While a default adjuster is mentioned (6b1), the specific actions for the Clerk being prompted to escalate or other solutions are not explicitly detailed for this scenario.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_5a_validation_failure",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The detailed description mentions 'System validates changes' (1c1) generally, but a specific validation failure in step 5 related to adjuster assignment (System supports adjuster assignment) is not explicitly detailed as an exception flow, though logical.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a_no_adjusters",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While 'supports adjuster assignment' (step 5) and 'assigns default adjuster' (6b1) are present, a flow for the clerk to explicitly choose to wait or escalate is not detailed.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8d_no_adjusters_default",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is entirely covered by '6b1. System assigns default adjuster'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_MAIN_12a_validation_failure",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is covered by '6a. Clerk confirms they are finished without completing minimum information: 6a1. System warns Clerk it cannot accept the loss without date of loss, insured name or policy number and handling adjuster'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionA_Baseline": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    },
+    "conditionB_EnhancedHITL": {
+      "avgQuality": 0.8999999999999999,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    }
+  }
+}

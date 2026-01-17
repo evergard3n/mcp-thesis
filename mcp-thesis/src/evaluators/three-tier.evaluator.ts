@@ -11,6 +11,12 @@ const batchFlowEvalSchema = z.array(
     inVagueSummary: z.boolean(),
     inDetailedDescription: z.boolean().optional(),
     inGroundTruth: z.boolean(),
+    matchedGroundTruthFlowId: z
+      .string()
+      .optional()
+      .describe(
+        "The ID of the semantically matching ground truth flow, if any"
+      ),
   })
 );
 
