@@ -56,34 +56,32 @@ Current research has two critical flaws:
 flowchart TD
     vague[Vague Input] --> baseline[Baseline Extraction]
     vague --> framework[Framework Extraction]
-    
+
     baseline --> baseOutput[Baseline Output]
-    
+
     framework --> draft[Draft Use Case]
     draft --> gaps[Gap Analysis Module]
     gaps --> mcGen[Generate MC Questions]
     gaps --> oeGen[Generate Open-Ended Questions]
-    
+
     mcGen --> clarify[Clarify Main Flow Details]
     oeGen --> discover[Discover Exception Flows]
-    
+
     clarify --> human[Human Answers]
     discover --> human
-    
+
     human --> refine[Refine Use Case]
     refine --> validate{Coverage Check}
     validate -->|Gaps Remain| gaps
     validate -->|Complete| final[Framework Output]
-    
+
     detailed[Detailed Input] --> oracle[Oracle Extraction]
     oracle --> oracleOutput[Oracle Output]
-    
+
     baseOutput --> eval[Three-Tier Evaluation]
     final --> eval
     oracleOutput --> eval
 ```
-
-
 
 ## Implementation Plan
 
@@ -114,8 +112,6 @@ export async function analyzeGaps(
 }
 ```
 
-
-
 ### 2. Enhance Question Generation (Hybrid Approach)
 
 **Modify**: [`src/validators/llm.validator.ts`](src/validators/llm.validator.ts)**Add new function**: `generateHybridQuestions`
@@ -131,7 +127,7 @@ const exceptionFlowPrompts = [
   "What could go wrong during {step}? List all possible failure scenarios.",
   "Are there any exceptional cases where the normal flow cannot complete?",
   "What system failures or external issues should this use case handle?",
-  "What validation errors or data mismatches might occur?"
+  "What validation errors or data mismatches might occur?",
 ];
 ```
 
@@ -143,8 +139,6 @@ Output structure:
   openEndedQuestions: OpenEndedQuestion[] // For exception discovery
 }
 ```
-
-
 
 ### 3. Update Refinement Service
 
@@ -170,8 +164,6 @@ refined.flows.push(...newFlows);
 return refined;
 ```
 
-
-
 ### 4. Redesign Testing Comparison
 
 **Modify**: [`src/tools/testingTools.ts`](src/tools/testingTools.ts)**Replace `runCOVEComparison` with `runFrameworkComparison`:**New comparison conditions:
@@ -184,7 +176,8 @@ server.registerTool(
   "runFrameworkComparison",
   {
     title: "Framework vs Baseline Comparison",
-    description: "Compare framework against baseline LLM extraction (both from vague input)",
+    description:
+      "Compare framework against baseline LLM extraction (both from vague input)",
     inputSchema: {
       datasetPath: z.string(),
       testCaseIds: z.array(z.string()).optional(),

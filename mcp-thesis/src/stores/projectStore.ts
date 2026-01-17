@@ -542,12 +542,7 @@ export class JsonProjectStore {
     await this.ensureStore();
     
     const project = this.getCurrentProject();
-    if (!project) {
-      throw new Error(
-        "No active project. Call initProject or switchToProject first.",
-      );
-    }
-    return project.actors;
+    return project?.actors || [];
   }
 
   // Add or update a use case

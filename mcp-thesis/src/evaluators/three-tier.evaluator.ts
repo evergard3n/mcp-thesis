@@ -41,6 +41,22 @@ Steps: ${flow.steps
     )
     .join("\n---\n");
 
+  const groundTruthDescription = context.groundTruth.flows
+    .map(
+      (flow) => `
+Flow ID: ${flow.id}
+Kind: ${flow.kind}
+Condition: ${flow.condition || "Main"}
+Steps: ${flow.steps
+        .map(
+          (s) =>
+            `${s.index}. ${s.actor} -> ${s.target || "N/A"}: ${s.description}`
+        )
+        .join("; ")}
+  `
+    )
+    .join("\n---\n");
+
   const prompt = `
 Evaluate ALL flows as GROUNDED (1.0), LOGICAL (0.7), or HALLUCINATION (0.0).
 
@@ -48,7 +64,8 @@ Domain: ${context.domain}
 Vague: ${context.vagueSummary}
 ${context.detailedDescription ? `Detailed: ${context.detailedDescription}` : ""}
 
-Ground Truth Flows: ${context.groundTruth.flows.map((f) => f.id).join(", ")}
+Ground Truth Flows:
+${groundTruthDescription}
 
 Flows to Evaluate:
 ${flowsDescription}

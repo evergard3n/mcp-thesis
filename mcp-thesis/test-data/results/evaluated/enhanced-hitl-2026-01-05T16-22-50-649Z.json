@@ -1,0 +1,269 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "RL1",
+      "evaluations": {
+        "conditionA_Baseline": {
+          "totalFlows": 1,
+          "breakdown": {
+            "grounded": 1,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Every step in the provided flow is directly supported by either the Vague or Detailed description. The Clerk's actions of capturing/registering loss information, entering details, pausing/saving, and confirming completion are all explicitly mentioned. The System's asynchronous validations, matching, duplicate checks, claim number assignment, coverage retrieval, adjuster support, storage, acknowledgment triggers, and ensuring readiness for processing are also explicitly stated in both descriptions.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        },
+        "conditionB_EnhancedHITL": {
+          "totalFlows": 23,
+          "breakdown": {
+            "grounded": 15,
+            "logical": 8,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 0.8956521739130435,
+            "discoveryRate": 0.6521739130434783,
+            "precision": 1,
+            "f1Score": 0.7894736842105263
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The MAIN flow directly reflects the 'Vague' description: 'A Clerk captures and registers loss information in the claims-capturing computer system... The Clerk enters available policy and incident details in a flexible order while the System asynchronously validates data, matches the loss to a policy, checks for duplicates, assigns a claim number, retrieves related coverage information, and supports adjuster assignment. The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion. Once sufficient information is provided, the System stores the loss, triggers acknowledgment actions, and ensures the claim is ready for further processing.' This is also well-aligned with the 'Main Success Scenario' in the 'Detailed' description.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_2a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly covered in the 'Detailed' description under '6a2. System warns Clerk it cannot assign claim number without required fields (claim line, date of loss, policy number or insured name): System directs Clerk to fields that require entry.' Steps 1 and 2 directly match this. Step 3 'Clerk enters missing information' is a logical continuation.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_3a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The 'Vague' description states 'while the System asynchronously validates data'. The 'Detailed' description mentions 'System validates changes' (1c1), 'System cannot validate policy match' (1c1a), and 'System warns Clerk it cannot accept the loss without date of loss...' (6a1). While a general validation failure during 'Step 3 data entry' is not explicitly listed as an 'Extension' or 'Alternative', it's a very reasonable and expected behavior for any system handling data entry that performs validation.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_2b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly covered in the 'Detailed' description under '6a2. System warns Clerk it cannot assign claim number without required fields (claim line, date of loss, policy number or insured name): System directs Clerk to fields that require entry.' The steps align perfectly.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The 'Vague' description states the system 'supports adjuster assignment'. The 'Detailed' description mentions 'Clerk selects and assigns an adjuster' (step 5) and 'handling adjuster has still not been entered' (6b). While not explicitly detailed, the scenario of no available adjusters and the system providing alternatives is a very common and logical alternative flow in a claims system, especially given '6b1. System assigns default adjuster'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8b",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Similar to ALT_8a, the concept of adjuster assignment and potential unavailability is implied by 'supports adjuster assignment' in the vague description and 'assigns a default adjuster' in the detailed description. An adjuster having no capacity is a logical reason for unavailability and the proposed steps are reasonable.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8c",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The 'Vague' description mentions 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This implies saving progress without full completion, including potentially without an adjuster. The 'Detailed' description directly supports this in '2f. Clerk can save the loss any time before completion of steps 2 through 6' and also '6b. Timeout: ...handling adjuster has still not been entered'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_8a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "While not explicitly stated, if all attempts to assign an adjuster fail (a logical scenario given the possibility of no available adjusters), escalating to a supervisor is a very common and logical protocol in business processes, especially in critical operations like claims.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly detailed under '2c. System detects possible duplicate claim' and subsequent steps: '2c1. System displays a list...', '2c2. Clerk selects and views...', '2c2a. Clerk finds that the claim is a duplicate...', '2c2b. Clerk finds that the claim is not a duplicate...'. This aligns perfectly with the proposed steps.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8d",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This scenario directly aligns with '6b1. System assigns default adjuster' and the context of '6b. Timeout: ... handling adjuster has still not been entered'. The idea of flagging for manual assignment is also a logical step when a default is used as a placeholder.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8e",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is covered by the implicit understanding of saving incomplete claims and the general flexibility for the Clerk. Specifically, the 'informing the Clerk that no suitable adjuster is available' is implied, and 'Flags the claim for manual assignment' is similar to the 'pending reassignment flag' concept common with default assignments. The 'Vague' description allows Clerk to 'pause, save, resume' which permits saving without final assignment.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_2c_dup_found",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is a direct paraphrase of '2c. System detects possible duplicate claim' in the 'Detailed' description, specifically leading to '2c1. System displays a list of possible duplicate claims...' and '2c2a. Clerk finds that the claim is a duplicate'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_2c_not_dup",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This is a direct paraphrase of '2c2b. Clerk finds that the claim is not a duplicate: Clerk returns to loss and completes it.' in the 'Detailed' description. Verifying it's not a duplicate is the action taken by the system.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This maps to '6b1. System assigns default adjuster' from the 'Detailed' description, which occurs when an adjuster is not entered. The condition explicitly refers to step 5 (adjuster assignment).",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This aligns with the flexibility for the Clerk to save progress, as indicated in the 'Vague' description ('The Clerk may pause, save, resume...'). The 'Detailed' description, specifically '2f. Clerk can save the loss any time' supports saving without immediate adjuster assignment, allowing it to be flagged for later. 'System takes action to manage the status of the claim' is a plausible interpretation of the system temporarily halting assignment. This implies the 'EXT_6_TIMEOUT' for later assignment.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_2_duplicate_true",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The 'Vague' description states 'System... checks for duplicates'. The 'Detailed' description has '2c. System detects possible duplicate claim' leading to '2c2a. Clerk finds that the claim is a duplicate'. The actions of preventing creation/merging/notifying the clerk are logical outcomes when a true duplicate is found. The phrase 'merges it with the existing one' is a common process in such systems when a true duplicate is confirmed.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5a_default_adjuster",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This directly maps to '6b1. System assigns default adjuster' from the 'Detailed' description, in the context of adjuster assignment.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5b_later_assignment",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is supported by the 'Vague' description's flexibility for the Clerk to 'pause, save, resume'. The 'Detailed' description, specifically '2f. Clerk can save the loss any time' and the scenario in '6b. Timeout' where an adjuster 'has still not been entered' implies that claims can be saved without an assigned adjuster and put into a state for later processing.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_5a_validation_failure",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The 'Vague' description mentions 'System asynchronously validates data'. While specific validation failures for adjuster assignment aren't listed, it's a logical extension that if a core piece of information like an adjuster assignment is validated, and it fails, the system would alert the user to correct it.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_5a_escalation",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "This is a logical extension of EXT_5a_validation_failure and the broader concept of handling unresolvable issues in a system. If the Clerk cannot make a valid assignment after re-attempting, escalation is a reasonable next step in a business process.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5b_select_different_adjuster",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The 'Detailed' description states 'Clerk selects and assigns an adjuster' (step 5) and 'supports adjuster assignment' in the vague description. If the initially chosen adjuster is unavailable, selecting another is a natural and logical alternative for the clerk.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_5b_queue_for_later",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This aligns with the flexibility for the Clerk to save progress, as indicated in the 'Vague' description ('The Clerk may pause, save, resume...'). The 'Detailed' description, specifically '2f. Clerk can save the loss any time' and the scenario in '6b. Timeout' where an adjuster 'has still not been entered' implies that claims can be saved without an assigned adjuster and retrieved later.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_5b_escalate_unavailability",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "This is a logical extension if the system cannot find an adjuster and the Clerk needs to push the issue higher. While not explicitly mentioned, it's a common practice in business process workflows when automated or user-driven solutions are blocked.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionA_Baseline": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    },
+    "conditionB_EnhancedHITL": {
+      "avgQuality": 0.8956521739130435,
+      "avgDiscovery": 0.6521739130434783,
+      "avgF1": 0.7894736842105263
+    }
+  }
+}

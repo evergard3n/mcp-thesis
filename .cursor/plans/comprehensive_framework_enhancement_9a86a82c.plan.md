@@ -142,18 +142,13 @@ Current framework achieves:
            └──────────────┘         └─────────────┘
 ```
 
-
-
 ### Key Innovation: Priority = Uncertainty × Criticality
 
 **Why this works**:
 
-- **High uncertainty + High criticality** = CRITICAL priority
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                - Example: Step 1 "Reports claim" (unclear input validation + entry point)
-- **High uncertainty + Low criticality** = MEDIUM priority
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                - Example: Step 7 "Displays result" (unclear but just feedback)
-- **Low uncertainty + High criticality** = LOW priority
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                - Already clear, even if important (no question needed)
+- **High uncertainty + High criticality** = CRITICAL priority - Example: Step 1 "Reports claim" (unclear input validation + entry point)
+- **High uncertainty + Low criticality** = MEDIUM priority - Example: Step 7 "Displays result" (unclear but just feedback)
+- **Low uncertainty + High criticality** = LOW priority - Already clear, even if important (no question needed)
 
 ---
 
@@ -199,18 +194,16 @@ test-data/
 - `runCOVEComparison`: Save raw results to `results/raw/`
 - `runHITLComparison`: Save raw results to `results/raw/`
 - `evaluateResults`: Save evaluated results to `results/evaluated/`
+
 ```typescript
 // Before:
 const resultsPath = `test-data/results/framework-comparison-${timestamp}.json`;
-const evaluatedPath = `${resultsPath.replace('.json', '-evaluated.json')}`;
+const evaluatedPath = `${resultsPath.replace(".json", "-evaluated.json")}`;
 
 // After:
 const resultsPath = `test-data/results/raw/framework-comparison-${timestamp}.json`;
 const evaluatedPath = `test-data/results/evaluated/framework-comparison-${timestamp}.json`;
 ```
-
-
-
 
 ### 0.3 Migration
 
@@ -284,13 +277,13 @@ Analyze missed flows to identify indicator words and patterns:**Temporal/Async E
 **File**: [`mcp-thesis/src/analyzers/gap.analyzer.ts`](mcp-thesis/src/analyzers/gap.analyzer.ts)Add new detection functions:
 
 ```typescript
-- detectTemporalExceptions(useCase, originalDescription)
-- detectNestedExceptions(useCase, validationFeedback) 
-- detectResourceAvailability(useCase, originalDescription)
-- detectPostCompletionScenarios(useCase)
-- detectDataQualityIssues(useCase, originalDescription)
-- detectEnvironmentalInterruptions(useCase, originalDescription)
-- detectTechnologyVariations(useCase, originalDescription)
+-detectTemporalExceptions(useCase, originalDescription) -
+  detectNestedExceptions(useCase, validationFeedback) -
+  detectResourceAvailability(useCase, originalDescription) -
+  detectPostCompletionScenarios(useCase) -
+  detectDataQualityIssues(useCase, originalDescription) -
+  detectEnvironmentalInterruptions(useCase, originalDescription) -
+  detectTechnologyVariations(useCase, originalDescription);
 ```
 
 ---
@@ -308,8 +301,6 @@ Layer 3: Uncertainty Ranker + Criticality Analyzer
          ↓ ranks steps/flows by priority
 Question Generator (uses priority rankings)
 ```
-
-
 
 ### 2.1 Leverage Existing Validator
 
@@ -338,18 +329,18 @@ interface StepUncertainty {
   flowId: string;
   flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
   description: string;
-  
+
   // Dimensions (0-1, lower = more uncertain)
-  clarityScore: number;          // "validates" = 0.4, "scans barcode" = 0.9
-  completeness: number;          // actor/target/description present
-  exceptionCoverage: number;     // does THIS step have exceptions?
-  
+  clarityScore: number; // "validates" = 0.4, "scans barcode" = 0.9
+  completeness: number; // actor/target/description present
+  exceptionCoverage: number; // does THIS step have exceptions?
+
   // From gap analyzer
   relatedGaps: Gap[];
   gapSeverity: "high" | "medium" | "low";
-  
+
   // Aggregate
-  uncertaintyScore: number;      // weighted combination
+  uncertaintyScore: number; // weighted combination
   uncertaintyReasons: string[];
 }
 
@@ -358,7 +349,7 @@ function analyzeStepUncertainty(
   parentFlow: GenFlow,
   allFlows: GenFlow[],
   gapAnalysis: GapAnalysis
-): StepUncertainty
+): StepUncertainty;
 ```
 
 **Key feature**: Exception flow steps can have nested exceptions!
@@ -369,20 +360,20 @@ function analyzeStepUncertainty(
 interface FlowUncertainty {
   flowId: string;
   flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
-  
+
   // ALL flow types
   stepsClarityAvg: number;
   stepsCompletenessAvg: number;
-  
+
   // ALT/EXCEPTION specific
-  conditionSpecificity: number;  // "error" = 0.3, "box ID mismatch" = 0.9
+  conditionSpecificity: number; // "error" = 0.3, "box ID mismatch" = 0.9
   hasCondition: boolean;
   hasResolution: boolean;
-  
+
   // EXCEPTION specific
   hasNestedExceptions: boolean;
   nestedExceptionCoverage: number;
-  
+
   // Aggregate
   uncertaintyScore: number;
   uncertaintyReasons: string[];
@@ -392,10 +383,8 @@ function analyzeFlowUncertainty(
   flow: GenFlow,
   useCase: GenUseCase,
   gapAnalysis: GapAnalysis
-): FlowUncertainty
+): FlowUncertainty;
 ```
-
-
 
 ### 2.3 Criticality Analyzer
 
@@ -403,9 +392,9 @@ function analyzeFlowUncertainty(
 
 ```typescript
 interface StepCriticality {
-  structuralImportance: number;   // position: entry=1.0, exit=0.8, middle=0.5
-  domainImportance: number;       // type: input=1.0, validation=0.9, logic=0.6
-  impactRadius: number;           // # of downstream flows that depend on it
+  structuralImportance: number; // position: entry=1.0, exit=0.8, middle=0.5
+  domainImportance: number; // type: input=1.0, validation=0.9, logic=0.6
+  impactRadius: number; // # of downstream flows that depend on it
 }
 
 function computeStepCriticality(
@@ -413,7 +402,7 @@ function computeStepCriticality(
   stepIndex: number,
   flow: GenFlow,
   allFlows: GenFlow[]
-): number // 0-1
+): number; // 0-1
 ```
 
 **Domain Importance Rules**:
@@ -434,17 +423,17 @@ interface StepPriority {
   stepIndex: number;
   flowId: string;
   description: string;
-  
-  uncertaintyScore: number;      // 0-1 (how unclear?)
-  criticalityScore: number;      // 0-1 (how important?)
-  priorityScore: number;         // uncertainty × criticality
+
+  uncertaintyScore: number; // 0-1 (how unclear?)
+  criticalityScore: number; // 0-1 (how important?)
+  priorityScore: number; // uncertainty × criticality
   priorityRank: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 }
 
 function rankStepPriorities(
   stepUncertainties: StepUncertainty[],
   useCase: GenUseCase
-): StepPriority[]
+): StepPriority[];
 ```
 
 **Why this works**:
@@ -487,20 +476,18 @@ Iteration 1:
     4. Generate questions (target: low-confidence + gaps)
     5. Collect answers
     6. Refine use case (integrate new flows)
-  
+
 Iteration 2+:
     1. Re-score confidence on refined use case
     2. Re-run gap analysis
     3. Generate NEW questions (avoid repeats)
-    4. Collect answers  
+    4. Collect answers
     5. Refine use case
-  
-Stop when: 
+
+Stop when:
     - Average confidence > 0.85 AND no high-priority gaps
     - OR total questions asked >= MAX_QUESTIONS (e.g., 20)
 ```
-
-
 
 ### 3.2 Update Testing Framework
 
@@ -518,37 +505,35 @@ let totalQuestionsAsked = 0;
 
 while (totalQuestionsAsked < MAX_QUESTIONS) {
   iteration++;
-  
+
   // Score confidence
   const confidence = evaluateUseCaseConfidence(currentUseCase);
-  
+
   // Gap analysis with enhanced patterns
   const gaps = await analyzeGapsEnhanced(currentUseCase, validation, originalDesc);
-  
+
   // Stopping condition
   if (confidence.overall > 0.85 && gaps.highPriorityGaps.length === 0) {
     break; // No confusions left
   }
-  
+
   // Generate questions (prioritize low-confidence areas + gaps)
   const questions = await generateAdaptiveQuestions(
     gaps, confidence, currentUseCase, allQuestions
   );
-  
+
   if (questions.length === 0) break; // No more questions
-  
+
   // Collect answers
   const answers = await collectAnswers(questions, detailedDesc);
-  
+
   // Refine
   currentUseCase = await refineIteratively(currentUseCase, questions, answers);
-  
+
   totalQuestionsAsked += questions.length;
   allQuestions.push(...questions);
 }
 ```
-
-
 
 ### 3.3 Priority-Based Question Generation
 
@@ -560,50 +545,46 @@ function generateAdaptiveQuestions(
   flowUncertainties: FlowUncertainty[],
   previousQuestions: string[]
 ): Question[] {
-  
   const questions = [];
-  
+
   // Top 5 highest priority steps
   for (const priority of stepPriorities.slice(0, 5)) {
-    
     // Skip if already asked about this area
     if (alreadyCovered(priority, previousQuestions)) continue;
-    
+
     // Generate question based on uncertainty type
     if (priority.clarityScore < 0.6) {
       questions.push({
         type: "clarification",
         priority: priority.priorityScore,
-        question: `How specifically is "${priority.description}" performed?`
+        question: `How specifically is "${priority.description}" performed?`,
       });
     }
-    
+
     if (priority.exceptionCoverage < 0.3 && priority.relatedGaps.length > 0) {
       questions.push({
         type: "exception_discovery",
         priority: priority.priorityScore,
-        question: `What happens if step ${priority.stepIndex} fails or encounters an error?`
+        question: `What happens if step ${priority.stepIndex} fails or encounters an error?`,
       });
     }
-    
+
     if (questions.length >= 6) break;
   }
-  
+
   // Top 3 uncertain flows
   for (const flowUnc of flowUncertainties.slice(0, 3)) {
     if (flowUnc.conditionSpecificity < 0.5) {
       questions.push({
         type: "condition_clarification",
         priority: flowUnc.uncertaintyScore * 0.7, // slightly lower priority than steps
-        question: `When exactly does ${flowUnc.flowId} occur? Be specific.`
+        question: `When exactly does ${flowUnc.flowId} occur? Be specific.`,
       });
     }
   }
-  
+
   // Sort by priority, take top 4-6
-  return questions
-    .sort((a, b) => b.priority - a.priority)
-    .slice(0, 6);
+  return questions.sort((a, b) => b.priority - a.priority).slice(0, 6);
 }
 ```
 
@@ -636,47 +617,47 @@ For each answer:
 Improve prompt with:
 
 - Examples of nested exceptions
-- Examples of temporal exceptions  
+- Examples of temporal exceptions
 - Guidance on detecting multiple flows in one answer
 
 ---
 
 ## Implementation Order
 
-1. ✅ **Organize Results Structure** (Priority: START HERE - Quick Win)
+1.  ✅ **Organize Results Structure** (Priority: START HERE - Quick Win)
 
                                                 - Create `test-data/results/raw/` and `test-data/results/evaluated/` folders
                                                 - Update paths in `testingTools.ts`
                                                 - Move existing results to new folders
                                                 - Test that evaluation pipeline still works
 
-2. **Gap Pattern Dictionary** (Priority: NEXT)
+2.  **Gap Pattern Dictionary** (Priority: NEXT)
 
                                                 - Mine patterns from evaluation results
                                                 - Implement 7 new detection functions in `gap.analyzer.ts`
                                                 - Test pattern detection against existing results
 
-3. **Uncertainty Ranker** (Priority: AFTER 2)
+3.  **Uncertainty Ranker** (Priority: AFTER 2)
 
                                                 - Create `uncertainty.ranker.ts`
                                                 - Implement step-level uncertainty analysis (ALL flow types)
                                                 - Implement flow-level uncertainty analysis
                                                 - Test uncertainty scoring makes sense
 
-4. **Criticality Analyzer** (Priority: AFTER 3)
+4.  **Criticality Analyzer** (Priority: AFTER 3)
 
                                                 - Add step criticality computation (structural + domain + impact)
                                                 - Implement priority calculation (uncertainty × criticality)
                                                 - Validate priorities match ground truth importance
 
-5. **Iterative Loop** (Priority: AFTER 4)
+5.  **Iterative Loop** (Priority: AFTER 4)
 
                                                 - Modify `runHITLComparison` for multi-iteration
                                                 - Implement stopping conditions (avg priority < threshold OR max questions)
                                                 - Integrate priority-based question generation
                                                 - Test with HC1/MO1 cases
 
-6. **Enhanced Flow Extraction** (Priority: PARALLEL WITH 5)
+6.  **Enhanced Flow Extraction** (Priority: PARALLEL WITH 5)
 
                                                 - Update extraction prompt with nested exception examples
                                                 - Add multi-flow parsing from single answer
@@ -715,7 +696,7 @@ After:
 ```javascript
 Iteration 1: 5 questions (Step 1,2,3 - high priority)
   → Discovered: EXT_1a, EXT_2a, EXT_3a
-Iteration 2: 4 questions (Step 7,8,9 - medium priority)  
+Iteration 2: 4 questions (Step 7,8,9 - medium priority)
   → Discovered: EXT_7a, ALT_8a, EXT_9a
 Total: 9 questions, 6/8 flows (75%)
 Iteration 3: 3 questions (remaining uncertainties)
