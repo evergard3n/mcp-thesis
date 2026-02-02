@@ -1,5 +1,5 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.functions.js";
+import { GeminiOpenRouterFunctions } from "./gemini-openrouter.service.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
 
 export async function generateFlatUseCase({
@@ -263,7 +263,7 @@ export async function refineWithConstrainedAnswers(
     selectedOption: string;
     reasoning?: string;
   }>,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<GenUseCase> {
   const qaContext = questions
     .map((q) => {
@@ -318,7 +318,7 @@ ${qaContext}
 export async function extractFlowsFromOpenEndedAnswers(
   answers: Array<{ questionId: string; answer: string; confidence?: string }>,
   baseUseCase: GenUseCase,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<import("../interfaces/usecase.interface.new.js").GenFlow[]> {
   const { z } = await import("zod");
   const flowSchema = z.array(
@@ -334,9 +334,9 @@ export async function extractFlowsFromOpenEndedAnswers(
           actor: z.string(),
           target: z.string().optional(),
           description: z.string(),
-        })
+        }),
       ),
-    })
+    }),
   );
 
   const answersContext = answers
@@ -345,7 +345,7 @@ export async function extractFlowsFromOpenEndedAnswers(
 Answer ${i + 1} (ID: ${a.questionId}):
 ${a.answer}
 Confidence: ${a.confidence || "medium"}
-`
+`,
     )
     .join("\n---\n");
 
@@ -507,7 +507,7 @@ export async function refineWithHybridAnswers(
     answer: string;
     confidence?: string;
   }>,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<GenUseCase> {
   // Step 1: Apply MC answers for clarifications (if any)
   let refined = baseUseCase;
@@ -517,7 +517,7 @@ export async function refineWithHybridAnswers(
       baseUseCase,
       mcQuestions,
       mcAnswers,
-      geminiFunctions
+      geminiFunctions,
     );
   }
 
@@ -525,7 +525,7 @@ export async function refineWithHybridAnswers(
   const newFlows = await extractFlowsFromOpenEndedAnswers(
     openEndedAnswers,
     refined,
-    geminiFunctions
+    geminiFunctions,
   );
 
   // Step 3: Integrate new flows

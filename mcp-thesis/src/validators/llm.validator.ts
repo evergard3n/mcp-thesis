@@ -1,13 +1,7 @@
 import z from "zod";
-import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.functions.js";
+import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import {
-  genUseCaseSchema,
-  GenUseCaseSchemaType,
-} from "../schemas/genusecase.schema.js";
-import openrouterFunction from "../helpers/openrouter.function.js";
-import { analysisSchema } from "../schemas/analysis.schema.js";
-import { UseCaseTermScore } from "./flat.validator.js";
+import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import { GapAnalysis } from "../analyzers/gap.analyzer.js";
 
 export const COVE_LLM_QUESTIONS: string[] = [
@@ -39,15 +33,11 @@ export const COVE_LLM_QUESTIONS: string[] = [
   "Are applicable nonfunctional requirements captured?",
 ];
 
-const extraQuestions: string[] = [
-  "If there are two actors of the same type existing in an use case, is it necessary to create a new role for each of them, or we can merge into one type that have multiple instances?",
-];
-
 export const generateLLMQuestions = async (
   originalDescription: string,
   useCase: GenUseCase,
   formattedValidationFeedback: string,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ) => {
   const questions = COVE_LLM_QUESTIONS.map((question) => `- ${question}`);
   const questionsSchema = z.array(z.string());
@@ -117,80 +107,11 @@ export async function answerLLMQuestions({
   return answers;
 }
 
-export async function compareUseCases({
-  originalDescription,
-  refUseCase,
-  newUseCase,
-}: {
-  originalDescription: string;
-  refUseCase: GenUseCaseSchemaType;
-  newUseCase: GenUseCaseSchemaType;
-}) {
-  const score = await openrouterFunction.generateStructured({
-    prompt: `
-    <role>
-    You are a Senior Business Analyst and Quality Assurance Specialist with 20 years of experience in Software Engineering. Your task is to evaluate the quality of a "Generated Use Case" (produced by an AI) by comparing it against a "Reference Use Case" (Ground Truth/Golden Standard).
-    </role>
-
-    <input>
-      <original_description>
-      ${originalDescription}
-      </original_description>
-      <reference>
-      ${JSON.stringify(refUseCase, null, 2)}
-      </reference>
-      <generated>
-      ${JSON.stringify(newUseCase, null, 2)}
-      </generated>
-    </input>
-    <instructions>
-      <criteria>
-      You must score the Generated Use Case on a scale of 0 to 10 for each of the following dimensions. Be strict and objective.
-      
-      **Important:** Use the Original Description as the source of truth for the user's intent. Both the Reference and Generated Use Cases should align with this description.
-
-      **1. Semantic Coverage**
-         - Does each step description have the same meaning, or convey the same scenario?
-         - Are the Pre-conditions and Post-conditions logically consistent with the Reference?
-         - Does the Generated Use Case capture all the key requirements from the Original Description?
-         - **Crucial:** Do NOT penalize for different wording/synonyms (e.g., "User logs in" vs. "Customer signs in") if the meaning is identical.
-         - **Check:** Are the temporal dependencies correct? (e.g., Step A must happen before Step B).
-
-      **2. Entity & Actor Alignment**
-         - Are the Actors correctly identified? (e.g., "Admin" vs "User").
-         - Note that different naming is acceptable if the role and responsibilities match.
-         - Verify that actors mentioned in the Original Description are properly represented.
-
-      **3. Factuality & Hallucination**
-         - Does the Generated Use Case omit any critical steps present in the Reference or Original Description?
-         - Be careful: there might be steps that do not exist in the Reference but exist in Gen Use Case, but they still make sense. Make sure to check the overall logic against the Original Description.
-         - **Penalty:** Deduct points heavily if the Generated Use Case invents steps or logic that do NOT exist in the Original Description or Reference (Hallucination).
-      **4. Structure**
-         - Is the Generated Use Case well-structured, with clear delineation of Basic Flow, Alternative Flows, Pre-conditions, Post-conditions, and Guarantees?
-         - Compare to the Reference Use Case, is the Generated one missing or "inventing" any new flows?
-         - With all flows, is the coverage of Gen Use Case comparable to Reference Use Case?
-
-      </criteria>
-      <process>
-      Before giving the final score, you must perform a step-by-step analysis:
-      1. **Review Original Description:** Understand the user's intent and key requirements.
-      2. **Analyze Actors:** Compare actors in Generated vs. Reference, and verify they match the Original Description.
-      3. **Map the Flow:** Attempt to map each step in the Reference Flow to a step in the Generated Flow. Note any missing or out-of-order steps.
-      4. **Check Logic:** Verify if Pre-conditions/Post-conditions match and align with the Original Description.
-      5. **Detect Noise:** Identify any invented information that doesn't come from the Original Description or Reference.
-      </process>
-    </instructions>
-    `,
-    zodSchema: analysisSchema,
-  });
-  return score;
-}
-
 export async function generateMultipleChoiceQuestions(
   originalDescription: string,
   useCase: GenUseCase,
   formattedValidationFeedback: string,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<
   Array<{
     id: string;
@@ -205,7 +126,7 @@ export async function generateMultipleChoiceQuestions(
       question: z.string(),
       options: z.array(z.string()).min(2).max(5),
       context: z.string(),
-    })
+    }),
   );
 
   const prompt = `
@@ -261,7 +182,7 @@ export async function expertAnswerMultipleChoice(
   }>,
   detailedDescription: string,
   domain: string,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<
   Array<{ questionId: string; selectedOption: string; reasoning: string }>
 > {
@@ -270,7 +191,7 @@ export async function expertAnswerMultipleChoice(
       questionId: z.string(),
       selectedOption: z.string(),
       reasoning: z.string(),
-    })
+    }),
   );
 
   const prompt = `
@@ -294,7 +215,7 @@ Options:
 ${q.options
   .map((opt, j) => `${String.fromCharCode(65 + j)}) ${opt}`)
   .join("\n")}
-`
+`,
   )
   .join("\n---\n")}
 </questions>
@@ -310,130 +231,6 @@ For each question:
   return geminiFunctions.generateStructured({
     prompt,
     schema: answerSchema,
-  });
-}
-
-export async function generateMultipleChoiceQuestionsWithScores(
-  originalDescription: string,
-  useCase: GenUseCase,
-  formattedValidationFeedback: string,
-  validationScore: UseCaseTermScore,
-  geminiFunctions: GeminiOpenRouterFunctions
-): Promise<
-  Array<{
-    id: string;
-    question: string;
-    options: string[];
-    context: string;
-  }>
-> {
-  const mcSchema = z.array(
-    z.object({
-      id: z.string(),
-      question: z.string(),
-      options: z.array(z.string()).min(2).max(5),
-      context: z.string(),
-    })
-  );
-
-  const scoreContext = `
-<validationScores>
-Overall Score: ${validationScore.overall}/100
-Structural Penalty: ${validationScore.structuralPenalty}
-
-Name Quality:
-- Unique Name: ${validationScore.hasUniqueName}
-- Verb-Noun Pattern: ${validationScore.hasVerbNounPattern}
-
-Coverage:
-- Summary Coverage: ${(validationScore.summaryCoverage * 100).toFixed(1)}%
-- Precondition Coverage: ${(validationScore.preCoverage * 100).toFixed(1)}%
-- Postcondition Coverage: ${(validationScore.postCoverage * 100).toFixed(1)}%
-- Process Pattern Coverage: ${(
-    validationScore.processPatternCoverage * 100
-  ).toFixed(1)}%
-
-Actor Participation:
-- Actor Participation: ${(validationScore.actorParticipation * 100).toFixed(1)}%
-- Has Main Actor Steps: ${validationScore.hasMainActorSteps}
-- Has System Actor: ${validationScore.hasSystemActor}
-
-Flow Structure:
-- Has Trigger Event: ${validationScore.hasTriggerEvent}
-- Has Definite Ending: ${validationScore.hasDefiniteEnding}
-- Valid Step Numbering: ${validationScore.hasValidStepNumbering}
-- Has Alternative Flow: ${validationScore.hasAlternativeFlow}
-- Has Exception Flow: ${validationScore.hasExceptionFlow}
-- Branch Anchoring Coverage: ${(
-    validationScore.branchAnchoringCoverage * 100
-  ).toFixed(1)}%
-- Branch Condition Coverage: ${(
-    validationScore.branchConditionCoverage * 100
-  ).toFixed(1)}%
-- Alt Flow Condition Coverage: ${(
-    validationScore.altFlowConditionCoverage * 100
-  ).toFixed(1)}%
-- Alt Flow Resume Coverage: ${(
-    validationScore.altFlowResumeCoverage * 100
-  ).toFixed(1)}%
-
-Loop Quality:
-- Has Loop: ${validationScore.hasLoop}
-- Loop Condition Coverage: ${(
-    validationScore.loopConditionCoverage * 100
-  ).toFixed(1)}%
-- Loop Span Coverage: ${(validationScore.loopSpanCoverage * 100).toFixed(1)}%
-
-Quality:
-- No Fluff: ${validationScore.fluffPenalty}
-</validationScores>
-  `;
-
-  const prompt = `
-<task>
-Convert validation feedback into 3-5 specific multiple-choice questions for use case clarification.
-Use the quantitative scores to identify specific weaknesses and generate targeted questions.
-</task>
-
-<originalDescription>
-${originalDescription}
-</originalDescription>
-
-<currentUseCase>
-${JSON.stringify(useCase, null, 2)}
-</currentUseCase>
-
-${scoreContext}
-
-<validationFeedback>
-${formattedValidationFeedback}
-</validationFeedback>
-
-<guidelines>
-Create questions with 2-4 concrete options each, prioritizing areas with low scores.
-
-Example (if branchConditionCoverage is low):
-Q: "When payment validation fails (alternative flow from step 5), what should happen?"
-Options:
-- Return to payment method selection and retry
-- Cancel order and notify user via email
-- Save order as pending and notify admin for manual review
-- Allow user to choose between retry or cancel
-
-Focus on:
-- Low coverage areas (< 50%)
-- Missing structural elements (flags = false)
-- Actor responsibilities (if actorParticipation < 80%)
-- Flow branching (if branch coverage < 60%)
-- Exception handling (if hasExceptionFlow = false)
-
-Return 3-5 questions maximum.
-</guidelines>
-  `;
-
-  return geminiFunctions.generateStructured({
-    prompt,
-    schema: mcSchema,
   });
 }
 
@@ -494,7 +291,7 @@ export async function generateHybridQuestions(
   useCase: GenUseCase,
   originalDescription: string,
   validationFeedback: string,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<HybridQuestions> {
   // 1. Generate MC questions for general clarifications (if needed)
   const mcQuestions =
@@ -503,7 +300,7 @@ export async function generateHybridQuestions(
           originalDescription,
           useCase,
           validationFeedback,
-          geminiFunctions
+          geminiFunctions,
         )
       : [];
 
@@ -512,7 +309,7 @@ export async function generateHybridQuestions(
     gapAnalysis,
     useCase,
     originalDescription,
-    geminiFunctions
+    geminiFunctions,
   );
 
   return {
@@ -541,7 +338,7 @@ async function generateOpenEndedQuestionsFromGaps(
   gapAnalysis: GapAnalysis,
   useCase: GenUseCase,
   originalDescription: string,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<OpenEndedQuestion[]> {
   const openEndedSchema = z.array(
     z.object({
@@ -553,7 +350,7 @@ async function generateOpenEndedQuestionsFromGaps(
         whyAsking: z.string(),
       }),
       answerGuidance: z.string(),
-    })
+    }),
   );
 
   // Build gap context for the LLM
@@ -645,14 +442,14 @@ export async function expertAnswerOpenEndedQuestions(
   questions: OpenEndedQuestion[],
   detailedDescription: string,
   domain: string,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<OpenEndedAnswer[]> {
   const answerSchema = z.array(
     z.object({
       questionId: z.string(),
       answer: z.string(),
       confidence: z.string(),
-    })
+    }),
   );
 
   const prompt = `
@@ -676,7 +473,7 @@ Context: ${q.context.whyAsking}
 ${q.context.step ? `Related to: ${q.context.step}` : ""}
 
 How to answer: ${q.answerGuidance}
-`
+`,
   )
   .join("\n---\n")}
 </questions>
@@ -735,7 +532,7 @@ export async function generateAdaptiveQuestions(
     uncertaintyReasons: string[];
   }>,
   previousQuestions: string[],
-  maxQuestions: number = 6
+  maxQuestions: number = 6,
 ): Promise<OpenEndedQuestion[]> {
   const questions: OpenEndedQuestion[] = [];
   const askedAbout = new Set<string>();
@@ -772,7 +569,7 @@ export async function generateAdaptiveQuestions(
           step: `Step ${priority.stepIndex}`,
           patternType: "clarification",
           whyAsking: `This step is critical (criticality: ${priority.criticalityScore.toFixed(
-            2
+            2,
           )}) but lacks clarity. Specific details are needed.`,
         },
         answerGuidance:
@@ -887,7 +684,7 @@ export async function generateAdaptiveQuestions(
 
   // Sort by priority (CRITICAL steps first, then HIGH)
   const priorityMap = new Map(
-    stepPriorities.map((p) => [`step-${p.stepIndex}`, p.priorityScore])
+    stepPriorities.map((p) => [`step-${p.stepIndex}`, p.priorityScore]),
   );
 
   return questions

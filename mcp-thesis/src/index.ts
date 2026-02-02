@@ -16,12 +16,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { JsonProjectStore } from "./stores/projectStore.js";
 import { registerProjectTools } from "./tools/projectTools.js";
-import { registerUseCaseTools } from "./tools/usecaseTools.js";
 import { registerTestingTools } from "./tools/testingTools.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "crypto";
 import { OPENROUTER_API_KEY } from "./helpers/env.js";
-import { GeminiOpenRouterFunctions } from "./helpers/gemini-openrouter.functions.js";
+import { GeminiOpenRouterFunctions } from "./services/gemini-openrouter.service.js";
+import semanticService from "./services/semantic.service.js";
 
 /**
  * Session-scoped MCP Server wrapper
@@ -58,19 +58,14 @@ class SessionServer {
     // Create session-scoped GeminiFunctions singleton
     this.geminiFunctions = new GeminiOpenRouterFunctions(
       geminiApiKey,
-      openrouterApiKey
+      openrouterApiKey,
     );
     // Register tools with session-specific store and singleton
     registerProjectTools(this.mcpServer, this.projectStore);
-    registerUseCaseTools(
-      this.mcpServer,
-      this.projectStore,
-      this.geminiFunctions
-    );
     registerTestingTools(
       this.mcpServer,
       this.projectStore,
-      this.geminiFunctions
+      this.geminiFunctions,
     );
   }
 
@@ -227,10 +222,15 @@ app.get("/mcp", async (req, res) => {
 // });
 
 const port = parseInt(process.env.PORT || "3006");
+
+// Initialize semantic model before starting server
+console.log("Initializing semantic model...");
+await semanticService.waitForReady();
+
 app
   .listen(port, () => {
     console.log(
-      `${new Date().toISOString()} Demo MCP Server running on http://localhost:${port}/mcp`
+      `${new Date().toISOString()} Demo MCP Server running on http://localhost:${port}/mcp`,
     );
   })
   .on("error", (error) => {

@@ -1,5 +1,6 @@
 import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
-import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.functions.js";
+import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
+import semanticService from "../services/semantic.service.js";
 import { z } from "zod";
 
 const batchFlowEvalSchema = z.array(
@@ -10,9 +11,137 @@ const batchFlowEvalSchema = z.array(
     reasoning: z.string(),
     inVagueSummary: z.boolean(),
     inDetailedDescription: z.boolean().optional(),
-    inGroundTruth: z.boolean(),
-  })
+  }),
 );
+
+type GroundTruthFlow = GenFlow & { embedding?: number[] };
+
+export function flowToText(flow: GenFlow): string {
+  const stepsText = flow.steps
+    .map((step) => `${step.actor} ${step.description}`)
+    .join(". ");
+  return `${flow.kind} ${flow.condition || ""}: ${stepsText}`;
+}
+
+async function getGroundTruthEmbeddings(
+  groundTruthFlows: GroundTruthFlow[],
+): Promise<number[][]> {
+  const embeddings: number[][] = new Array(groundTruthFlows.length);
+  const missingTexts: string[] = [];
+  const missingIndexes: number[] = [];
+
+  groundTruthFlows.forEach((flow, index) => {
+    if (flow.embedding && flow.embedding.length > 0) {
+      embeddings[index] = flow.embedding;
+    } else {
+      missingTexts.push(flowToText(flow));
+      missingIndexes.push(index);
+    }
+  });
+
+  if (missingTexts.length > 0) {
+    console.warn(
+      `Missing ${missingTexts.length} ground truth embeddings; embedding on the fly.`,
+    );
+    const generated = await semanticService.embedBatch(missingTexts);
+    generated.forEach((embedding, idx) => {
+      embeddings[missingIndexes[idx]] = embedding;
+    });
+  }
+
+  return embeddings;
+}
+
+interface FlowMatchResult {
+  inGroundTruth: boolean;
+  isDuplicate: boolean;
+  matchedFlowId?: string;
+  bestScore: number;
+}
+
+async function matchFlowsToGroundTruth(
+  generatedFlows: GenFlow[],
+  groundTruthFlows: GroundTruthFlow[],
+  threshold = 0.6,
+): Promise<Map<string, FlowMatchResult>> {
+  const matchResults = new Map<string, FlowMatchResult>();
+
+  if (generatedFlows.length === 0 || groundTruthFlows.length === 0) {
+    return matchResults;
+  }
+
+  const groundTruthEmbeddings =
+    await getGroundTruthEmbeddings(groundTruthFlows);
+  const generatedTexts = generatedFlows.map(flowToText);
+  const generatedEmbeddings = await semanticService.embedBatch(generatedTexts);
+
+  // First pass: compute all best match scores
+  const allMatches: {
+    genFlowId: string;
+    bestGTFlowId: string | undefined;
+    bestScore: number;
+  }[] = [];
+
+  for (let i = 0; i < generatedFlows.length; i++) {
+    let bestScore = -Infinity;
+    let bestGTFlowId: string | undefined;
+
+    for (let j = 0; j < groundTruthEmbeddings.length; j++) {
+      const score = await semanticService.cosineSimilarity(
+        generatedEmbeddings[i],
+        groundTruthEmbeddings[j],
+      );
+      if (score > bestScore) {
+        bestScore = score;
+        bestGTFlowId = groundTruthFlows[j].id;
+      }
+    }
+
+    allMatches.push({
+      genFlowId: generatedFlows[i].id,
+      bestGTFlowId,
+      bestScore,
+    });
+  }
+
+  // Sort by bestScore descending (best matches claim first)
+  allMatches.sort((a, b) => b.bestScore - a.bestScore);
+
+  // Second pass: assign claims with deduplication
+  const claimedGTFlows = new Set<string>();
+
+  for (const match of allMatches) {
+    if (match.bestScore >= threshold && match.bestGTFlowId) {
+      if (!claimedGTFlows.has(match.bestGTFlowId)) {
+        // First to claim this GT flow
+        claimedGTFlows.add(match.bestGTFlowId);
+        matchResults.set(match.genFlowId, {
+          inGroundTruth: true,
+          isDuplicate: false,
+          matchedFlowId: match.bestGTFlowId,
+          bestScore: match.bestScore,
+        });
+      } else {
+        // GT flow already claimed - this is a duplicate
+        matchResults.set(match.genFlowId, {
+          inGroundTruth: false,
+          isDuplicate: true,
+          matchedFlowId: match.bestGTFlowId,
+          bestScore: match.bestScore,
+        });
+      }
+    } else {
+      // No match above threshold
+      matchResults.set(match.genFlowId, {
+        inGroundTruth: false,
+        isDuplicate: false,
+        bestScore: match.bestScore,
+      });
+    }
+  }
+
+  return matchResults;
+}
 
 export async function evaluateUseCase(
   useCase: GenUseCase,
@@ -22,7 +151,7 @@ export async function evaluateUseCase(
     groundTruth: GenUseCase;
     domain: string;
   },
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ) {
   // Build single prompt with all flows
   const flowsDescription = useCase.flows
@@ -34,26 +163,10 @@ Condition: ${flow.condition || "Main"}
 Steps: ${flow.steps
         .map(
           (s) =>
-            `${s.index}. ${s.actor} -> ${s.target || "N/A"}: ${s.description}`
+            `${s.index}. ${s.actor} -> ${s.target || "N/A"}: ${s.description}`,
         )
         .join("; ")}
-  `
-    )
-    .join("\n---\n");
-
-  const groundTruthDescription = context.groundTruth.flows
-    .map(
-      (flow) => `
-Flow ID: ${flow.id}
-Kind: ${flow.kind}
-Condition: ${flow.condition || "Main"}
-Steps: ${flow.steps
-        .map(
-          (s) =>
-            `${s.index}. ${s.actor} -> ${s.target || "N/A"}: ${s.description}`
-        )
-        .join("; ")}
-  `
+  `,
     )
     .join("\n---\n");
 
@@ -64,9 +177,6 @@ Domain: ${context.domain}
 Vague: ${context.vagueSummary}
 ${context.detailedDescription ? `Detailed: ${context.detailedDescription}` : ""}
 
-Ground Truth Flows:
-${groundTruthDescription}
-
 Flows to Evaluate:
 ${flowsDescription}
 
@@ -75,35 +185,48 @@ Rules:
 - LOGICAL: Not mentioned, but reasonable for domain/actors
 - HALLUCINATION: Neither
 
-For each flow, also check if it exists in ground truth.
-
 Return array with evaluation for each flow.
   `;
 
+  const matchResults = await matchFlowsToGroundTruth(
+    useCase.flows,
+    context.groundTruth.flows,
+  );
   const flowEvals = await geminiFunctions.generateStructured({
     prompt,
     schema: batchFlowEvalSchema,
   });
 
-  // Calculate metrics
-  const grounded = flowEvals.filter((f) => f.category === "grounded").length;
-  const logical = flowEvals.filter((f) => f.category === "logical").length;
-  const hallucinations = flowEvals.filter(
-    (f) => f.category === "hallucination"
-  ).length;
+  const flowDetails = flowEvals.map((flowEval) => {
+    const match = matchResults.get(flowEval.flowId);
+    return {
+      ...flowEval,
+      inGroundTruth: match?.inGroundTruth ?? false,
+      isDuplicate: match?.isDuplicate ?? false,
+      matchedFlowId: match?.matchedFlowId,
+    };
+  });
 
-  const qualityScore = (grounded * 1.0 + logical * 0.7) / flowEvals.length;
-  const discoveryRate =
-    flowEvals.filter((f) => f.inGroundTruth).length /
-    context.groundTruth.flows.length;
-  const precision = (grounded + logical) / flowEvals.length;
+  // Calculate metrics
+  const grounded = flowDetails.filter((f) => f.category === "grounded").length;
+  const logical = flowDetails.filter((f) => f.category === "logical").length;
+  const hallucinations = flowDetails.filter(
+    (f) => f.category === "hallucination",
+  ).length;
+  const duplicates = flowDetails.filter((f) => f.isDuplicate).length;
+
+  const qualityScore = (grounded * 1.0 + logical * 0.7) / flowDetails.length;
+  // Discovery rate = unique GT flows found / total GT flows
+  const uniqueGTCovered = flowDetails.filter((f) => f.inGroundTruth).length;
+  const discoveryRate = uniqueGTCovered / context.groundTruth.flows.length;
+  const precision = (grounded + logical) / flowDetails.length;
   const f1Score =
     (2 * (precision * discoveryRate)) / (precision + discoveryRate);
 
   return {
-    totalFlows: flowEvals.length,
-    breakdown: { grounded, logical, hallucinations },
+    totalFlows: flowDetails.length,
+    breakdown: { grounded, logical, hallucinations, duplicates },
     scores: { qualityScore, discoveryRate, precision, f1Score },
-    flowDetails: flowEvals,
+    flowDetails,
   };
 }

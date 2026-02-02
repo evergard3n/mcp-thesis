@@ -4,7 +4,7 @@ import {
   GenStep,
 } from "../interfaces/usecase.interface.new.js";
 import { UseCaseTermScore } from "../validators/flat.validator.js";
-import { GapAnalysis, Gap } from "../analyzers/gap.analyzer.js";
+import { GapAnalysis, Gap } from "./gap.analyzer.js";
 
 /**
  * Step-level uncertainty analysis
@@ -166,14 +166,14 @@ function analyzeStepCompleteness(step: GenStep): number {
 function analyzeStepExceptionCoverage(
   step: GenStep,
   parentFlow: GenFlow,
-  allFlows: GenFlow[]
+  allFlows: GenFlow[],
 ): number {
   // Count exception flows from this step
   const exceptionCount = allFlows.filter(
     (f) =>
       f.kind === "EXCEPTION" &&
       f.parentFlow === parentFlow.id &&
-      f.fromStepIndex === step.index
+      f.fromStepIndex === step.index,
   ).length;
 
   // Steps that need exceptions
@@ -196,19 +196,19 @@ export function analyzeStepUncertainty(
   step: GenStep,
   parentFlow: GenFlow,
   allFlows: GenFlow[],
-  gapAnalysis: GapAnalysis
+  gapAnalysis: GapAnalysis,
 ): StepUncertainty {
   const clarityScore = analyzeStepClarity(step.description);
   const completeness = analyzeStepCompleteness(step);
   const exceptionCoverage = analyzeStepExceptionCoverage(
     step,
     parentFlow,
-    allFlows
+    allFlows,
   );
 
   // Find related gaps
   const relatedGaps = gapAnalysis.gaps.filter(
-    (g) => g.relatedStep === step.index && g.relatedFlow === parentFlow.id
+    (g) => g.relatedStep === step.index && g.relatedFlow === parentFlow.id,
   );
 
   // Determine gap severity
@@ -221,8 +221,7 @@ export function analyzeStepUncertainty(
   // Calculate uncertainty score (inverse of confidence)
   // Lower clarity/completeness/coverage = higher uncertainty
   const uncertaintyScore =
-    1 -
-    (clarityScore * 0.3 + completeness * 0.3 + exceptionCoverage * 0.4);
+    1 - (clarityScore * 0.3 + completeness * 0.3 + exceptionCoverage * 0.4);
 
   // Add gap penalty
   const gapPenalty =
@@ -233,8 +232,7 @@ export function analyzeStepUncertainty(
   const uncertaintyReasons: string[] = [];
   if (clarityScore < 0.5) uncertaintyReasons.push("Vague or unclear action");
   if (completeness < 0.7) uncertaintyReasons.push("Missing actor or target");
-  if (exceptionCoverage < 0.5)
-    uncertaintyReasons.push("No exception handling");
+  if (exceptionCoverage < 0.5) uncertaintyReasons.push("No exception handling");
   if (gapSeverity !== "none")
     uncertaintyReasons.push(`${gapSeverity} priority gap detected`);
 
@@ -271,7 +269,7 @@ function analyzeConditionSpecificity(condition: string | undefined): number {
   // Specific conditions (mentions concrete values, actors, or states)
   if (
     cond.match(
-      /\b(invalid|missing|unavailable|timeout|not found|mismatch|incorrect)\b/
+      /\b(invalid|missing|unavailable|timeout|not found|mismatch|incorrect)\b/,
     )
   ) {
     return 0.7;
@@ -308,11 +306,11 @@ function hasResolution(flow: GenFlow): boolean {
 export function analyzeFlowUncertainty(
   flow: GenFlow,
   useCase: GenUseCase,
-  gapAnalysis: GapAnalysis
+  gapAnalysis: GapAnalysis,
 ): FlowUncertainty {
   // Analyze all steps in this flow
   const stepAnalyses = flow.steps.map((step) =>
-    analyzeStepUncertainty(step, flow, useCase.flows, gapAnalysis)
+    analyzeStepUncertainty(step, flow, useCase.flows, gapAnalysis),
   );
 
   const stepsClarityAvg =
@@ -338,11 +336,11 @@ export function analyzeFlowUncertainty(
   const hasNestedExceptions =
     flow.kind === "EXCEPTION" &&
     useCase.flows.some(
-      (f) => f.kind === "EXCEPTION" && f.parentFlow === flow.id
+      (f) => f.kind === "EXCEPTION" && f.parentFlow === flow.id,
     );
 
   const nestedExceptionCount = useCase.flows.filter(
-    (f) => f.kind === "EXCEPTION" && f.parentFlow === flow.id
+    (f) => f.kind === "EXCEPTION" && f.parentFlow === flow.id,
   ).length;
   const nestedExceptionCoverage =
     flow.kind === "EXCEPTION" && flow.steps.length > 0
@@ -350,7 +348,8 @@ export function analyzeFlowUncertainty(
       : 1;
 
   // Calculate flow uncertainty
-  let uncertaintyScore = 1 - (stepsClarityAvg * 0.4 + stepsCompletenessAvg * 0.3);
+  let uncertaintyScore =
+    1 - (stepsClarityAvg * 0.4 + stepsCompletenessAvg * 0.3);
 
   if (flow.kind !== "MAIN") {
     uncertaintyScore += (1 - conditionSpecificity) * 0.2;
@@ -403,7 +402,7 @@ export function analyzeFlowUncertainty(
 function computeStructuralImportance(
   stepIndex: number,
   flow: GenFlow,
-  allFlows: GenFlow[]
+  allFlows: GenFlow[],
 ): number {
   const totalSteps = flow.steps.length;
   if (totalSteps === 0) return 0.5;
@@ -419,7 +418,7 @@ function computeStructuralImportance(
     (f) =>
       (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
       f.parentFlow === flow.id &&
-      f.fromStepIndex === stepIndex
+      f.fromStepIndex === stepIndex,
   ).length;
 
   if (branchCount >= 3) return 0.9;
@@ -443,9 +442,7 @@ function computeDomainImportance(step: GenStep): number {
   }
 
   // Validation/Authentication (very high priority)
-  if (
-    desc.match(/validat|verify|check|find policy|authenticate|authorize/i)
-  ) {
+  if (desc.match(/validat|verify|check|find policy|authenticate|authorize/i)) {
     return 0.9;
   }
 
@@ -479,14 +476,14 @@ function computeDomainImportance(step: GenStep): number {
 function computeImpactRadius(
   stepIndex: number,
   flow: GenFlow,
-  allFlows: GenFlow[]
+  allFlows: GenFlow[],
 ): number {
   // Count direct branches from this step
   const directBranches = allFlows.filter(
     (f) =>
       (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
       f.parentFlow === flow.id &&
-      f.fromStepIndex === stepIndex
+      f.fromStepIndex === stepIndex,
   ).length;
 
   // Count steps after this one in the same flow
@@ -505,12 +502,12 @@ function computeImpactRadius(
 export function computeStepCriticality(
   step: GenStep,
   flow: GenFlow,
-  allFlows: GenFlow[]
+  allFlows: GenFlow[],
 ): StepCriticality {
   const structuralImportance = computeStructuralImportance(
     step.index,
     flow,
-    allFlows
+    allFlows,
   );
   const domainImportance = computeDomainImportance(step);
   const impactRadius = computeImpactRadius(step.index, flow, allFlows);
@@ -532,7 +529,7 @@ export function computeStepCriticality(
  */
 export function rankStepPriorities(
   stepUncertainties: StepUncertainty[],
-  useCase: GenUseCase
+  useCase: GenUseCase,
 ): StepPriority[] {
   const priorities: StepPriority[] = [];
 
@@ -548,7 +545,8 @@ export function rankStepPriorities(
     const criticality = computeStepCriticality(step, flow, useCase.flows);
 
     // Priority = Uncertainty × Criticality
-    const priorityScore = stepUnc.uncertaintyScore * criticality.criticalityScore;
+    const priorityScore =
+      stepUnc.uncertaintyScore * criticality.criticalityScore;
 
     // Determine rank
     let priorityRank: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
@@ -580,21 +578,21 @@ export function rankStepPriorities(
 export function rankAllUncertainties(
   useCase: GenUseCase,
   validationScore: UseCaseTermScore,
-  gapAnalysis: GapAnalysis
+  gapAnalysis: GapAnalysis,
 ): UncertaintyAnalysis {
   // Analyze all steps
   const stepUncertainties: StepUncertainty[] = [];
   for (const flow of useCase.flows) {
     for (const step of flow.steps) {
       stepUncertainties.push(
-        analyzeStepUncertainty(step, flow, useCase.flows, gapAnalysis)
+        analyzeStepUncertainty(step, flow, useCase.flows, gapAnalysis),
       );
     }
   }
 
   // Analyze all flows
   const flowUncertainties: FlowUncertainty[] = useCase.flows.map((flow) =>
-    analyzeFlowUncertainty(flow, useCase, gapAnalysis)
+    analyzeFlowUncertainty(flow, useCase, gapAnalysis),
   );
 
   // Rank priorities
@@ -608,7 +606,7 @@ export function rankAllUncertainties(
 
   // Count high priority items
   const highPriorityCount = stepPriorities.filter(
-    (p) => p.priorityRank === "CRITICAL" || p.priorityRank === "HIGH"
+    (p) => p.priorityRank === "CRITICAL" || p.priorityRank === "HIGH",
   ).length;
 
   return {
@@ -619,4 +617,3 @@ export function rankAllUncertainties(
     highPriorityCount,
   };
 }
-

@@ -1,9 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
+import { GenFlow } from "../interfaces/usecase.interface.new.js";
 import { writeFile, readFile } from "fs/promises";
 import { JsonProjectStore } from "../stores/projectStore.js";
-import { GeminiOpenRouterFunctions } from "../helpers/gemini-openrouter.functions.js";
+import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
+import semanticService from "../services/semantic.service.js";
 import {
   generateFlatUseCase,
   improveUseCase,
@@ -19,20 +21,34 @@ import {
   generateLLMQuestions,
   answerLLMQuestions,
   generateMultipleChoiceQuestions,
-  generateMultipleChoiceQuestionsWithScores,
   expertAnswerMultipleChoice,
   generateHybridQuestions,
   expertAnswerOpenEndedQuestions,
   generateAdaptiveQuestions,
 } from "../validators/llm.validator.js";
-import { evaluateUseCase } from "../evaluators/three-tier.evaluator.js";
+import { evaluateUseCase, flowToText } from "../evaluators/three-tier.evaluator.js";
 import { analyzeGaps } from "../analyzers/gap.analyzer.js";
-import { rankAllUncertainties } from "../evaluators/uncertainty.ranker.js";
+import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
+
+interface EmbeddedFlow extends GenFlow {
+  embedding?: number[];
+}
+
+interface DatasetTestCase {
+  id: string;
+  groundTruth: {
+    flows: EmbeddedFlow[];
+  };
+}
+
+interface DatasetFile {
+  testCases: DatasetTestCase[];
+}
 
 export function registerTestingTools(
   server: McpServer,
   projectStore: JsonProjectStore,
-  geminiFunctions: GeminiOpenRouterFunctions
+  geminiFunctions: GeminiOpenRouterFunctions,
 ) {
   // Tool 1: prepareTestData
   server.registerTool(
@@ -49,12 +65,12 @@ export function registerTestingTools(
             detailedDescription: z
               .string()
               .describe(
-                "Expert-level description, just contain flows, not detailed description"
+                "Expert-level description, just contain flows, not detailed description",
               ),
             groundTruthJson: z.string(),
             complexity: z.enum(["simple", "medium", "complex"]).optional(),
             notes: z.string().optional(),
-          })
+          }),
         ),
       },
     },
@@ -128,10 +144,79 @@ export function registerTestingTools(
         ],
         structuredContent: { validated, outputFile: outputPath },
       };
-    }
+    },
   );
 
-  // Tool 2: runFrameworkComparison (NEW: Framework vs Baseline)
+  // Tool 2: embedDataset (pre-embed ground truth flows)
+  server.registerTool(
+    "embedDataset",
+    {
+      title: "Embed Dataset Ground Truth",
+      description:
+        "Pre-embed ground truth flows and store embeddings in dataset JSON",
+      inputSchema: {
+        datasetPath: z.string(),
+        testCaseIds: z.array(z.string()).optional(),
+        forceReembed: z.boolean().optional(),
+      },
+    },
+    async ({ datasetPath, testCaseIds, forceReembed }) => {
+      try {
+        const dataset = JSON.parse(
+          await readFile(datasetPath, "utf-8"),
+        ) as DatasetFile;
+
+        const testCases = testCaseIds
+          ? dataset.testCases.filter((tc) => testCaseIds.includes(tc.id))
+          : dataset.testCases;
+
+        let totalFlows = 0;
+        let embeddedCount = 0;
+        let skippedCount = 0;
+
+        for (const testCase of testCases) {
+          const flows = testCase.groundTruth?.flows ?? [];
+          for (const flow of flows) {
+            totalFlows += 1;
+            if (flow.embedding && flow.embedding.length > 0 && !forceReembed) {
+              skippedCount += 1;
+              continue;
+            }
+
+            const text = flowToText(flow);
+            flow.embedding = await semanticService.embed(text);
+            embeddedCount += 1;
+          }
+        }
+
+        await writeFile(datasetPath, JSON.stringify(dataset, null, 2));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Embedded ${embeddedCount} flows (${skippedCount} skipped). Saved to: ${datasetPath}`,
+            },
+          ],
+          structuredContent: {
+            datasetPath,
+            totalFlows,
+            embeddedCount,
+            skippedCount,
+          },
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        return {
+          content: [{ type: "text" as const, text: `Error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // Tool 3: runFrameworkComparison (NEW: Framework vs Baseline)
   server.registerTool(
     "runFrameworkComparison",
     {
@@ -178,7 +263,7 @@ export function registerTestingTools(
         const gapAnalysis = await analyzeGaps(
           draft,
           validation.score!,
-          tc.inputs.vague
+          tc.inputs.vague,
         );
 
         // Step 3: Generate hybrid questions (MC + open-ended)
@@ -187,7 +272,7 @@ export function registerTestingTools(
           draft,
           tc.inputs.vague,
           formatValidationForLLM(validation),
-          geminiFunctions
+          geminiFunctions,
         );
 
         // Step 4: Expert answers questions (simulated using detailed description)
@@ -197,7 +282,7 @@ export function registerTestingTools(
                 hybridQuestions.mcQuestions,
                 tc.inputs.detailed,
                 tc.domain,
-                geminiFunctions
+                geminiFunctions,
               )
             : [];
 
@@ -207,7 +292,7 @@ export function registerTestingTools(
                 hybridQuestions.openEndedQuestions,
                 tc.inputs.detailed,
                 tc.domain,
-                geminiFunctions
+                geminiFunctions,
               )
             : [];
 
@@ -218,7 +303,7 @@ export function registerTestingTools(
           hybridQuestions.mcQuestions,
           mcAnswers,
           openEndedAnswers,
-          geminiFunctions
+          geminiFunctions,
         );
 
         // Condition C: Oracle (Detailed → LLM → Done, upper bound)
@@ -243,7 +328,7 @@ export function registerTestingTools(
                   missingAlternativeFlows: gapAnalysis.missingAlternativeFlows,
                   totalGaps: gapAnalysis.gaps.length,
                   highPriorityGaps: gapAnalysis.gaps.filter(
-                    (g) => g.severity === "high"
+                    (g) => g.severity === "high",
                   ).length,
                   completenessScore: gapAnalysis.completenessScore,
                 },
@@ -274,7 +359,7 @@ export function registerTestingTools(
         ],
         structuredContent: { results, outputPath },
       };
-    }
+    },
   );
 
   // Tool 3: runCOVEComparison (KEEP for backward compatibility)
@@ -307,14 +392,14 @@ export function registerTestingTools(
 
         const validationVague = await validateUseCaseWithFeedback(
           extractedVague,
-          { projectStore }
+          { projectStore },
         );
 
         const questionsVague = await generateLLMQuestions(
           tc.inputs.vague,
           extractedVague,
           formatValidationForLLM(validationVague),
-          geminiFunctions
+          geminiFunctions,
         );
 
         const answersVague = await answerLLMQuestions({
@@ -339,14 +424,14 @@ export function registerTestingTools(
 
         const validationDetailed = await validateUseCaseWithFeedback(
           extractedDetailed,
-          { projectStore }
+          { projectStore },
         );
 
         const questionsDetailed = await generateLLMQuestions(
           tc.inputs.detailed,
           extractedDetailed,
           formatValidationForLLM(validationDetailed),
-          geminiFunctions
+          geminiFunctions,
         );
 
         const answersDetailed = await answerLLMQuestions({
@@ -384,7 +469,7 @@ export function registerTestingTools(
         ],
         structuredContent: { results, outputPath },
       };
-    }
+    },
   );
 
   // Tool 3: runHITLComparison
@@ -445,14 +530,14 @@ export function registerTestingTools(
           const gapAnalysis = await analyzeGaps(
             currentUseCase,
             validation.score!,
-            tc.inputs.vague
+            tc.inputs.vague,
           );
 
           // Step 3: Uncertainty analysis and priority ranking
           const uncertaintyAnalysis = rankAllUncertainties(
             currentUseCase,
             validation.score!,
-            gapAnalysis
+            gapAnalysis,
           );
 
           // Stopping condition: high confidence and no high-priority gaps
@@ -462,8 +547,8 @@ export function registerTestingTools(
           ) {
             console.log(
               `  Stopping: High confidence (${uncertaintyAnalysis.overallConfidence.toFixed(
-                2
-              )}) and no high-priority items`
+                2,
+              )}) and no high-priority items`,
             );
             break;
           }
@@ -473,7 +558,7 @@ export function registerTestingTools(
             uncertaintyAnalysis.stepPriorities,
             uncertaintyAnalysis.flowUncertainties,
             allQuestions,
-            Math.min(6, MAX_QUESTIONS - totalQuestionsAsked)
+            Math.min(6, MAX_QUESTIONS - totalQuestionsAsked),
           );
 
           if (adaptiveQuestions.length === 0) {
@@ -488,7 +573,7 @@ export function registerTestingTools(
             adaptiveQuestions,
             tc.inputs.detailed,
             tc.domain,
-            geminiFunctions
+            geminiFunctions,
           );
 
           // Step 6: Refine use case with answers
@@ -498,7 +583,7 @@ export function registerTestingTools(
             [], // No MC questions in iterative mode
             [],
             answers,
-            geminiFunctions
+            geminiFunctions,
           );
 
           // Track iteration data
@@ -516,7 +601,7 @@ export function registerTestingTools(
         }
 
         console.log(
-          `  Completed ${iteration} iterations, ${totalQuestionsAsked} total questions`
+          `  Completed ${iteration} iterations, ${totalQuestionsAsked} total questions`,
         );
 
         const hitlUseCase = currentUseCase;
@@ -549,7 +634,7 @@ Results: ${outputPath}`,
         ],
         structuredContent: { results, outputPath },
       };
-    }
+    },
   );
 
   // Tool 4: evaluateResults
@@ -571,7 +656,7 @@ Results: ${outputPath}`,
 
       for (const result of results) {
         const testCase = dataset.testCases.find(
-          (tc: any) => tc.id === result.testCaseId
+          (tc: any) => tc.id === result.testCaseId,
         );
         if (!testCase) continue;
 
@@ -596,7 +681,7 @@ Results: ${outputPath}`,
               groundTruth: testCase.groundTruth,
               domain: testCase.domain,
             },
-            geminiFunctions
+            geminiFunctions,
           );
         }
 
@@ -630,7 +715,7 @@ Results: ${outputPath}`,
       const outputPath = `test-data/results/evaluated/${filename}`;
       await writeFile(
         outputPath,
-        JSON.stringify({ evaluations, summary }, null, 2)
+        JSON.stringify({ evaluations, summary }, null, 2),
       );
 
       return {
@@ -640,12 +725,12 @@ Results: ${outputPath}`,
             text: `Evaluation complete\n${JSON.stringify(
               summary,
               null,
-              2
+              2,
             )}\nSaved: ${outputPath}`,
           },
         ],
         structuredContent: { evaluations, summary, outputPath },
       };
-    }
+    },
   );
 }

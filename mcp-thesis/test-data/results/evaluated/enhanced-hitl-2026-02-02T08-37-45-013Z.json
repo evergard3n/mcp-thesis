@@ -1,0 +1,314 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "RL1",
+      "evaluations": {
+        "conditionA_Baseline": {
+          "totalFlows": 2,
+          "breakdown": {
+            "grounded": 2,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.08695652173913043,
+            "precision": 1,
+            "f1Score": 0.16
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "All steps in the MAIN flow are explicitly mentioned across the vague summary and detailed description.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EDIT_LOSS_INFO",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The action of 'pauses, saves, resumes, corrects, or revises entries' is explicitly stated in the vague summary.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": true
+            }
+          ]
+        },
+        "conditionB_EnhancedHITL": {
+          "totalFlows": 27,
+          "breakdown": {
+            "grounded": 22,
+            "logical": 5,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 0.9444444444444444,
+            "discoveryRate": 1.0869565217391304,
+            "precision": 1,
+            "f1Score": 1.0416666666666667
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Every step in the MAIN flow is explicitly mentioned in the Vague description. The wording is almost identical.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EDIT_LOSS_INFO",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description states: 'The Clerk may pause, save, resume, correct, or revise entries as needed until confirming completion.' This directly covers the steps in this flow.",
+              "inVagueSummary": true,
+              "inDetailedDescription": false,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_3a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The Vague description mentions 'System asynchronously validates data' and the Detailed description mentions 'System validates this entry' and 'If the basic info is invalid or incomplete'. The specific details of how validation works (checking against rules, identifying discrepancies, displaying errors, Clerk correcting) are not explicitly stated in either, but are a logical and common implementation of system validation in such a process.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description states 'System ... checks for duplicates'. The Detailed description has a dedicated 'Duplicate Check' phase, explicitly mentioning 'System ... performs a check for existing competing claims' and 'System displays a list' if found. The steps in the flow align perfectly with these descriptions, detailing the criteria used and how results are displayed.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_5a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description states: 'If a potential duplicate is found: The System displays a list. The Clerk reviews it and either opens the existing claim (marking it as a true duplicate)'. This corresponds directly to 'Clerk makes a judgment call to open an existing claim' in the flow.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description states: 'If a potential duplicate is found: The System displays a list. The Clerk reviews it and either opens the existing claim (marking it as a true duplicate) or returns to continue the current claim (marking it as not a duplicate)'. This flow directly matches the latter part of this description.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_2a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description mentions 'Initial Loss Capture & Duplicate Check' and specifies 'Validation: If the basic info is invalid or incomplete (e.g., changed after check), the System forces a re-evaluation or warns the Clerk.' It also states in Phase 1: 'If not found: The Clerk must retry with different search details. If mismatched: The Clerk must correct the policy number or name'. This flow details system prevention and error messages, which are direct consequences and logical extensions of the stated validation failures.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_EDIT_LOSS_INFO_trigger",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description mentions the Clerk 'enters available policy and incident details in a flexible order' and 'may pause, save, resume, correct, or revise entries'. The Detailed description has a 'Detailed Entry & Coverage' phase where the Clerk proceeds to enter 'line-specific loss information'. This flow describes an action (entering detailed info) that would typically follow initial capture and pre-claim-number duplicate checks, and aligns with the flexibility to edit/add info.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_3a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The Vague description states 'System asynchronously validates data'. The Detailed description mentions 'Validation: If the basic info is invalid or incomplete... the System forces a re-evaluation or warns the Clerk.' While the specifics of 'alerts the Clerk', 'highlights invalid fields', and 'prevents finalization' are not explicitly stated, they are very common and logical ways for a system to handle validation failure.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_2b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description mentions in Phase 1 that if a policy is 'not found' or 'mismatched', the Clerk must retry or correct. In Phase 2, under 'Validation', it states: 'If the basic info is invalid or incomplete... the System forces a re-evaluation or warns the Clerk.' This flow describes specific system responses (immediate validation errors, preventing proceeding, highlighting fields) which directly align with this stated system behavior.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The condition refers to 'step 3' which is 'System asynchronously validates entered data'. This alternative flow details *what* the system validates ('line-specific loss information') which is implicitly part of ongoing validation but not explicitly broken out this way for step 3 in the main flow. It's a logical clarification rather than a new action.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_8a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description explicitly states in 'Phase 4: Adjuster Assignment & Completion': 'Unavailability: If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'. This flow directly matches that description.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description explicitly states in 'Phase 4: Adjuster Assignment & Completion': 'Unavailability: ... or the System may assign a default adjuster (especially in timeout scenarios)'. This flow exactly matches that condition and action.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_12a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Vague description mentions the Clerk confirming completion and the System storing the loss. The Detailed description provides 'Final Validation' for completion: 'If missing, the System warns and may prevent exit or discard unsaved changes if the Clerk insists on exiting.' This flow covers all these aspects related to missing info and system response.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a_condition_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description under 'Phase 2: Initial Loss Capture & Duplicate Check', 'Validation' section states: 'If the basic info is invalid or incomplete..., the System forces a re-evaluation...'. This flow is a direct restatement of that.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a_condition_2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description under 'Phase 2: Initial Loss Capture & Duplicate Check', 'Validation' section states: 'If the basic info is invalid or incomplete (e.g., changed after check), the System ... warns the Clerk.' This flow is a direct restatement of that.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_8a_2",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a slight rephrasing of EXT_8a, which is directly supported by the Detailed description's 'Unavailability: If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a_2b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a slight rephrasing of ALT_8a_1, which is directly supported by the Detailed description's 'Unavailability: ... or the System may assign a default adjuster (especially in timeout scenarios)'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_9a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description under 'Phase 4: Adjuster Assignment & Completion', 'Final Validation' states: 'If missing, the System warns and may prevent exit...'. This flow directly captures the 'prevent exit' scenario.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_9a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description under 'Phase 4: Adjuster Assignment & Completion', 'Final Validation' states: 'If missing, the System warns and ... discard unsaved changes if the Clerk insists on exiting.' This flow directly captures the 'discard unsaved changes' scenario.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_5b_dupe",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a reiteration of ALT_5b, which is directly supported by the Detailed description's 'If a potential duplicate is found: The System displays a list. The Clerk reviews it and either ... returns to continue the current claim (marking it as not a duplicate)'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_5a_dupe",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a reiteration of EXT_5a, which is directly supported by the Detailed description's 'If a potential duplicate is found: The System displays a list. The Clerk reviews it and either opens the existing claim (marking it as a true duplicate)'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_8a_available",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a reiteration of EXT_8a and EXT_8a_2, directly supported by the Detailed description's 'Unavailability: If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8b_default_assign",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a reiteration of ALT_8a_1 and ALT_8a_2b, directly supported by the Detailed description's 'Unavailability: ... or the System may assign a default adjuster (especially in timeout scenarios)'.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_8a_condition_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The Detailed description for 'Phase 2: Initial Loss Capture & Duplicate Check' states: 'If a potential duplicate is found: The System displays a list. The Clerk reviews it...' This flow explicitly details the system presenting the list and the clerk reviewing it.",
+              "inVagueSummary": false,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "EXT_6a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "The Detailed description covers adjuster assignment in Phase 4. The main flow lists 'Supports adjuster assignment' as Step 8. This flow refers to 'Step 6', which in the main flow is 'Assigns a claim number'. Adjuster assignment is clearly indicated to happen after the claim number. Placing 'no suitable adjusters' at step 6 makes this flow less accurate in terms of sequence.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_6a",
+              "category": "logical",
+              "score": 0.7,
+              "reasoning": "Similar to EXT_6a, the Detailed description covers adjuster assignment in Phase 4. The main flow lists 'Supports adjuster assignment' as Step 8. Referring to 'Step 6' for adjuster assignment issues (no suitable adjusters, default assignment) is out of sequence with the detailed description.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionA_Baseline": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.08695652173913043,
+      "avgF1": 0.16
+    },
+    "conditionB_EnhancedHITL": {
+      "avgQuality": 0.9444444444444444,
+      "avgDiscovery": 1.0869565217391304,
+      "avgF1": 1.0416666666666667
+    }
+  }
+}

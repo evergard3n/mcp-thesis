@@ -1,0 +1,260 @@
+{
+  "evaluations": [
+    {
+      "testCaseId": "RL1",
+      "evaluations": {
+        "conditionA_Baseline": {
+          "totalFlows": 1,
+          "breakdown": {
+            "grounded": 1,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "Every step in this flow is explicitly mentioned in the vague and/or detailed description. The flow describes the main sequence of events from a clerk beginning loss entry to the system ensuring the claim is ready for further processing.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            }
+          ]
+        },
+        "conditionB_EnhancedHITL": {
+          "totalFlows": 22,
+          "breakdown": {
+            "grounded": 22,
+            "logical": 0,
+            "hallucinations": 0
+          },
+          "scores": {
+            "qualityScore": 1,
+            "discoveryRate": 0.043478260869565216,
+            "precision": 1,
+            "f1Score": 0.08333333333333333
+          },
+          "flowDetails": [
+            {
+              "flowId": "MAIN",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The MAIN flow describes the core process of capturing and registering loss information, entering policy and incident details, asynchronous validation, duplicate checks, claim number assignment, coverage retrieval, adjuster assignment, and completion confirmation. All these steps are explicitly mentioned in the Vague and Detailed descriptions.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": true
+            },
+            {
+              "flowId": "ALT_3a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow describes the Clerk reviewing potential duplicates and making a decision, which is explicitly covered in 'Phase 2: Initial Loss Capture & Duplicate Check' of the detailed description: \"If a potential duplicate is found: The System displays a list. The Clerk reviews it and either opens the existing claim (marking it as a true duplicate) or returns to continue the current claim (marking it as not a duplicate).\"",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow addresses what happens when the policy search doesn't find a match or is mismatched. The detailed description states: 'If not found: The Clerk must retry with different search details.' and 'If mismatched: The Clerk must correct the policy number or name'. This directly aligns with the flow's description.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3a_reenter",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a rephrasing of the action taken in EXT_3a. The detailed description clearly states 'If not found: The Clerk must retry with different search details.' and 'If mismatched: The Clerk must correct the policy number or name.'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "The vague description mentions 'asynchronously validates data'. The detailed description mentions 'The System validates this entry'. A failure in this validation, leading to highlighting fields and clerk correction, is a direct consequence and thus grounded.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3c",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow describes what happens when the initial policy identification input is incomplete or invalid. The detailed description directly states: \"The Clerk initiates the process by entering an insured's policy number or name and the date of the incident.\" and subsequent validation. If this initial input is bad, the system blocking or returning no match and requiring correction from the Clerk is a logical extension of the initial policy identification and validation steps.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is directly addressed in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'Unavailability: If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'the System may assign a default adjuster (especially in timeout scenarios).'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_3d",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in 'Phase 2: Initial Loss Capture & Duplicate Check' of the detailed description: 'Validation: If the basic info is invalid or incomplete (e.g., changed after check), the System forces a re-evaluation or warns the Clerk.' The steps align with this.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6c",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly stated in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'. This is a direct match.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6d",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow covers the scenario of automatic adjuster assignment due to timeout or escalation rules. The detailed description states: 'or the System may assign a default adjuster (especially in timeout scenarios).' Escalation rules are a logical extension of managing adjuster assignment in an insurance system.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6e",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is a near-duplicate of ALT_6a and ALT_6c, which are explicitly stated in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_6f",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'the System may assign a default adjuster (especially in timeout scenarios).'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_12a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly detailed under 'Phase 4: Adjuster Assignment & Completion' -> 'Final Validation': 'The System checks for minimum required info (Date of Loss, Insured Name, Policy #, Adjuster). If missing, the System warns and may prevent exit or discard unsaved changes if the Clerk insists on exiting.'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8b",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'the System may assign a default adjuster (especially in timeout scenarios).'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_10a",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly detailed under 'Phase 4: Adjuster Assignment & Completion' -> 'Final Validation': 'The System checks for minimum required info (Date of Loss, Insured Name, Policy #, Adjuster). If missing, the System warns and may prevent exit'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_10a_1",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion' -> 'Final Validation': 'the System...may prevent exit or discard unsaved changes if the Clerk insists on exiting'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8a_new",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'If no suitable adjusters are available, the System notifies the Clerk. The Clerk may save the claim for later assignment'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "ALT_8b_new",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion': 'the System may assign a default adjuster (especially in timeout scenarios).'",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_12a_new",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly detailed under 'Phase 4: Adjuster Assignment & Completion' -> 'Final Validation': 'The System checks for minimum required info (Date of Loss, Insured Name, Policy #, Adjuster). If missing, the System warns and may prevent exit'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            },
+            {
+              "flowId": "EXT_12a_CONTINUED",
+              "category": "grounded",
+              "score": 1,
+              "reasoning": "This flow is explicitly mentioned in the detailed description under 'Phase 4: Adjuster Assignment & Completion' -> 'Final Validation': 'the System...may prevent exit or discard unsaved changes if the Clerk insists on exiting'.",
+              "inVagueSummary": true,
+              "inDetailedDescription": true,
+              "inGroundTruth": false
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "summary": {
+    "conditionA_Baseline": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    },
+    "conditionB_EnhancedHITL": {
+      "avgQuality": 1,
+      "avgDiscovery": 0.043478260869565216,
+      "avgF1": 0.08333333333333333
+    }
+  }
+}
