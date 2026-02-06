@@ -9,9 +9,7 @@ import semanticService from "../services/semantic.service.js";
 import {
   generateFlatUseCase,
   improveUseCase,
-  refineWithConstrainedAnswers,
   refineWithHybridAnswers,
-  extractFlowsFromOpenEndedAnswers,
 } from "../services/usecase.service.js";
 import {
   validateUseCaseWithFeedback,
@@ -26,9 +24,17 @@ import {
   expertAnswerOpenEndedQuestions,
   generateAdaptiveQuestions,
 } from "../validators/llm.validator.js";
-import { evaluateUseCase, flowToText } from "../evaluators/three-tier.evaluator.js";
-import { analyzeGaps } from "../analyzers/gap.analyzer.js";
+import {
+  evaluateUseCase,
+  flowToText,
+} from "../evaluators/three-tier.evaluator.js";
+import {
+  analyzeGaps,
+  InteractionMemory,
+  GapType,
+} from "../analyzers/gap.analyzer.js";
 import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
+import { OpenEndedQuestion } from "../validators/llm.validator.js";
 
 interface EmbeddedFlow extends GenFlow {
   embedding?: number[];
@@ -216,262 +222,6 @@ export function registerTestingTools(
     },
   );
 
-  // Tool 3: runFrameworkComparison (NEW: Framework vs Baseline)
-  server.registerTool(
-    "runFrameworkComparison",
-    {
-      title: "Framework vs Baseline Comparison",
-      description:
-        "Compare framework (gap analysis + hybrid questions) against baseline LLM extraction and oracle. When being called, will generate a new baseline and use it for both conditions A and B",
-      inputSchema: {
-        datasetPath: z.string(),
-        // baseline: genUseCaseSchema.describe(
-        //   "The baseline we get from extractUseCase tool"
-        // ),
-        testCaseIds: z.array(z.string()).optional(),
-        includeIntermediateResults: z.boolean().optional(),
-      },
-    },
-    async ({ datasetPath, testCaseIds, includeIntermediateResults }) => {
-      const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
-      const testCases = testCaseIds
-        ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
-        : dataset.testCases;
-
-      const results = [];
-
-      for (const tc of testCases) {
-        console.log(`Testing ${tc.id}...`);
-
-        // Condition A: Baseline (Pre-generated, no framework)
-        console.log(`  Using pre-generated baseline...`);
-        // baseline is already loaded above
-
-        // Condition B: Framework (Same baseline → Gap Analysis → Hybrid Questions → Refinement)
-        console.log(`  Framework with gap analysis...`);
-
-        // Step 1: Use the SAME baseline as Condition A (no regeneration)
-        const draft = await generateFlatUseCase({
-          description: tc.inputs.vague,
-          geminiFunctions: geminiFunctions,
-        });
-
-        // Step 2: Validate and analyze gaps
-        const validation = await validateUseCaseWithFeedback(draft, {
-          projectStore,
-        });
-        const gapAnalysis = await analyzeGaps(
-          draft,
-          validation.score!,
-          tc.inputs.vague,
-        );
-
-        // Step 3: Generate hybrid questions (MC + open-ended)
-        const hybridQuestions = await generateHybridQuestions(
-          gapAnalysis,
-          draft,
-          tc.inputs.vague,
-          formatValidationForLLM(validation),
-          geminiFunctions,
-        );
-
-        // Step 4: Expert answers questions (simulated using detailed description)
-        const mcAnswers =
-          hybridQuestions.mcQuestions.length > 0
-            ? await expertAnswerMultipleChoice(
-                hybridQuestions.mcQuestions,
-                tc.inputs.detailed,
-                tc.domain,
-                geminiFunctions,
-              )
-            : [];
-
-        const openEndedAnswers =
-          hybridQuestions.openEndedQuestions.length > 0
-            ? await expertAnswerOpenEndedQuestions(
-                hybridQuestions.openEndedQuestions,
-                tc.inputs.detailed,
-                tc.domain,
-                geminiFunctions,
-              )
-            : [];
-
-        // Step 5: Refine with hybrid answers
-        const framework = await refineWithHybridAnswers(
-          tc.inputs.vague,
-          draft,
-          hybridQuestions.mcQuestions,
-          mcAnswers,
-          openEndedAnswers,
-          geminiFunctions,
-        );
-
-        // Condition C: Oracle (Detailed → LLM → Done, upper bound)
-        // console.log(`  Oracle extraction...`);
-        // const oracle = await generateFlatUseCase({
-        //   description: tc.inputs.detailed,
-        //   geminiFunctions: geminiFunctions,
-        // });
-
-        // as oracle is just the ground truth, we don't need to generate it
-
-        results.push({
-          testCaseId: tc.id,
-          conditionA_Baseline: draft,
-          conditionB_Framework: framework,
-          conditionC_Oracle: tc.groundTruth,
-          groundTruth: tc.groundTruth,
-          intermediateData: includeIntermediateResults
-            ? {
-                gapAnalysis: {
-                  missingExceptionFlows: gapAnalysis.missingExceptionFlows,
-                  missingAlternativeFlows: gapAnalysis.missingAlternativeFlows,
-                  totalGaps: gapAnalysis.gaps.length,
-                  highPriorityGaps: gapAnalysis.gaps.filter(
-                    (g) => g.severity === "high",
-                  ).length,
-                  completenessScore: gapAnalysis.completenessScore,
-                },
-                hybridQuestions: {
-                  mcCount: hybridQuestions.mcQuestions.length,
-                  openEndedCount: hybridQuestions.openEndedQuestions.length,
-                  questions: hybridQuestions,
-                },
-                answers: {
-                  mcAnswers,
-                  openEndedAnswers,
-                },
-              }
-            : undefined,
-        });
-      }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const outputPath = `test-data/results/raw/framework-comparison-${timestamp}.json`;
-      await writeFile(outputPath, JSON.stringify(results, null, 2));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Framework comparison complete: ${results.length} test cases\nResults: ${outputPath}`,
-          },
-        ],
-        structuredContent: { results, outputPath },
-      };
-    },
-  );
-
-  // Tool 3: runCOVEComparison (KEEP for backward compatibility)
-  server.registerTool(
-    "runCOVEComparison",
-    {
-      title: "Run COVE Comparison",
-      description: "Compare COVE with vague input vs detailed input",
-      inputSchema: {
-        datasetPath: z.string(),
-        testCaseIds: z.array(z.string()).optional(),
-      },
-    },
-    async ({ datasetPath, testCaseIds }) => {
-      const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
-      const testCases = testCaseIds
-        ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
-        : dataset.testCases;
-
-      const results = [];
-
-      for (const tc of testCases) {
-        console.log(`Testing ${tc.id}...`);
-
-        // Condition A: COVE + Vague
-        const extractedVague = await generateFlatUseCase({
-          description: tc.inputs.vague,
-          geminiFunctions: geminiFunctions,
-        });
-
-        const validationVague = await validateUseCaseWithFeedback(
-          extractedVague,
-          { projectStore },
-        );
-
-        const questionsVague = await generateLLMQuestions(
-          tc.inputs.vague,
-          extractedVague,
-          formatValidationForLLM(validationVague),
-          geminiFunctions,
-        );
-
-        const answersVague = await answerLLMQuestions({
-          originalDescription: tc.inputs.vague,
-          baseUseCase: extractedVague,
-          questions: questionsVague,
-          geminiFunctions: geminiFunctions,
-        });
-
-        const improvedVague = await improveUseCase({
-          originalDescription: tc.inputs.vague,
-          baseUseCase: extractedVague,
-          answers: answersVague,
-          geminiFunctions: geminiFunctions,
-        });
-
-        // Condition B: COVE + Detailed (same process)
-        const extractedDetailed = await generateFlatUseCase({
-          description: tc.inputs.detailed,
-          geminiFunctions: geminiFunctions,
-        });
-
-        const validationDetailed = await validateUseCaseWithFeedback(
-          extractedDetailed,
-          { projectStore },
-        );
-
-        const questionsDetailed = await generateLLMQuestions(
-          tc.inputs.detailed,
-          extractedDetailed,
-          formatValidationForLLM(validationDetailed),
-          geminiFunctions,
-        );
-
-        const answersDetailed = await answerLLMQuestions({
-          originalDescription: tc.inputs.detailed,
-          baseUseCase: extractedDetailed,
-          questions: questionsDetailed,
-          geminiFunctions: geminiFunctions,
-        });
-
-        const improvedDetailed = await improveUseCase({
-          originalDescription: tc.inputs.detailed,
-          baseUseCase: extractedDetailed,
-          answers: answersDetailed,
-          geminiFunctions: geminiFunctions,
-        });
-
-        results.push({
-          testCaseId: tc.id,
-          conditionA_COVEVague: improvedVague,
-          conditionB_COVEDetailed: improvedDetailed,
-          groundTruth: tc.groundTruth,
-        });
-      }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const outputPath = `test-data/results/raw/phase1-cove-${timestamp}.json`;
-      await writeFile(outputPath, JSON.stringify(results, null, 2));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `COVE comparison complete: ${results.length} test cases\nResults: ${outputPath}`,
-          },
-        ],
-        structuredContent: { results, outputPath },
-      };
-    },
-  );
-
   // Tool 3: runHITLComparison
   server.registerTool(
     "runHITLComparison",
@@ -485,6 +235,7 @@ export function registerTestingTools(
       },
     },
     async ({ datasetPath, testCaseIds }) => {
+      console.log("========================== running version: 18:20");
       const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
       const testCases = testCaseIds
         ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
@@ -511,8 +262,9 @@ export function registerTestingTools(
         const MAX_ITERATIONS = 5;
         let iteration = 0;
         let totalQuestionsAsked = 0;
-        const allQuestions: string[] = [];
+        const conversationHistory: InteractionMemory[] = [];
         const allIterations: any[] = [];
+        const allQuestions: string[] = [];
 
         // Iterative refinement loop
         while (
@@ -531,6 +283,7 @@ export function registerTestingTools(
             currentUseCase,
             validation.score!,
             tc.inputs.vague,
+            conversationHistory,
           );
 
           // Step 3: Uncertainty analysis and priority ranking
@@ -557,7 +310,6 @@ export function registerTestingTools(
           const adaptiveQuestions = await generateAdaptiveQuestions(
             uncertaintyAnalysis.stepPriorities,
             uncertaintyAnalysis.flowUncertainties,
-            allQuestions,
             Math.min(6, MAX_QUESTIONS - totalQuestionsAsked),
           );
 

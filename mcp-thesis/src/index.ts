@@ -42,7 +42,6 @@ class SessionServer {
       title: "MCP Thesis",
       websiteUrl: "https://github.com/yourusername/mcp-thesis",
     });
-    console.log("OPENROUTER_API_KEY", OPENROUTER_API_KEY);
     // Create session-scoped project store
     this.projectStore = new JsonProjectStore(sessionId);
     const geminiApiKey = process.env.GEMINI_API_KEY;

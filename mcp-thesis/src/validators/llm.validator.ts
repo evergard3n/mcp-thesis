@@ -43,7 +43,7 @@ export const generateLLMQuestions = async (
   const questionsSchema = z.array(z.string());
 
   const prompt = `
-        <intructions>
+        <instructions>
         You are a validator in a team of software analysts. Your teammates have already created an use case based on the original user description, and validated it using a predefined algorithm.
         You are given the original description, the use case, the validation feedback, and a set of further validation questions.
         Your task is to read those four materials, and give FIVE SPECIFIC QUESTIONS ONLY that will help your teammates to improve the use case.
@@ -531,23 +531,9 @@ export async function generateAdaptiveQuestions(
     uncertaintyScore: number;
     uncertaintyReasons: string[];
   }>,
-  previousQuestions: string[],
   maxQuestions: number = 6,
 ): Promise<OpenEndedQuestion[]> {
   const questions: OpenEndedQuestion[] = [];
-  const askedAbout = new Set<string>();
-
-  // Track what we've already asked about in previous iterations
-  for (const prevQ of previousQuestions) {
-    const stepMatch = prevQ.match(/step (\d+)/i);
-    if (stepMatch) {
-      askedAbout.add(`step-${stepMatch[1]}`);
-    }
-    const flowMatch = prevQ.match(/flow ([A-Z_0-9]+)/i);
-    if (flowMatch) {
-      askedAbout.add(`flow-${flowMatch[1]}`);
-    }
-  }
 
   // 1. Process top priority steps (CRITICAL and HIGH)
   const topSteps = stepPriorities
@@ -556,9 +542,6 @@ export async function generateAdaptiveQuestions(
 
   for (const priority of topSteps) {
     if (questions.length >= maxQuestions) break;
-
-    const stepKey = `step-${priority.stepIndex}`;
-    if (askedAbout.has(stepKey)) continue;
 
     // Generate question based on uncertainty type
     if (priority.uncertaintyReasons.includes("Vague or unclear action")) {
@@ -575,7 +558,6 @@ export async function generateAdaptiveQuestions(
         answerGuidance:
           "Describe the specific actions, tools, or procedures used in this step.",
       });
-      askedAbout.add(stepKey);
     } else if (
       priority.uncertaintyReasons.includes("No exception handling") &&
       priority.relatedGaps.length > 0
@@ -594,7 +576,6 @@ export async function generateAdaptiveQuestions(
         answerGuidance:
           "Describe each exception scenario: what triggers it, what steps are taken, and how it resolves.",
       });
-      askedAbout.add(stepKey);
     } else if (
       priority.uncertaintyReasons.includes("Missing actor or target")
     ) {
@@ -609,7 +590,6 @@ export async function generateAdaptiveQuestions(
         answerGuidance:
           "Specify the actor performing the action and the target entity or system involved.",
       });
-      askedAbout.add(stepKey);
     }
   }
 
@@ -622,9 +602,6 @@ export async function generateAdaptiveQuestions(
   for (const flowUnc of uncertainFlows) {
     if (questions.length >= maxQuestions) break;
 
-    const flowKey = `flow-${flowUnc.flowId}`;
-    if (askedAbout.has(flowKey)) continue;
-
     if (flowUnc.flowKind !== "MAIN" && flowUnc.conditionSpecificity < 0.5) {
       questions.push({
         id: `condition-${flowUnc.flowId}`,
@@ -636,7 +613,6 @@ export async function generateAdaptiveQuestions(
         answerGuidance:
           "Specify the exact condition that triggers this flow, including any relevant values, states, or events.",
       });
-      askedAbout.add(flowKey);
     } else if (flowUnc.flowKind !== "MAIN" && !flowUnc.hasCondition) {
       questions.push({
         id: `missing-condition-${flowUnc.flowId}`,
@@ -648,7 +624,6 @@ export async function generateAdaptiveQuestions(
         answerGuidance:
           "Describe the condition that causes this flow to execute, including what triggers it and when it occurs.",
       });
-      askedAbout.add(flowKey);
     }
   }
 
@@ -656,13 +631,6 @@ export async function generateAdaptiveQuestions(
   const remainingGaps = stepPriorities
     .flatMap((p) => p.relatedGaps)
     .filter((g) => g.severity === "high" || g.severity === "medium")
-    .filter((g) => {
-      // Check if we haven't asked about this gap type yet
-      const gapKey = `gap-${g.type}`;
-      if (askedAbout.has(gapKey)) return false;
-      askedAbout.add(gapKey);
-      return true;
-    })
     .slice(0, maxQuestions - questions.length);
 
   for (const gap of remainingGaps) {

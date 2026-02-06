@@ -1,5 +1,6 @@
 import { GenUseCase, GenFlow } from "../interfaces/usecase.interface.new.js";
 import { UseCaseTermScore } from "../validators/flat.validator.js";
+import semanticService from "../services/semantic.service.js";
 
 /**
  * Types of gaps that can be detected in a use case
@@ -42,6 +43,73 @@ export interface GapAnalysis {
   gaps: Gap[];
   priorityGaps: GapType[]; // ordered by importance
   completenessScore: number; // 0-1 estimate of how complete the use case is
+}
+
+/**
+ * Memory of previous Q&A interactions for deduplication
+ */
+export interface InteractionMemory {
+  stepContext: string;
+  question: string;
+  answer: string;
+  vector: number[];
+  iteration: number;
+  metadata: {
+    stepIndex?: number;
+    flowId?: string;
+    gapType?: GapType;
+  };
+}
+
+/**
+ * Gets step context string for a gap
+ */
+function getStepContext(gap: Gap, useCase: GenUseCase): string {
+  if (gap.relatedStep === undefined) {
+    return `[Global] ${gap.description}`;
+  }
+  const flow = useCase.flows.find(f => f.id === (gap.relatedFlow || "MAIN"));
+  const step = flow?.steps.find(s => s.index === gap.relatedStep);
+  if (step) {
+    return `[Step ${step.index}] Actor: ${step.actor}, Action: ${step.description}`;
+  }
+  return `[Step ${gap.relatedStep}] ${gap.description}`;
+}
+
+/**
+ * Filters out gaps that have already been covered by previous Q&A interactions
+ */
+export async function filterStaleGaps(
+  gaps: Gap[],
+  useCase: GenUseCase,
+  history: InteractionMemory[],
+  threshold: number = 0.85
+): Promise<Gap[]> {
+  if (history.length === 0 || gaps.length === 0) return gaps;
+  
+  const gapQueries = gaps.map(gap => {
+    const stepContext = getStepContext(gap, useCase);
+    return `Context: ${stepContext}\nGap: ${gap.description}`;
+  });
+  
+  const gapVectors = await semanticService.embedBatch(gapQueries);
+  
+  const freshGaps: Gap[] = [];
+  for (let i = 0; i < gaps.length; i++) {
+    let isCovered = false;
+    for (const record of history) {
+      const similarity = await semanticService.cosineSimilarity(gapVectors[i], record.vector);
+      if (similarity > threshold) {
+        isCovered = true;
+        break;
+      }
+    }
+    if (!isCovered) {
+      freshGaps.push(gaps[i]);
+    }
+  }
+  
+  return freshGaps;
 }
 
 /**
@@ -428,12 +496,14 @@ function detectTechnologyVariations(
  * @param useCase - The use case to analyze
  * @param validationFeedback - Validation score and metrics
  * @param originalDescription - Original user description (to check for mentioned but not extracted items)
+ * @param conversationHistory - Optional history of previous Q&A interactions for deduplication
  * @returns Gap analysis with prioritized list of gaps
  */
 export async function analyzeGaps(
   useCase: GenUseCase,
   validationFeedback: UseCaseTermScore,
-  originalDescription: string
+  originalDescription: string,
+  conversationHistory?: InteractionMemory[]
 ): Promise<GapAnalysis> {
   const gaps: Gap[] = [];
   const incompleteActors: string[] = [];
@@ -649,13 +719,31 @@ export async function analyzeGaps(
     completenessScore *= 0.85;
   }
 
+  // Filter out stale gaps if history is provided
+  const filteredGaps = conversationHistory && conversationHistory.length > 0
+    ? await filterStaleGaps(gaps, useCase, conversationHistory)
+    : gaps;
+
+  // Recompute priority gaps from filtered list
+  const filteredPriorityGaps: GapType[] = [];
+  for (const type of typeOrder) {
+    if (filteredGaps.some(g => g.type === type && g.severity === "high") && !filteredPriorityGaps.includes(type)) {
+      filteredPriorityGaps.push(type);
+    }
+  }
+  for (const type of typeOrder) {
+    if (!filteredPriorityGaps.includes(type) && filteredGaps.some(g => g.type === type)) {
+      filteredPriorityGaps.push(type);
+    }
+  }
+
   return {
     missingExceptionFlows,
     missingAlternativeFlows,
     incompleteActors,
     uncertainConditions,
-    gaps,
-    priorityGaps,
+    gaps: filteredGaps,
+    priorityGaps: filteredPriorityGaps,
     completenessScore: Math.max(0, Math.min(1, completenessScore)),
   };
 }

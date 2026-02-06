@@ -1,7 +1,7 @@
-import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
-import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
-import semanticService from "../services/semantic.service.js";
 import { z } from "zod";
+import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
+import semanticService from "../services/semantic.service.js";
+import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 
 const batchFlowEvalSchema = z.array(
   z.object({
@@ -20,7 +20,8 @@ export function flowToText(flow: GenFlow): string {
   const stepsText = flow.steps
     .map((step) => `${step.actor} ${step.description}`)
     .join(". ");
-  return `${flow.kind} ${flow.condition || ""}: ${stepsText}`;
+  const conditionText = flow.condition ? ` ${flow.condition}` : "";
+  return `${flow.kind}${conditionText}: ${stepsText}`;
 }
 
 async function getGroundTruthEmbeddings(
@@ -110,34 +111,42 @@ async function matchFlowsToGroundTruth(
   // Second pass: assign claims with deduplication
   const claimedGTFlows = new Set<string>();
 
+  function setMatchResult(
+    genFlowId: string,
+    result: FlowMatchResult,
+  ): void {
+    matchResults.set(genFlowId, result);
+  }
+
   for (const match of allMatches) {
-    if (match.bestScore >= threshold && match.bestGTFlowId) {
-      if (!claimedGTFlows.has(match.bestGTFlowId)) {
-        // First to claim this GT flow
-        claimedGTFlows.add(match.bestGTFlowId);
-        matchResults.set(match.genFlowId, {
-          inGroundTruth: true,
-          isDuplicate: false,
-          matchedFlowId: match.bestGTFlowId,
-          bestScore: match.bestScore,
-        });
-      } else {
-        // GT flow already claimed - this is a duplicate
-        matchResults.set(match.genFlowId, {
-          inGroundTruth: false,
-          isDuplicate: true,
-          matchedFlowId: match.bestGTFlowId,
-          bestScore: match.bestScore,
-        });
-      }
-    } else {
-      // No match above threshold
-      matchResults.set(match.genFlowId, {
+    if (match.bestScore < threshold || !match.bestGTFlowId) {
+      setMatchResult(match.genFlowId, {
         inGroundTruth: false,
         isDuplicate: false,
         bestScore: match.bestScore,
       });
+      continue;
     }
+
+    if (!claimedGTFlows.has(match.bestGTFlowId)) {
+      // First to claim this GT flow
+      claimedGTFlows.add(match.bestGTFlowId);
+      setMatchResult(match.genFlowId, {
+        inGroundTruth: true,
+        isDuplicate: false,
+        matchedFlowId: match.bestGTFlowId,
+        bestScore: match.bestScore,
+      });
+      continue;
+    }
+
+    // GT flow already claimed - this is a duplicate
+    setMatchResult(match.genFlowId, {
+      inGroundTruth: false,
+      isDuplicate: true,
+      matchedFlowId: match.bestGTFlowId,
+      bestScore: match.bestScore,
+    });
   }
 
   return matchResults;
@@ -152,7 +161,28 @@ export async function evaluateUseCase(
     domain: string;
   },
   geminiFunctions: GeminiOpenRouterFunctions,
-) {
+): Promise<{
+  totalFlows: number;
+  breakdown: {
+    grounded: number;
+    logical: number;
+    hallucinations: number;
+    duplicates: number;
+  };
+  scores: {
+    qualityScore: number;
+    discoveryRate: number;
+    precision: number;
+    f1Score: number;
+  };
+  flowDetails: Array<
+    z.infer<typeof batchFlowEvalSchema>[number] & {
+      inGroundTruth: boolean;
+      isDuplicate: boolean;
+      matchedFlowId?: string;
+    }
+  >;
+}> {
   // Build single prompt with all flows
   const flowsDescription = useCase.flows
     .map(

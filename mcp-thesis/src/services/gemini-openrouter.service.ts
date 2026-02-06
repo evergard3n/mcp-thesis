@@ -35,19 +35,18 @@ class GeminiOpenRouterFunctions {
           model: "google/gemini-2.5-flash",
           messages: [{ role: "user", content: prompt }],
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
-        `OpenRouter API error: ${response.status} - ${errorText}`
+        `OpenRouter API error: ${response.status} - ${errorText}`,
       );
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
-    console.log(content + "\n");
     return content;
   }
 
@@ -82,19 +81,18 @@ class GeminiOpenRouterFunctions {
             },
           },
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
-        `OpenRouter API error: ${response.status} - ${errorText}`
+        `OpenRouter API error: ${response.status} - ${errorText}`,
       );
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
-    console.log(content + "\n");
     let cleanedText = content.trim();
     if (cleanedText.startsWith("```json")) {
       cleanedText = cleanedText.slice(7); // Remove ```json

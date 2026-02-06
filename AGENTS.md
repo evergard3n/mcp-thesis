@@ -1,110 +1,154 @@
 # MCP Thesis - Agent Guidelines
 
-This document provides coding guidelines for AI agents working on the MCP Thesis codebase.
+## Table of Contents
+1. [Project Overview](#1-project-overview)
+2. [Research Methodology: HITL Framework](#2-research-methodology-hitl-framework)
+3. [Architecture & Data Structure](#3-architecture--data-structure)
+4. [Code Style Guidelines](#4-code-style-guidelines)
+5. [Testing & Evaluation Framework](#5-testing--evaluation-framework)
+6. [MCP Tools Reference](#6-mcp-tools-reference)
+7. [Build & Development Commands](#7-build--development-commands)
+8. [DO NOTs](#8-do-nots)
 
-## Project Overview
+---
 
-**MCP Thesis** is a Model Context Protocol server for UML use case management, focused on LLM-assisted use case extraction, validation, and iterative improvement. Uses Gemini 2.0 Flash via OpenRouter.
+## 1. Project Overview
+
+**MCP Thesis** is a Model Context Protocol server for UML use case management, focused on LLM-assisted use case extraction, validation, and iterative improvement. It uses Gemini 2.0 Flash via OpenRouter.
 
 **Working Directory**: `/Users/arya/Documents/code/mcp-thesis/mcp-thesis/`
 
-## Research Methodology: Human-in-the-Loop (HITL) Framework
+---
 
-### Goal
+## 2. Research Methodology: HITL Framework
+
+### 2.1 Core Concepts
 
 The framework acts as an **interviewer** (like a Business Analyst) that asks the right questions to help domain experts articulate their knowledge. It is NOT a one-shot generator that magically infers everything from input.
 
-### Data Structure
+### 2.2 Research Problem & Solution
 
-Each test case in `test-data/dataset-*.json` contains:
+**The Core Tension**: Previous approaches (COVE) often expanded use cases with "hallucinations"—plausible but incorrect flows. The challenge is distinguishing reasonable logical additions from pure fabrications.
 
-- **vague**: A high-level description (what a stakeholder initially provides)
-- **detailed**: Domain knowledge the expert has (used to simulate expert answers)
-- **groundTruth**: The ideal final use case after complete expert collaboration
+**The Solution**:
+1.  **Information Asymmetry**: Separating knowledge roles.
+    *   **Generator**: Sees only the vague summary.
+    *   **Expert**: Has the detailed ground truth.
+2.  **Constrained Elicitation**: Using multiple-choice questions to limit invention.
+3.  **Three-Tier Evaluation**: Distinguishing between Grounded (in input), Logical (reasonable domain knowledge), and Hallucination (wrong).
 
-### Information Separation (Critical)
+### 2.3 Data Structure & Information Separation
+
+Each test case contains:
+*   **vague**: High-level description (stakeholder input)
+*   **detailed**: Domain knowledge (hidden from generator, used by expert simulator)
+*   **groundTruth**: Ideal final use case
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
 │   FRAMEWORK SEES:              │   EXPERT HAS (hidden):            │
 │   - Vague input                │   - Detailed input                │
 │   - Current generated UC       │   - Domain knowledge              │
 │   - Previous Q&A history       │                                   │
-│                                │                                   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Gap Analyzer**: Only sees vague input + current generated use case
-- **Question Generator**: Based on gaps detected from vague input + current UC
-- **Answer Simulator**: Uses detailed input to answer questions (simulates expert)
+### 2.4 Iterative Flow
 
-### Iterative Flow
+1.  **Generate UC**: Extract initial use case from vague input.
+2.  **Gap Analyzer**: Detect missing information/ambiguities (sees vague + current UC).
+3.  **Generate Qs**: Formulate targeted questions based on gaps.
+4.  **Expert Answers**: Expert simulator answers using detailed input.
+5.  **Update UC**: Refine use case with new, grounded knowledge.
 
+---
+
+## 3. Architecture & Data Structure
+
+### 3.1 Session & Store Architecture
+
+Each session has one store, and each store can contain multiple projects.
+
+**Firestore Structure**:
 ```
-Vague Input
-    │
-    ▼
-┌─────────────────┐
-│ Generate UC     │◄──────────────────────────────┐
-└────────┬────────┘                               │
-         │                                        │
-         ▼                                        │
-┌─────────────────┐                               │
-│ Gap Analyzer    │ (sees: vague + current UC)    │
-└────────┬────────┘                               │
-         │                                        │
-         ▼                                        │
-┌─────────────────┐                               │
-│ Generate Qs     │                               │
-└────────┬────────┘                               │
-         │                                        │
-         ▼                                        │
-┌─────────────────┐     ┌──────────────────┐      │
-│ Expert Answers  │◄────│ Detailed Input   │      │
-└────────┬────────┘     │ (hidden domain   │      │
-         │              │  knowledge)      │      │
-         │              └──────────────────┘      │
-         │                                        │
-         ▼                                        │
-┌─────────────────┐                               │
-│ Update UC with  │───────────────────────────────┘
-│ new knowledge   │
-└─────────────────┘
-         │
-         ▼ (repeat until converged)
-    Final Use Case
+stores/
+  └── {sessionId}/
+      ├── id: string (sessionId)
+      ├── currentProjectId: string | null
+      └── projects: {
+            [projectId: string]: {
+              id: string, name: string, description: string,
+              useCases: UseCase[], actors: Actor[]
+            }
+          }
 ```
 
-### What This Tests
+**Key Patterns**:
+*   **Session Isolation**: `SessionServer`, `JsonProjectStore`, and `GeminiOpenRouterFunctions` are isolated per session.
+*   **Store Pattern**: All data operations go through `JsonProjectStore`.
+*   **Session-Scoped Singleton**: `GeminiOpenRouterFunctions` is instantiated once per session in `SessionServer` and passed to tools/services, replacing per-call instantiation.
 
-1. **Question Quality**: Does the gap analyzer ask relevant, useful questions?
-2. **Question Diversity**: Does it cover different aspects (validation, errors, resources, etc.)?
-3. **Iterative Improvement**: Does each Q&A round discover new scenarios?
-4. **Convergence**: Does the use case improve toward completeness?
+### 3.2 Key Architectural Components
 
-### What This Does NOT Test
+#### Semantic Embedding Service
+Uses `@xenova/transformers` (MiniLM-L12-v2) for semantic matching instead of regex.
+*   **Purpose**: Detect equivalent concepts ("matches" vs "validates").
+*   **Usage**: `semanticService.embedBatch()` for efficiency.
+*   **Application**: Gap analysis, flow comparison, duplicate detection.
 
-- Perfect one-shot extraction from detailed input
-- Matching ground truth in minimum iterations
-- Inferring domain knowledge not mentioned anywhere
+#### LLM Interaction
+*   All calls via `GeminiOpenRouterFunctions`.
+*   **Batch Evaluation**: `evaluateUseCase` evaluates all flows in a single API call for performance.
+*   **Zod Validation**: All LLM outputs must be validated with Zod schemas.
 
-### Evaluation Metrics
+---
 
-- **Discovery Rate**: How many ground truth flows were eventually discovered
-- **Quality Score**: Ratio of grounded/logical flows vs hallucinations
-- **F1 Score**: Balance of precision and recall against ground truth
-- **Iteration Efficiency**: Knowledge gained per Q&A round
+## 4. Code Style Guidelines
 
-### Key Files
+### 4.1 TypeScript Configuration
+*   **Target**: ES2022, **Module**: Node16 with ES modules.
+*   **Strict mode**: Enabled.
 
-- `src/analyzers/gap.analyzer.ts` - Detects gaps in generated use case
-- `src/analyzers/uncertainty.ranker.ts` - Prioritizes which gaps to ask about
-- `src/tools/testingTools.ts` - HITL comparison and evaluation tools
-- `src/evaluators/three-tier.evaluator.ts` - Categorizes flows as grounded/logical/hallucination
-- `src/services/semantic.service.ts` - Text embeddings for semantic matching (addresses string matching problems)
+### 4.2 Import Conventions
+**CRITICAL**: Always use `.js` extensions in imports.
+```typescript
+// ✅ Correct
+import { JsonProjectStore } from "./stores/projectStore.js";
+```
+**Order**: Node built-ins → MCP SDK → local absolute → local relative.
 
-### Current Problems (as of 2026-02-02)
+### 4.3 Naming & Types
+*   **Files**: `camelCase.ts`, `kebab-case.ts`, `*.interface.ts`, `*.service.ts`.
+*   **Variables**: `camelCase`. Classes: `PascalCase`. Constants: `UPPER_SNAKE_CASE`.
+*   **Types**: Prefer `interface` for shapes, `type` for unions. Always type params and returns.
+
+### 4.4 Error Handling
+*   **MCP Tools**: Return structured errors, NEVER throw.
+*   **Services**: Use try-catch with meaningful error wrapping.
+
+### 4.5 Async/Await
+*   Always use `async/await`, never raw promises (`.then()`).
+
+---
+
+## 5. Testing & Evaluation Framework
+
+### 5.1 Three-Tier Evaluation Metrics
+
+We evaluate generated flows against Ground Truth (GT) using three categories:
+
+1.  **GROUNDED (Score 1.0)**: Explicitly mentioned in the input description.
+2.  **LOGICAL (Score 0.7)**: Not in input, but reasonable for the domain (not a hallucination).
+3.  **HALLUCINATION (Score 0.0)**: Neither grounded nor logical; incorrect or absurd.
+
+### 5.2 Key Metrics
+
+*   **Precision**: `(Grounded + Logical) / Total Generated Flows` (How accurate is the output?)
+*   **Recall (Discovery Rate)**: `Flows Matching GT / Total GT Flows` (How complete is the output?)
+*   **F1 Score**: Harmonic mean of Precision and Recall.
+*   **Quality Score**: Weighted average: `(Grounded×1.0 + Logical×0.7) / Total Flows`.
+
+### 5.3 Current Problems (as of 2026-02-02)
 
 #### 1. Gap Analyzer: Keyword Matching is Imprecise
 
@@ -114,9 +158,11 @@ The gap analyzer uses regex patterns to detect validation steps but misses seman
 
 The vague input may mention scenarios like "pause, save, resume" but the analyzer only does keyword detection, not semantic understanding. Results in generic questions instead of specific ones like "Can the clerk restart an interrupted entry?"
 
-#### 3. QA Loop Gets Stuck on Same Topics
+#### 3. Duplication in Question Generation (GitHub Issue #1)
 
-The iterative process may keep asking about the same topic repeatedly (e.g., iterations 3-5 all asked "When does ALT_8a occur?") instead of exploring new areas like policy identification or claim line changes. Evidence: 62% of generated flows (18/29) are duplicates.
+The iterative HITL refinement process asks duplicate questions across iterations instead of exploring new areas. Evidence shows 18.75% of questions are exact duplicates and 62% of generated flows are duplicates.
+**Root Cause**: Ineffective semantic filtering due to wording mismatch between gap context and actual questions, plus missing metadata-based deduplication.
+**Link**: https://github.com/evergard3n/mcp-thesis/issues/1
 
 #### 4. No Diminishing Returns Mechanism
 
@@ -147,7 +193,30 @@ Evidence: Only 8/23 ground truth flows discovered (34.78% discovery rate).
 - ~~Evaluation: Semantic matching too permissive~~ - Fixed with one-to-one GT flow claiming
 - ~~Evaluation: Duplicate flows inflate metrics~~ - Fixed with `isDuplicate` tracking and deduplication
 
-## Build & Development Commands
+---
+
+## 6. MCP Tools Reference
+
+### 6.1 Test Data Management
+*   **`prepareTestData`**: Validates test cases and creates structured dataset JSON (`test-data/dataset-*.json`).
+
+### 6.2 Comparison Tools
+*   **`runCOVEComparison`**: Phase 1 testing. Compares COVE with Vague Input vs. COVE with Detailed Input.
+*   **`runHITLComparison`**: Phase 2 testing. Compares Constrained HITL vs. COVE (Detailed).
+*   **`evaluateResults`**: Runs the three-tier evaluation on results files.
+
+### 6.3 HITL Workflow Tools
+*   **`generateQuestionsFromBaseline`**: Step 1. Validates baseline and generates questions (with optional score awareness).
+*   **`refineWithHumanAnswers`**: Step 2. Refines use case using provided answers (constrained to avoid hallucination).
+*   **Note**: Replaces the old monolithic `extractUseCaseWithConstrainedHITL`.
+
+### 6.4 Data Formats
+*   **Dataset**: JSON containing `vague`, `detailed`, and `groundTruth` for each `testCaseId`.
+*   **Results**: JSON mapping test cases to generated Use Cases under different conditions (e.g., `conditionA_COVEVague`, `conditionD_HITL`).
+
+---
+
+## 7. Build & Development Commands
 
 ```bash
 npm install                    # Install dependencies
@@ -157,237 +226,24 @@ npm run build                  # Build production bundle (tsc)
 npm run inspector              # Run MCP inspector for debugging
 ```
 
-**Testing**: No Jest/Mocha/Vitest. Testing via MCP tools: `runHITLComparison` and `evaluateResults`. Test data: `test-data/dataset-*.json`. No single test command available.
-
-## Code Style Guidelines
-
-### TypeScript Configuration
-
-- **Target**: ES2022, **Module**: Node16 with ES modules
-- **Strict mode**: Enabled, **Output**: `build/` directory
-
-### Import Conventions
-
-**CRITICAL**: Always use `.js` extensions in imports (ES module requirement):
-
-```typescript
-// ✅ Correct
-import { JsonProjectStore } from "./stores/projectStore.js";
-
-// ❌ Wrong
-import { JsonProjectStore } from "./stores/projectStore";
-import { JsonProjectStore } from "./stores/projectStore.ts";
-```
-
-**Import order**: Node built-ins → MCP SDK → local absolute → local relative
-
-```typescript
-import { randomUUID } from "crypto";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import { validateUseCase } from "./validators.js";
-```
-
-### Naming Conventions
-
-- **Files**: `camelCase.ts` (single-purpose), `kebab-case.ts` (multi-word), `*.interface.ts`, `*.schema.ts`, `*.service.ts`, `*Tools.ts`
-- **Variables/Functions**: `camelCase`
-- **Classes/Interfaces/Types**: `PascalCase`
-- **Constants**: `UPPER_SNAKE_CASE`
-
-```typescript
-export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-export interface GenUseCase {}
-export class JsonProjectStore {}
-export async function generateUseCase() {}
-```
-
-### Type Definitions
-
-Prefer interfaces for object shapes, types for unions/literals:
-
-```typescript
-// ✅ Preferred
-export interface Gap {
-  type: GapType;
-  severity: "high" | "medium" | "low";
-}
-export type GapType = "missing_exception_flows" | "missing_alternative_flows";
-
-// ✅ Always type params and returns
-export async function analyzeGaps(useCase: GenUseCase): Promise<GapAnalysis> {}
-```
-
-### Error Handling
-
-**MCP Tools** - Return structured errors, never throw:
-
-```typescript
-async (args) => {
-  try {
-    const result = await doSomething(args);
-    return { content: [{ type: "text" as const, text: `Success: ${result}` }] };
-  } catch (error) {
-    return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-};
-```
-
-**Services/Helpers** - Use try-catch with meaningful messages:
-
-```typescript
-export async function generateUseCase(
-  description: string,
-): Promise<GenUseCase> {
-  try {
-    const result = await llmCall(description);
-    if (!result) throw new Error("LLM returned empty result");
-    return result;
-  } catch (error) {
-    throw new Error(`Generation failed: ${error.message}`);
-  }
-}
-```
-
-### Async/Await
-
-Always use async/await, never raw promises:
-
-```typescript
-// ✅ Correct
-const useCase = await extractUseCase(description);
-
-// ❌ Avoid
-extractUseCase(description).then(...);
-```
-
-### Comments
-
-JSDoc for public APIs, inline comments for complex logic:
-
-```typescript
-/**
- * Analyzes use case for gaps and missing flows
- * @param useCase - Use case to analyze
- * @returns Prioritized gap analysis
- */
-export async function analyzeGaps(useCase: GenUseCase): Promise<GapAnalysis> {
-  // Calculate uncertainty × criticality for each step
-  const priorities = flow.steps.map((step) => calculatePriority(step));
-}
-```
-
-## Architecture Patterns
-
-### Session Isolation
-
-Each MCP session gets isolated instances: `SessionServer`, `JsonProjectStore`, `GeminiOpenRouterFunctions`. Never share state between sessions.
-
-### Store Pattern
-
-All data operations through `JsonProjectStore`:
-
-```typescript
-await projectStore.initProject(name, description);
-await projectStore.saveUseCase(useCase);
-const useCases = await projectStore.getAllUseCases();
-```
-
-### LLM Interaction Pattern
-
-All LLM calls through `GeminiOpenRouterFunctions`:
-
-```typescript
-const result = await geminiFunctions.generateObject({
-  schema: genUseCaseSchema,
-  prompt: "...",
-  systemInstructions: "You are a business analyst...",
-});
-```
-
-### Zod Validation
-
-Always validate LLM outputs with Zod:
-
-```typescript
-import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-const validated = genUseCaseSchema.parse(llmOutput);
-```
-
-### Semantic Embedding Service
-
-The `SemanticService` provides text embeddings to tackle string matching problems. Uses `@xenova/transformers` with multilingual MiniLM-L12-v2 model (384-dimensional embeddings).
-
-**Purpose**: Replace keyword/regex matching with semantic similarity to detect equivalent concepts (e.g., "matches" vs "validates", "checks" vs "confirms").
-
-**Usage Pattern**:
-
-```typescript
-import semanticService from "../services/semantic.service.js";
-
-// Single text embedding
-const embedding = await semanticService.embed("Matches the loss to a policy");
-
-// Batch embedding (more efficient)
-const embeddings = await semanticService.embedBatch([
-  "validates policy",
-  "checks policy match",
-  "confirms policy"
-]);
-
-// Compute similarity (cosine similarity, returns -1 to 1)
-const similarity = await semanticService.cosineSimilarity(embedding1, embedding2);
-
-// Compute centroid for multiple related texts
-const centroid = await semanticService.computeCentroid(embeddings);
-```
-
-**Key Features**:
-- **Singleton**: Auto-initialized on import, use `await semanticService.waitForReady()` if needed
-- **Normalized embeddings**: All embeddings are L2-normalized (magnitude = 1)
-- **Batch processing**: Use `embedBatch()` for multiple texts (more efficient)
-- **Cosine similarity**: Returns dot product (since vectors are normalized)
-
-**Use Cases**:
-- Gap analyzer: Detect validation steps semantically instead of regex patterns
-- Flow comparison: Match semantically similar steps across use cases
-- Duplicate detection: Identify duplicate flows using embedding similarity
-- Vague input parsing: Extract implied scenarios through semantic clustering
-
-**Performance Notes**:
-- Model loads on first import (~100MB, quantized)
-- Embeddings are cached implicitly by the model pipeline
-- Batch operations are more efficient than sequential single embeddings
-
-## Environment Variables
-
-Required in `.env`:
-
+### Environment Variables (.env)
 ```bash
-OPENROUTER_API_KEY=sk-or-v1-...    # Server-side LLM access
-GEMINI_API_KEY=...                  # Session-specific (via HTTP header)
-API_KEY=...                          # Firebase config
-AUTH_DOMAIN=...
-PROJECT_ID=...
-STORAGE_BUCKET=...
-MESSAGING_SENDER_ID=...
-APP_ID=...
-MEASUREMENT_ID=...
+OPENROUTER_API_KEY=...     # Server-side LLM access
+GEMINI_API_KEY=...         # Session-specific
+API_KEY=...                # Firebase config
+# ... other Firebase vars
 ```
 
-## DO NOT
+---
 
-- ❌ Add linting/formatting configs (ESLint, Prettier, etc.)
-- ❌ Create unit test files (Jest, Mocha, Vitest)
-- ❌ Use `.ts` extensions in import paths
-- ❌ Throw errors in MCP tool handlers
-- ❌ Share state between sessions
-- ❌ Use `require()` - ES module project
-- ❌ Commit `.env` file
-- ❌ Use `any` type (except for legitimate unknown types)
-- Dont create scripts for running MCP tools directly. Return an error message if you can't find the specified error.
-- Don't create documentation files (unless specified)
-- Don't create separate files for new functions. Search if there's a file containing similar or topic functions, edit into it. Don't comment too much on the code.
+## 8. DO NOTs
+
+*   ❌ Add linting/formatting configs (ESLint, Prettier).
+*   ❌ Create unit test files (Jest, Mocha) - use MCP testing tools.
+*   ❌ Use `.ts` extensions in import paths.
+*   ❌ Throw errors in MCP tool handlers (return error objects).
+*   ❌ Share state between sessions.
+*   ❌ Use `require()` (ES module project).
+*   ❌ Commit `.env` file.
+*   ❌ Create documentation files unless specified.
+*   ❌ Create separate files for new functions if they fit in existing topic files.
