@@ -89,106 +89,164 @@ export function registerTestingTools(
   };
 
   // Tool 1: prepareTestData
+  // Metadata extraction schema (for LLM structured output)
+  const metadataExtractionSchema = z.object({
+    testCaseId: z
+      .string()
+      .describe(
+        "Extract from UC # field (e.g., '1010' from 'UC #: 1010'). If not found, generate a short ID from the use case name.",
+      ),
+    name: z.string().describe("The use case name/title"),
+    domain: z
+      .string()
+      .describe(
+        "Extract from Scope field (e.g., 'Insurance/Claims' from 'Scope: Insurance company Operations')",
+      ),
+    complexity: z
+      .enum(["simple", "medium", "complex"])
+      .describe(
+        "Determine complexity based on number and depth of extensions: simple (0-2 extensions), medium (3-5), complex (6+)",
+      ),
+    notes: z
+      .string()
+      .optional()
+      .describe(
+        "Optional notes about the use case (e.g., key characteristics, special patterns)",
+      ),
+  });
+
   server.registerTool(
     "prepareTestData",
     {
       title: "Prepare Test Dataset",
-      description: "Validate test cases and create structured dataset JSON",
+      description:
+        "Generate structured test dataset from a single text-based use case description",
       inputSchema: {
-        testCases: z.array(
-          z.object({
-            testCaseId: z.string(),
-            domain: z.string(),
-            vagueSummary: z.string(),
-            detailedDescription: z
-              .string()
-              .describe(
-                "Expert-level description, just contain flows, not detailed steps",
-              ),
-            textBasedGroundTruth: z
-              .string()
-              .describe(
-                "Text describing the ground truth use case, from which we will generate the structured flows",
-              ),
-            complexity: z.enum(["simple", "medium", "complex"]).optional(),
-            notes: z.string().optional(),
-          }),
-        ),
+        textBasedGroundTruth: z
+          .string()
+          .describe(
+            "Full text-based use case description (including UC #, Main Success Scenario, Extensions, etc.)",
+          ),
+        testCaseId: z
+          .string()
+          .optional()
+          .describe(
+            "Optional override for test case ID. If not provided, will be auto-extracted from UC text.",
+          ),
       },
     },
-    async ({ testCases }) => {
-      const validated = [];
-      const dataset: {
-        version: string;
-        createdAt: string;
-        testCases: Array<{
-          id: string;
-          domain: string;
-          metadata: {
-            complexity: "simple" | "medium" | "complex";
-            expectedFlows: number;
-            notes?: string;
-          };
-          inputs: {
-            vague: string;
-            detailed: string;
-          };
-          groundTruth: any;
-        }>;
-      } = {
-        version: "1.0",
-        createdAt: new Date().toISOString(),
-        testCases: [],
-      };
+    async ({ textBasedGroundTruth, testCaseId }) => {
+      try {
+        // Step 1: Extract metadata using Gemini structured output
+        console.log("Step 1/4: Extracting metadata from UC text...");
+        const metadataPrompt = `<instruction>
+You are a professional business analyst. Extract metadata from the following use case description.
 
-      for (const tc of testCases) {
-        try {
-          const groundTruth = generateFlatUseCase({
-            description: tc.textBasedGroundTruth,
-            geminiFunctions,
-          });
-          const validatedTruth = genUseCaseSchema.parse(groundTruth);
+Follow these rules:
+1. Extract the test case ID from the "UC #:" field. If not found, generate a short alphanumeric ID from the use case name (e.g., "Handle Claim" -> "HC").
+2. Extract the domain from the "Scope:" field. Normalize to a standard format (e.g., "Insurance/Claims").
+3. Determine complexity by counting extensions:
+   - simple: 0-2 extension scenarios
+   - medium: 3-5 extension scenarios
+   - complex: 6+ extension scenarios
+4. Add any relevant notes about special characteristics (e.g., "asynchronous validation", "nested exceptions", "temporal patterns").
+</instruction>
 
-          dataset.testCases.push({
-            id: tc.testCaseId,
-            domain: tc.domain,
-            metadata: {
-              complexity: tc.complexity || "medium",
-              expectedFlows: validatedTruth.flows.length,
-              notes: tc.notes,
+<useCaseText>
+${textBasedGroundTruth}
+</useCaseText>`;
+
+        const extractedMetadata = await geminiFunctions.generateStructured({
+          prompt: metadataPrompt,
+          schema: metadataExtractionSchema,
+        });
+
+        // Use provided testCaseId or fall back to extracted one
+        const finalTestCaseId = testCaseId || extractedMetadata.testCaseId;
+
+        // Step 2: Generate vague summary (main scenario only, no extensions)
+        console.log("Step 2/4: Generating vague summary...");
+        const vagueSummaryPrompt = `<instruction>
+You are a stakeholder describing a use case to a business analyst. Generate a brief, high-level summary (2-3 sentences) that describes ONLY the main success scenario (happy path).
+
+CRITICAL RULES:
+- Do NOT mention extensions, alternative flows, error handling, or edge cases
+- Focus only on the normal, expected flow
+- Use natural language, as if a domain expert is giving a verbal description
+- Keep it vague and high-level (avoid implementation details)
+- Do NOT include any markdown formatting or special characters
+</instruction>
+
+<useCaseText>
+${textBasedGroundTruth}
+</useCaseText>
+
+Generate a vague summary:`;
+
+        const vagueSummary = (
+          await geminiFunctions.generate({ prompt: vagueSummaryPrompt })
+        ).trim();
+
+        // Step 3: Generate structured GenUseCase from full text
+        console.log("Step 3/4: Generating structured use case...");
+        const groundTruth = await generateFlatUseCase({
+          description: textBasedGroundTruth,
+          geminiFunctions,
+        });
+        const validatedTruth = genUseCaseSchema.parse(groundTruth);
+
+        // Step 4: Create dataset and write to file
+        console.log("Step 4/4: Writing dataset file...");
+        const dataset = {
+          version: "1.0",
+          createdAt: new Date().toISOString(),
+          testCases: [
+            {
+              id: finalTestCaseId,
+              domain: extractedMetadata.domain,
+              metadata: {
+                complexity: extractedMetadata.complexity,
+                expectedFlows: validatedTruth.flows.length,
+                notes: extractedMetadata.notes,
+              },
+              inputs: {
+                vague: vagueSummary,
+                detailed: textBasedGroundTruth,
+              },
+              groundTruth: validatedTruth,
             },
-            inputs: {
-              vague: tc.vagueSummary,
-              detailed: tc.detailedDescription,
+          ],
+        };
+
+        const outputPath = `test-data/dataset-${finalTestCaseId}.json`;
+        await writeFile(outputPath, JSON.stringify(dataset, null, 2));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Dataset prepared successfully!\n\nTest Case ID: ${finalTestCaseId}\nDomain: ${extractedMetadata.domain}\nComplexity: ${extractedMetadata.complexity}\nExpected Flows: ${validatedTruth.flows.length}\n\nSaved to: ${outputPath}`,
             },
-            groundTruth: validatedTruth,
-          });
-
-          validated.push({ id: tc.testCaseId, status: "valid" });
-        } catch (error: any) {
-          validated.push({
-            id: tc.testCaseId,
-            status: "invalid",
-            errors: [error.message],
-          });
-        }
-      }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const outputPath = `test-data/dataset-${timestamp}.json`;
-      await writeFile(outputPath, JSON.stringify(dataset, null, 2));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Dataset prepared: ${
-              validated.filter((v) => v.status === "valid").length
-            }/${testCases.length} valid\nSaved to: ${outputPath}`,
+          ],
+          structuredContent: {
+            testCaseId: finalTestCaseId,
+            domain: extractedMetadata.domain,
+            complexity: extractedMetadata.complexity,
+            flowCount: validatedTruth.flows.length,
+            outputFile: outputPath,
           },
-        ],
-        structuredContent: { validated, outputFile: outputPath },
-      };
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error preparing dataset: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
     },
   );
 
