@@ -4,6 +4,113 @@ import { GenUseCase } from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
 import { flowToText } from "../evaluators/three-tier.evaluator.js";
 
+const FLOW_ID_CONVENTION = `
+<flowIdConvention>
+Flow ID naming convention (MUST follow strictly):
+- MAIN flow: always "MAIN"
+- Non-MAIN flows: {TYPE}_{STEP}{letter}
+  - TYPE: "EXT" for EXCEPTION, "ALT" for ALTERNATIVE
+  - STEP: the fromStepIndex number from the parent flow
+  - letter: auto-incrementing lowercase (a, b, c...) within same TYPE+STEP
+  - If a flow is not tied to any specific step (temporal/global), use the next
+    number after the last step in the parent flow
+    (e.g., if MAIN has 6 steps, use 7, 8, etc.)
+- Nested exceptions: append ".{STEP}{letter}" for each nesting level
+  (e.g., EXT_1a.2a = exception from step 2 of EXT_1a)
+- Check existing flow IDs before assigning a letter to avoid collisions
+  (e.g., if EXT_1a exists, the next exception from step 1 is EXT_1b)
+</flowIdConvention>`;
+
+function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
+  const normalized = JSON.parse(JSON.stringify(useCase)) as GenUseCase;
+  const flows = normalized.flows;
+  const mainFlow = flows.find((f) => f.kind === "MAIN");
+  const mainStepCount = mainFlow?.steps.length ?? 0;
+  
+  const renames = new Map<string, string>();
+  renames.set("MAIN", "MAIN");
+  
+  const assignedCounts = new Map<string, number>();
+  const nextUnboundSlots = new Map<string, number>();
+
+  function getTopologicalLevel(flowId: string, visited = new Set<string>()): number {
+    if (visited.has(flowId)) return 999;
+    visited.add(flowId);
+    
+    const flow = flows.find((f) => f.id === flowId);
+    if (!flow || !flow.parentFlow || flow.parentFlow === "MAIN") return 0;
+    
+    return 1 + getTopologicalLevel(flow.parentFlow, visited);
+  }
+
+  function determineStepIndex(flow: import("../interfaces/usecase.interface.new.js").GenFlow, parentId: string): number {
+    if (typeof flow.fromStepIndex === "number") {
+      return flow.fromStepIndex;
+    }
+    
+    const currentSlot = nextUnboundSlots.get(parentId) || (
+      parentId === "MAIN" 
+        ? mainStepCount + 1 
+        : (flows.find(f => f.id === flow.parentFlow)?.steps.length ?? 0) + 1
+    );
+    nextUnboundSlots.set(parentId, currentSlot + 1);
+    return currentSlot;
+  }
+
+  function generateCountKey(parentId: string, type: string, stepIndex: number): string {
+    if (parentId === "MAIN") {
+      return `${parentId}_${type}_${stepIndex}`;
+    }
+    return `${parentId}_${stepIndex}`;
+  }
+
+  function buildFlowId(parentId: string, type: string, stepIndex: number, letter: string): string {
+    if (parentId === "MAIN") {
+      return `${type}_${stepIndex}${letter}`;
+    }
+    return `${parentId}.${stepIndex}${letter}`;
+  }
+
+  const sortedFlows = [...flows].sort((a, b) => {
+    if (a.kind === "MAIN") return -1;
+    if (b.kind === "MAIN") return 1;
+    return getTopologicalLevel(a.id) - getTopologicalLevel(b.id);
+  });
+
+  for (const flow of sortedFlows) {
+    if (flow.kind === "MAIN") continue;
+
+    const oldId = flow.id;
+    const oldParentId = flow.parentFlow || "MAIN";
+    const newParentId = renames.get(oldParentId) || "MAIN";
+    
+    flow.parentFlow = newParentId;
+
+    const type = flow.kind === "ALTERNATIVE" ? "ALT" : "EXT";
+    const stepIndex = determineStepIndex(flow, newParentId);
+    const countKey = generateCountKey(newParentId, type, stepIndex);
+    
+    const count = assignedCounts.get(countKey) || 0;
+    const letter = String.fromCharCode(97 + count);
+    assignedCounts.set(countKey, count + 1);
+
+    const newId = buildFlowId(newParentId, type, stepIndex, letter);
+    
+    renames.set(oldId, newId);
+    flow.id = newId;
+  }
+
+  if (normalized.loops) {
+    for (const loop of normalized.loops) {
+      if (loop.flowRef && renames.has(loop.flowRef)) {
+        loop.flowRef = renames.get(loop.flowRef)!;
+      }
+    }
+  }
+
+  return normalized;
+}
+
 export async function generateFlatUseCase({
   description,
   geminiFunctions,
@@ -34,7 +141,7 @@ GenUseCase:
 
 GenFlow:
 {
-  "id": "MAIN" | string, // if the flow is the main flow, use "MAIN"; otherwise, use any unique string ID. You must have a meaningful ID for each flow.
+  "id": string, // Flow ID. Follow the <flowIdConvention> rules strictly.
   "kind": "MAIN" | "ALTERNATIVE" | "EXCEPTION",
 
   // For MAIN:
@@ -110,6 +217,8 @@ Rules:
    - "condition" is a short natural-language description of the repetition.
 6. If preconditions or postconditions are not obvious, you may omit those arrays or keep them empty.
 7. Use short, clear English for all descriptions and conditions, even if the original text is longer or noisier.
+
+${FLOW_ID_CONVENTION}
 </rules>
 
 <description>
@@ -118,10 +227,11 @@ ${description}
 
 
 `;
-  return geminiFunctions.generateStructured({
+  const raw = await geminiFunctions.generateStructured({
     prompt,
     schema: genUseCaseSchema,
   });
+  return normalizeFlowIds(raw);
 }
 
 export async function improveUseCase({
@@ -165,7 +275,7 @@ GenUseCase:
 
 GenFlow:
 {
-"id": "MAIN" | string, // if the flow is the main flow, use "MAIN"; otherwise, use any unique string ID. You must have a meaningful ID for each flow.
+"id": string, // Flow ID. Follow the <flowIdConvention> rules strictly.
 "kind": "MAIN" | "ALTERNATIVE" | "EXCEPTION",
 
 // For MAIN:
@@ -241,6 +351,9 @@ Rules:
  - "condition" is a short natural-language description of the repetition.
 6. If preconditions or postconditions are not obvious, you may omit those arrays or keep them empty.
 7. Use short, clear English for all descriptions and conditions, even if the original text is longer or noisier.
+8. Preserve existing flow IDs. When adding new flows, follow the naming convention and auto-increment letters based on what already exists in the draft.
+
+${FLOW_ID_CONVENTION}
 </rules>
   <draftUseCase>
   ${JSON.stringify(baseUseCase)}
@@ -253,7 +366,7 @@ Rules:
     prompt,
     schema: genUseCaseSchema,
   });
-  return improvedUseCase;
+  return normalizeFlowIds(improvedUseCase);
 }
 
 export async function refineWithConstrainedAnswers(
@@ -299,6 +412,10 @@ ${qaContext}
 2. Do NOT elaborate beyond selected options
 3. Do NOT invent additional scenarios
 4. Keep unchanged elements as-is
+5. Follow the flow ID naming convention in <flowIdConvention>
+6. Preserve existing flow IDs when not modifying them
+
+${FLOW_ID_CONVENTION}
 </constraints>
   `;
 
@@ -370,7 +487,7 @@ ${answersContext}
 For each answer:
 1. Identify if it describes one or MULTIPLE scenarios
 2. For each scenario, determine if it's an EXCEPTION flow (error, failure) or ALTERNATIVE flow (different valid path)
-3. Generate a unique flow ID (e.g., "EXT_2a" for exception from step 2, "ALT_3a" for alternative from step 3)
+3. Generate a unique flow ID following the convention (e.g., "EXT_2a", "ALT_3a").
 4. Determine which flow step this branches from (fromStepIndex and parentFlow)
 5. Extract the branching condition from the answer
 6. Break down the scenario into sequential steps with actors and descriptions
@@ -412,6 +529,8 @@ Guidelines:
 - For nested exceptions, parentFlow should reference the parent exception ID (not "MAIN")
 - For temporal exceptions, omit fromStepIndex
 
+${FLOW_ID_CONVENTION}
+
 Example 1 - Simple Exception:
 {
   "id": "EXT_2a",
@@ -431,7 +550,7 @@ Example 1 - Simple Exception:
 
 Example 2 - Nested Exception:
 {
-  "id": "EXT_1a2a",
+  "id": "EXT_1a.2a",
   "kind": "EXCEPTION",
   "parentFlow": "EXT_1a",
   "fromStepIndex": 2,
@@ -448,7 +567,7 @@ Example 2 - Nested Exception:
 
 Example 3 - Temporal Exception (no fromStepIndex):
 {
-  "id": "EXT_ANY_SYSTEM_DOWN",
+  "id": "EXT_7a",
   "kind": "EXCEPTION",
   "parentFlow": "MAIN",
   "condition": "At any time, System goes down",
@@ -560,8 +679,8 @@ export async function refineWithHybridAnswers(
   const combinedFlows = [...refined.flows, ...uniqueNewFlows];
 
   // Return refined use case with all flows
-  return {
+  return normalizeFlowIds({
     ...refined,
     flows: combinedFlows,
-  };
+  });
 }
