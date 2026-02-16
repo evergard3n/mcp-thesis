@@ -14,7 +14,7 @@
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepack": "npm run build",
     "watch": "tsc --watch",
-    "dev": "npx -y tsx src/index.ts",
+    "dev": "npx -y tsx watch src/index.ts",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js"
   },
   "dependencies": {
