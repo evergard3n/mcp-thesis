@@ -1,0 +1,118 @@
+{
+  "modelId": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+  "categories": {
+    "validation": {
+      "keywords": [
+        "validates the data",
+        "verifies the information",
+        "checks for errors",
+        "confirms the input is correct",
+        "matches records to policy",
+        "authenticates the user credentials",
+        "ensures data is valid",
+        "compares submitted data against records",
+        "checks for duplicate records",
+        "detects competing claims"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_validation_handling",
+      "requiresExceptionCheck": true
+    },
+    "search_lookup": {
+      "keywords": [
+        "finds the matching policy",
+        "looks up the account record",
+        "searches for the existing entry",
+        "retrieves the matching entry",
+        "looks up the policy information",
+        "finds the associated record",
+        "searches the database for the item"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_search_handling",
+      "requiresExceptionCheck": true
+    },
+    "data_input": {
+      "keywords": [
+        "submits the form data",
+        "enters the information",
+        "provides customer details",
+        "inputs the required data",
+        "reports an incident or claim",
+        "fills out the form fields",
+        "uploads a document or file",
+        "registers a new record",
+        "sends the request to system"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_data_quality_handling",
+      "requiresExceptionCheck": true
+    },
+    "resource_assignment": {
+      "keywords": [
+        "assigns a resource or agent",
+        "allocates system resources",
+        "schedules an appointment",
+        "reserves a time slot",
+        "books a service",
+        "distributes work to agents",
+        "selects an available adjuster",
+        "supports the assignment of an adjuster",
+        "facilitates resource allocation",
+        "coordinates agent selection"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_resource_availability",
+      "requiresExceptionCheck": true
+    },
+    "system_interaction": {
+      "keywords": [
+        "calls external service",
+        "queries the database",
+        "fetches data from system",
+        "retrieves information from API",
+        "connects to external system",
+        "accesses the database",
+        "requests data from another system"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_system_failure_handling",
+      "requiresExceptionCheck": true
+    },
+    "completion": {
+      "keywords": [
+        "closes the case or claim",
+        "completes the transaction",
+        "finishes the process",
+        "terminates the session",
+        "ends the workflow",
+        "settles the claim",
+        "finalizes the record"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_post_completion_scenarios",
+      "requiresExceptionCheck": true
+    },
+    "vague_condition": {
+      "keywords": [
+        "something goes wrong",
+        "an error occurs",
+        "a problem happens",
+        "an issue is detected",
+        "the process fails",
+        "something unexpected happens",
+        "it does not work"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "uncertain_conditions",
+      "requiresExceptionCheck": false
+    }
+  }
+}

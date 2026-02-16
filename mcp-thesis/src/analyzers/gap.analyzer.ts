@@ -1,16 +1,16 @@
-import { GenUseCase, GenFlow } from "../interfaces/usecase.interface.new.js";
+import { GenUseCase, GenFlow, GenStep } from "../interfaces/usecase.interface.new.js";
 import { UseCaseTermScore } from "../validators/flat.validator.js";
 import semanticService from "../services/semantic.service.js";
+import { readFile } from "fs/promises";
+import { join } from "path";
 
-/**
- * Types of gaps that can be detected in a use case
- */
 export type GapType =
   | "missing_exception_flows"
   | "missing_alternative_flows"
   | "incomplete_actors"
   | "uncertain_conditions"
   | "missing_validation_handling"
+  | "missing_search_handling"
   | "missing_system_failure_handling"
   | "missing_temporal_exceptions"
   | "missing_nested_exceptions"
@@ -20,9 +20,6 @@ export type GapType =
   | "missing_environmental_interruptions"
   | "missing_technology_variations";
 
-/**
- * Analysis result for a single gap
- */
 export interface Gap {
   type: GapType;
   severity: "high" | "medium" | "low";
@@ -32,27 +29,22 @@ export interface Gap {
   suggestedQuestion?: string;
 }
 
-/**
- * Complete gap analysis result
- */
 export interface GapAnalysis {
   missingExceptionFlows: boolean;
   missingAlternativeFlows: boolean;
   incompleteActors: string[];
   uncertainConditions: string[];
   gaps: Gap[];
-  priorityGaps: GapType[]; // ordered by importance
-  completenessScore: number; // 0-1 estimate of how complete the use case is
+  priorityGaps: GapType[];
+  completenessScore: number;
 }
 
-/**
- * Memory of previous Q&A interactions for deduplication
- */
 export interface InteractionMemory {
   stepContext: string;
   question: string;
   answer: string;
   vector: number[];
+  questionVector?: number[];
   iteration: number;
   metadata: {
     stepIndex?: number;
@@ -61,15 +53,114 @@ export interface InteractionMemory {
   };
 }
 
+interface StepSource {
+  type: "step";
+  flowId: string;
+  stepIndex: number;
+  step: GenStep;
+  flow: GenFlow;
+}
+
+interface ConditionSource {
+  type: "condition";
+  flowId: string;
+  flow: GenFlow;
+}
+
+interface EmbeddedText {
+  text: string;
+  embedding: number[];
+  source: StepSource | ConditionSource;
+}
+
+interface GapCategory {
+  name: string;
+  keywords: string[];
+  centroid: number[] | null;
+  threshold: number;
+  gapType: GapType;
+  requiresExceptionCheck: boolean;
+}
+
+interface GapCentroidData {
+  modelId: string;
+  categories: Record<string, GapCategory>;
+}
+
+const GAP_TYPE_PRIORITY: GapType[] = [
+  "missing_exception_flows",
+  "missing_data_quality_handling",
+  "missing_validation_handling",
+  "missing_search_handling",
+  "missing_resource_availability",
+  "missing_system_failure_handling",
+  "missing_post_completion_scenarios",
+  "missing_temporal_exceptions",
+  "missing_nested_exceptions",
+  "missing_environmental_interruptions",
+  "missing_alternative_flows",
+  "missing_technology_variations",
+  "uncertain_conditions",
+  "incomplete_actors",
+];
+
+let gapCentroidsCache: GapCategory[] | null = null;
+
 /**
- * Gets step context string for a gap
+ * Clear the gap centroids cache to force reloading from file.
+ * Useful when gap-centroids.json has been updated.
  */
+export function clearGapCentroidsCache(): void {
+  gapCentroidsCache = null;
+  console.log("Gap centroids cache cleared");
+}
+
+async function loadGapCentroids(): Promise<GapCategory[]> {
+  if (gapCentroidsCache) return gapCentroidsCache;
+
+  try {
+    const dataPath = join(process.cwd(), "src/data/gap-centroids.json");
+    const fileContent = await readFile(dataPath, "utf-8");
+    const data = JSON.parse(fileContent) as GapCentroidData;
+
+    console.log(`Loading gap centroids from ${dataPath}`);
+    let categoriesWithCentroids = 0;
+
+    for (const [name, category] of Object.entries(data.categories)) {
+      if (!category.centroid) {
+        console.log(`  Computing centroid for "${name}" from ${category.keywords.length} keywords`);
+        const embeddings = await semanticService.embedBatch(category.keywords);
+        category.centroid = await semanticService.computeCentroid(embeddings);
+        categoriesWithCentroids++;
+      }
+      category.name = name;
+    }
+
+    gapCentroidsCache = Object.values(data.categories);
+    console.log(`Gap centroids loaded: ${gapCentroidsCache.length} categories (${categoriesWithCentroids} computed)`);
+    
+    // Log thresholds for verification
+    for (const cat of gapCentroidsCache) {
+      if (cat.requiresExceptionCheck) {
+        console.log(`  ${cat.name}: threshold=${cat.threshold}, keywords=${cat.keywords.length}`);
+      }
+    }
+    
+    return gapCentroidsCache;
+  } catch (error) {
+    console.error("Failed to load gap centroids:", error);
+    return [];
+  }
+}
+
 function getStepContext(gap: Gap, useCase: GenUseCase): string {
   if (gap.relatedStep === undefined) {
     return `[Global] ${gap.description}`;
   }
-  const flow = useCase.flows.find(f => f.id === (gap.relatedFlow || "MAIN"));
-  const step = flow?.steps.find(s => s.index === gap.relatedStep);
+
+  const flow = useCase.flows.find((f) => f.id === (gap.relatedFlow || "MAIN"));
+  const step = flow?.steps.find((s) => s.index === gap.relatedStep);
+
   if (step) {
     return `[Step ${step.index}] Actor: ${step.actor}, Action: ${step.description}`;
   }
@@ -77,427 +168,116 @@ function getStepContext(gap: Gap, useCase: GenUseCase): string {
 }
 
 /**
- * Filters out gaps that have already been covered by previous Q&A interactions
+ * Filters out gaps already covered by previous Q&A interactions.
+ * Uses dual-vector comparison (gap context + question asked) at 0.6 threshold.
  */
 export async function filterStaleGaps(
   gaps: Gap[],
   useCase: GenUseCase,
   history: InteractionMemory[],
-  threshold: number = 0.85
+  threshold: number = 0.6,
 ): Promise<Gap[]> {
   if (history.length === 0 || gaps.length === 0) return gaps;
-  
-  const gapQueries = gaps.map(gap => {
-    const stepContext = getStepContext(gap, useCase);
-    return `Context: ${stepContext}\nGap: ${gap.description}`;
+
+  // NEW: Layer 0 - Metadata-based pre-filter
+  const exploredTuples = new Set(
+    history
+      .filter((h) => h.metadata.stepIndex !== undefined && h.metadata.gapType)
+      .map((h) => `${h.metadata.stepIndex}|${h.metadata.gapType}`),
+  );
+
+  const metadataFiltered = gaps.filter((gap) => {
+    if (gap.relatedStep === undefined) return true; // Keep gaps without step info
+    const tuple = `${gap.relatedStep}|${gap.type}`;
+    return !exploredTuples.has(tuple);
   });
-  
+
+  if (metadataFiltered.length === 0) return [];
+
+  const gapQueries = metadataFiltered.map((gap) => {
+    const stepContext = getStepContext(gap, useCase);
+    return `${stepContext} | ${gap.description}`;
+  });
+
   const gapVectors = await semanticService.embedBatch(gapQueries);
-  
   const freshGaps: Gap[] = [];
-  for (let i = 0; i < gaps.length; i++) {
-    let isCovered = false;
-    for (const record of history) {
-      const similarity = await semanticService.cosineSimilarity(gapVectors[i], record.vector);
-      if (similarity > threshold) {
-        isCovered = true;
-        break;
-      }
-    }
+
+  for (let i = 0; i < metadataFiltered.length; i++) {
+    const isCovered = await isGapCoveredByHistory(
+      gapVectors[i],
+      history,
+      threshold,
+    );
     if (!isCovered) {
-      freshGaps.push(gaps[i]);
+      freshGaps.push(metadataFiltered[i]);
     }
   }
-  
+
   return freshGaps;
 }
 
-/**
- * Detects missing temporal/async exceptions that can occur at any time
- */
-function detectTemporalExceptions(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-  const descLower = originalDescription.toLowerCase();
-
-  // Check if description mentions temporal scenarios
-  const temporalKeywords = [
-    "at any time",
-    "anytime",
-    "at all times",
-    "throughout",
-    "during any",
-    "while",
-  ];
-
-  const hasTemporalMention = temporalKeywords.some((kw) =>
-    descLower.includes(kw)
-  );
-
-  if (hasTemporalMention) {
-    // Check if there are exception flows without fromStepIndex (global exceptions)
-    const hasGlobalException = useCase.flows.some(
-      (f) =>
-        f.kind === "EXCEPTION" &&
-        (f.fromStepIndex === undefined || f.fromStepIndex === null)
+async function isGapCoveredByHistory(
+  gapVector: number[],
+  history: InteractionMemory[],
+  threshold: number
+): Promise<boolean> {
+  for (const record of history) {
+    const simToContext = await semanticService.cosineSimilarity(
+      gapVector,
+      record.vector
     );
 
-    if (!hasGlobalException) {
-      gaps.push({
-        type: "missing_temporal_exceptions",
-        severity: "high",
-        description:
-          "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
-        suggestedQuestion:
-          "Are there any conditions that can occur at any time during the process (e.g., system failures, interruptions)?",
-      });
-    }
-  }
-
-  return gaps;
-}
-
-/**
- * Detects missing nested exceptions (exceptions within exception handling)
- */
-function detectNestedExceptions(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-  const descLower = originalDescription.toLowerCase();
-
-  // Check for nested exception keywords
-  const nestedKeywords = [
-    "timeout",
-    "does not respond",
-    "fails to provide",
-    "within time period",
-    "no response",
-    "does not supply",
-  ];
-
-  const hasNestedMention = nestedKeywords.some((kw) => descLower.includes(kw));
-
-  if (hasNestedMention) {
-    // Check if there are exception flows with parentFlow pointing to another exception
-    const exceptionFlows = useCase.flows.filter((f) => f.kind === "EXCEPTION");
-    const hasNestedExceptions = exceptionFlows.some((f) => {
-      const parent = useCase.flows.find((pf) => pf.id === f.parentFlow);
-      return parent && parent.kind === "EXCEPTION";
-    });
-
-    if (!hasNestedExceptions && exceptionFlows.length > 0) {
-      gaps.push({
-        type: "missing_nested_exceptions",
-        severity: "medium",
-        description:
-          "Description mentions timeout or non-response scenarios but no nested exception flows found.",
-        suggestedQuestion:
-          "What happens if a response or action is not received within the expected time? Are there timeouts or escalations?",
-      });
-    }
-  }
-
-  return gaps;
-}
-
-/**
- * Detects missing resource availability exceptions
- */
-function detectResourceAvailability(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-  const descLower = originalDescription.toLowerCase();
-
-  // Find assignment/allocation steps
-  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-  if (!mainFlow) return gaps;
-
-  for (const step of mainFlow.steps) {
-    const stepDesc = step.description.toLowerCase();
-
-    // Check if step involves resource assignment
-    if (stepDesc.match(/assign|allocat|schedul|reserve|book|distribute/i)) {
-      // Check if there's an exception for resource unavailability
-      const hasResourceException = useCase.flows.some(
-        (f) =>
-          f.kind === "EXCEPTION" &&
-          f.fromStepIndex === step.index &&
-          (f.condition?.toLowerCase().includes("no ") ||
-            f.condition?.toLowerCase().includes("unavailable") ||
-            f.condition?.toLowerCase().includes("insufficient"))
+    let simToQuestion = 0;
+    if (record.questionVector) {
+      simToQuestion = await semanticService.cosineSimilarity(
+        gapVector,
+        record.questionVector
       );
+    }
 
-      if (!hasResourceException) {
-        gaps.push({
-          type: "missing_resource_availability",
-          severity: "high",
-          description: `Step ${step.index} involves resource assignment but has no exception for resource unavailability.`,
-          relatedStep: step.index,
-          relatedFlow: "MAIN",
-          suggestedQuestion: `What happens if no resources (agents, slots, capacity) are available at step ${step.index}?`,
-        });
-      }
+    if (Math.max(simToContext, simToQuestion) >= threshold) {
+      return true;
     }
   }
+  return false;
+}
 
-  // Also check if description mentions resource constraints
-  const resourceKeywords = [
-    "no agents",
-    "unavailable",
-    "not available",
-    "insufficient",
-    "capacity",
-    "overloaded",
-    "fully booked",
-  ];
-
-  const hasResourceMention = resourceKeywords.some((kw) =>
-    descLower.includes(kw)
-  );
-
-  if (hasResourceMention && gaps.length === 0) {
-    gaps.push({
-      type: "missing_resource_availability",
-      severity: "medium",
-      description:
-        "Description mentions resource availability issues but no related exception flows found.",
-      suggestedQuestion:
-        "What happens when required resources (agents, slots, equipment) are unavailable?",
-    });
+function generateQuestionForCategory(
+  categoryName: string,
+  step: GenStep
+): string {
+  const targetContext = step.target ? ` targeting ${step.target}` : "";
+  
+  switch (categoryName) {
+    case "validation":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when this validation encounters partial data, format mismatches, or conflicting records? Describe the specific failure scenario and how it's handled.`;
+    case "search_lookup":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when this search returns no results, multiple ambiguous matches, or stale/outdated data? How does the actor proceed?`;
+    case "data_input":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when the submitted data is incomplete, contains contradictory information, or duplicates an existing entry? What are the minimum required fields?`;
+    case "resource_assignment":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when no suitable resource is available, the assigned resource becomes unavailable, or the assignment times out? Is there a default fallback?`;
+    case "system_interaction":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when the system is unavailable, responds with a timeout, or returns a partial/corrupted response? Is data automatically saved?`;
+    case "completion":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens if the actor attempts to finish without completing all required information? Can the process be saved for later, reopened, or reversed after this point?`;
+    default:
+      return `What exceptions might occur at step ${step.index}?`;
   }
+}
 
-  return gaps;
+function isStepSource(source: EmbeddedText["source"]): source is StepSource {
+  return source.type === "step";
+}
+
+function isConditionSource(
+  source: EmbeddedText["source"]
+): source is ConditionSource {
+  return source.type === "condition";
 }
 
 /**
- * Detects missing post-completion scenarios (reopening, reversal)
- */
-function detectPostCompletionScenarios(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-  const descLower = originalDescription.toLowerCase();
-
-  // Find closing/completion steps
-  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-  if (!mainFlow || mainFlow.steps.length === 0) return gaps;
-
-  const lastStep = mainFlow.steps[mainFlow.steps.length - 1];
-  const lastStepDesc = lastStep.description.toLowerCase();
-
-  // Check if last step is a closing action
-  if (lastStepDesc.match(/close|complet|finish|terminat|end|settle|finaliz/i)) {
-    // Check if there's an exception or alternative flow from the last step
-    const hasPostCompletionFlow = useCase.flows.some(
-      (f) =>
-        (f.kind === "EXCEPTION" || f.kind === "ALTERNATIVE") &&
-        f.fromStepIndex === lastStep.index
-    );
-
-    if (!hasPostCompletionFlow) {
-      gaps.push({
-        type: "missing_post_completion_scenarios",
-        severity: "medium",
-        description: `Step ${lastStep.index} closes the process but has no flows for post-completion scenarios.`,
-        relatedStep: lastStep.index,
-        relatedFlow: "MAIN",
-        suggestedQuestion: `Can this process be reopened or reversed after step ${lastStep.index}? What happens if new information arrives after completion?`,
-      });
-    }
-  }
-
-  // Also check description for reopening keywords
-  const reopenKeywords = [
-    "reopen",
-    "reverse",
-    "undo",
-    "after close",
-    "after completion",
-    "reverts to",
-    "resume",
-    "reactivate",
-  ];
-
-  const hasReopenMention = reopenKeywords.some((kw) => descLower.includes(kw));
-
-  if (hasReopenMention && gaps.length === 0) {
-    gaps.push({
-      type: "missing_post_completion_scenarios",
-      severity: "high",
-      description:
-        "Description mentions post-completion actions but no related flows found.",
-      suggestedQuestion:
-        "Under what conditions can this process be reopened or resumed after completion?",
-    });
-  }
-
-  return gaps;
-}
-
-/**
- * Detects missing data quality handling at input steps
- */
-function detectDataQualityIssues(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-
-  // Focus on first 2 steps (initial data collection)
-  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-  if (!mainFlow || mainFlow.steps.length < 2) return gaps;
-
-  const initialSteps = mainFlow.steps.slice(0, 2);
-
-  for (const step of initialSteps) {
-    const stepDesc = step.description.toLowerCase();
-
-    // Check if step involves data submission/collection
-    if (
-      stepDesc.match(
-        /submit|enter|provid|input|report|fill|upload|send|register/i
-      )
-    ) {
-      // Check if there's an exception for data quality issues
-      const hasDataQualityException = useCase.flows.some(
-        (f) =>
-          f.kind === "EXCEPTION" &&
-          f.fromStepIndex === step.index &&
-          (f.condition?.toLowerCase().includes("incomplete") ||
-            f.condition?.toLowerCase().includes("invalid") ||
-            f.condition?.toLowerCase().includes("missing") ||
-            f.condition?.toLowerCase().includes("malformed"))
-      );
-
-      if (!hasDataQualityException) {
-        gaps.push({
-          type: "missing_data_quality_handling",
-          severity: "high",
-          description: `Step ${step.index} involves data submission but has no exception for incomplete or invalid data.`,
-          relatedStep: step.index,
-          relatedFlow: "MAIN",
-          suggestedQuestion: `What happens if the data submitted in step ${step.index} is incomplete, invalid, or missing required fields?`,
-        });
-      }
-    }
-  }
-
-  return gaps;
-}
-
-/**
- * Detects missing environmental/external interruption handling
- */
-function detectEnvironmentalInterruptions(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-  const descLower = originalDescription.toLowerCase();
-
-  // Check for environmental interruption keywords
-  const environmentalKeywords = [
-    "fire alarm",
-    "emergency",
-    "evacuation",
-    "power outage",
-    "natural disaster",
-    "interruption",
-    "external event",
-  ];
-
-  const hasEnvironmentalMention = environmentalKeywords.some((kw) =>
-    descLower.includes(kw)
-  );
-
-  if (hasEnvironmentalMention) {
-    // Check if there are exception flows for environmental events
-    const hasEnvironmentalException = useCase.flows.some(
-      (f) =>
-        f.kind === "EXCEPTION" &&
-        environmentalKeywords.some((kw) =>
-          f.condition?.toLowerCase().includes(kw)
-        )
-    );
-
-    if (!hasEnvironmentalException) {
-      gaps.push({
-        type: "missing_environmental_interruptions",
-        severity: "medium",
-        description:
-          "Description mentions environmental or external interruptions but no related exception flows found.",
-        suggestedQuestion:
-          "How does the process handle external interruptions like emergencies, power failures, or environmental events?",
-      });
-    }
-  }
-
-  return gaps;
-}
-
-/**
- * Detects missing technology variation flows
- */
-function detectTechnologyVariations(
-  useCase: GenUseCase,
-  originalDescription: string
-): Gap[] {
-  const gaps: Gap[] = [];
-  const descLower = originalDescription.toLowerCase();
-
-  // Check for technology variation keywords
-  const techKeywords = [
-    "by check",
-    "by cash",
-    "electronic",
-    "paper",
-    "digital",
-    "manual",
-    "automated",
-    "online",
-    "offline",
-  ];
-
-  const hasTechMention = techKeywords.some((kw) => descLower.includes(kw));
-
-  if (hasTechMention) {
-    // Check if there are alternative flows for technology variations
-    const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-    const alternativeFlows = useCase.flows.filter(
-      (f) => f.kind === "ALTERNATIVE"
-    );
-
-    if (alternativeFlows.length === 0 && mainFlow) {
-      gaps.push({
-        type: "missing_technology_variations",
-        severity: "low",
-        description:
-          "Description mentions different technology or implementation methods but no alternative flows found.",
-        suggestedQuestion:
-          "Are there different ways to implement certain steps (e.g., electronic vs. paper, online vs. offline)?",
-      });
-    }
-  }
-
-  return gaps;
-}
-
-/**
- * Analyzes a use case to detect gaps and missing components.
- * This is the core function for identifying what questions need to be asked.
- *
- * @param useCase - The use case to analyze
- * @param validationFeedback - Validation score and metrics
- * @param originalDescription - Original user description (to check for mentioned but not extracted items)
- * @param conversationHistory - Optional history of previous Q&A interactions for deduplication
- * @returns Gap analysis with prioritized list of gaps
+ * Analyzes a use case to detect gaps using unified semantic embedding.
  */
 export async function analyzeGaps(
   useCase: GenUseCase,
@@ -509,8 +289,30 @@ export async function analyzeGaps(
   const incompleteActors: string[] = [];
   const uncertainConditions: string[] = [];
 
-  // 1. Check for missing exception flows
+  // Phase 1: Collect and embed all texts
+  const embeddedTexts = await collectAndEmbedTexts(useCase);
+  const categories = await loadGapCentroids();
+
+  // Phase 2: Analyze steps against category centroids
+  const stepGaps = await analyzeStepsAgainstCategories(
+    embeddedTexts,
+    categories,
+    useCase
+  );
+  gaps.push(...stepGaps);
+
+  // Phase 3: Analyze condition quality
+  const conditionResults = await analyzeConditionQuality(
+    embeddedTexts,
+    categories
+  );
+  gaps.push(...conditionResults.gaps);
+  uncertainConditions.push(...conditionResults.uncertainFlowIds);
+
+  // Phase 4: Structural checks
   const missingExceptionFlows = !validationFeedback.hasExceptionFlow;
+  const missingAlternativeFlows = !validationFeedback.hasAlternativeFlow;
+
   if (missingExceptionFlows) {
     gaps.push({
       type: "missing_exception_flows",
@@ -522,8 +324,6 @@ export async function analyzeGaps(
     });
   }
 
-  // 2. Check for missing alternative flows
-  const missingAlternativeFlows = !validationFeedback.hasAlternativeFlow;
   if (missingAlternativeFlows) {
     gaps.push({
       type: "missing_alternative_flows",
@@ -535,62 +335,7 @@ export async function analyzeGaps(
     });
   }
 
-  // 3. Check for validation steps without failure handling
-  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-  if (mainFlow) {
-    for (let i = 0; i < mainFlow.steps.length; i++) {
-      const step = mainFlow.steps[i];
-      const description = step.description.toLowerCase();
-
-      // Check if step contains validation keywords
-      if (description.match(/validat|check|verif|confirm|authentic|ensure/i)) {
-        // Check if there's an exception flow from this step
-        const hasExceptionFromStep = useCase.flows.some(
-          (f) =>
-            f.kind === "EXCEPTION" &&
-            f.parentFlow === "MAIN" &&
-            f.fromStepIndex === step.index
-        );
-
-        if (!hasExceptionFromStep) {
-          gaps.push({
-            type: "missing_validation_handling",
-            severity: "high",
-            description: `Step ${step.index} performs validation but has no exception flow for validation failure.`,
-            relatedStep: step.index,
-            relatedFlow: "MAIN",
-            suggestedQuestion: `What happens if the validation in step ${step.index} fails? (${step.description})`,
-          });
-        }
-      }
-
-      // Check for system interactions without failure handling
-      if (
-        step.target &&
-        step.target.toLowerCase().match(/system|service|api|database|server/i)
-      ) {
-        const hasExceptionFromStep = useCase.flows.some(
-          (f) =>
-            f.kind === "EXCEPTION" &&
-            f.parentFlow === "MAIN" &&
-            f.fromStepIndex === step.index
-        );
-
-        if (!hasExceptionFromStep) {
-          gaps.push({
-            type: "missing_system_failure_handling",
-            severity: "high",
-            description: `Step ${step.index} interacts with ${step.target} but has no exception flow for system failures.`,
-            relatedStep: step.index,
-            relatedFlow: "MAIN",
-            suggestedQuestion: `What happens if ${step.target} is unavailable or fails during step ${step.index}?`,
-          });
-        }
-      }
-    }
-  }
-
-  // 4. Check for incomplete actor participation
+  // Check for incomplete actors
   const allSteps = useCase.flows.flatMap((f) => f.steps);
   const usedActors = new Set(allSteps.map((s) => s.actor.toLowerCase()));
 
@@ -606,136 +351,26 @@ export async function analyzeGaps(
     }
   }
 
-  // 5. Check for flows with weak or missing conditions
-  for (const flow of useCase.flows) {
-    if (
-      (flow.kind === "ALTERNATIVE" || flow.kind === "EXCEPTION") &&
-      (!flow.condition || flow.condition.trim().length < 10)
-    ) {
-      uncertainConditions.push(flow.id);
-      gaps.push({
-        type: "uncertain_conditions",
-        severity: "medium",
-        description: `Flow '${flow.id}' has a weak or missing condition.`,
-        relatedFlow: flow.id,
-        suggestedQuestion: `Under what specific conditions does flow '${flow.id}' occur?`,
-      });
-    }
-  }
-
-  // 6. NEW: Detect temporal/async exceptions
+  // Phase 5: Description-based detectors
   gaps.push(...detectTemporalExceptions(useCase, originalDescription));
-
-  // 7. NEW: Detect nested exceptions
   gaps.push(...detectNestedExceptions(useCase, originalDescription));
-
-  // 8. NEW: Detect resource availability issues
-  gaps.push(...detectResourceAvailability(useCase, originalDescription));
-
-  // 9. NEW: Detect post-completion scenarios
-  gaps.push(...detectPostCompletionScenarios(useCase, originalDescription));
-
-  // 10. NEW: Detect data quality issues at input
-  gaps.push(...detectDataQualityIssues(useCase, originalDescription));
-
-  // 11. NEW: Detect environmental interruptions
   gaps.push(...detectEnvironmentalInterruptions(useCase, originalDescription));
-
-  // 12. NEW: Detect technology variations
   gaps.push(...detectTechnologyVariations(useCase, originalDescription));
 
-  // 13. Priority ordering (high severity first, then by type importance)
-  const priorityGaps: GapType[] = [];
-  const typeOrder: GapType[] = [
-    "missing_exception_flows",
-    "missing_data_quality_handling",
-    "missing_validation_handling",
-    "missing_resource_availability",
-    "missing_system_failure_handling",
-    "missing_post_completion_scenarios",
-    "missing_temporal_exceptions",
-    "missing_nested_exceptions",
-    "missing_environmental_interruptions",
-    "missing_alternative_flows",
-    "missing_technology_variations",
-    "uncertain_conditions",
-    "incomplete_actors",
-  ];
+  // Phase 6: Calculate completeness and filter stale gaps
+  const completenessScore = calculateCompletenessScore(
+    validationFeedback,
+    gaps,
+    missingExceptionFlows,
+    missingAlternativeFlows
+  );
 
-  // Add high-severity gaps first
-  for (const type of typeOrder) {
-    const hasHighSeverityGap = gaps.some(
-      (g) => g.type === type && g.severity === "high"
-    );
-    if (hasHighSeverityGap && !priorityGaps.includes(type)) {
-      priorityGaps.push(type);
-    }
-  }
+  const filteredGaps =
+    conversationHistory && conversationHistory.length > 0
+      ? await filterStaleGaps(gaps, useCase, conversationHistory)
+      : gaps;
 
-  // Then add medium and low severity
-  for (const type of typeOrder) {
-    if (!priorityGaps.includes(type) && gaps.some((g) => g.type === type)) {
-      priorityGaps.push(type);
-    }
-  }
-
-  // 14. Calculate completeness score
-  // Start with validation score, penalize for major gaps
-  let completenessScore = validationFeedback.overall / 100;
-
-  // Heavy penalty for missing exception flows (most critical)
-  if (missingExceptionFlows) {
-    completenessScore *= 0.6;
-  }
-
-  // Penalty for validation/system steps without exception handling
-  const validationGaps = gaps.filter(
-    (g) =>
-      g.type === "missing_validation_handling" ||
-      g.type === "missing_system_failure_handling"
-  ).length;
-  if (validationGaps > 0) {
-    completenessScore *= Math.max(0.5, 1 - validationGaps * 0.1);
-  }
-
-  // Penalty for data quality issues (critical for input steps)
-  const dataQualityGaps = gaps.filter(
-    (g) => g.type === "missing_data_quality_handling"
-  ).length;
-  if (dataQualityGaps > 0) {
-    completenessScore *= Math.max(0.5, 1 - dataQualityGaps * 0.15);
-  }
-
-  // Penalty for resource availability issues
-  const resourceGaps = gaps.filter(
-    (g) => g.type === "missing_resource_availability"
-  ).length;
-  if (resourceGaps > 0) {
-    completenessScore *= Math.max(0.6, 1 - resourceGaps * 0.1);
-  }
-
-  // Moderate penalty for missing alternative flows
-  if (missingAlternativeFlows) {
-    completenessScore *= 0.85;
-  }
-
-  // Filter out stale gaps if history is provided
-  const filteredGaps = conversationHistory && conversationHistory.length > 0
-    ? await filterStaleGaps(gaps, useCase, conversationHistory)
-    : gaps;
-
-  // Recompute priority gaps from filtered list
-  const filteredPriorityGaps: GapType[] = [];
-  for (const type of typeOrder) {
-    if (filteredGaps.some(g => g.type === type && g.severity === "high") && !filteredPriorityGaps.includes(type)) {
-      filteredPriorityGaps.push(type);
-    }
-  }
-  for (const type of typeOrder) {
-    if (!filteredPriorityGaps.includes(type) && filteredGaps.some(g => g.type === type)) {
-      filteredPriorityGaps.push(type);
-    }
-  }
+  const priorityGaps = computePriorityGaps(filteredGaps);
 
   return {
     missingExceptionFlows,
@@ -743,7 +378,384 @@ export async function analyzeGaps(
     incompleteActors,
     uncertainConditions,
     gaps: filteredGaps,
-    priorityGaps: filteredPriorityGaps,
+    priorityGaps,
     completenessScore: Math.max(0, Math.min(1, completenessScore)),
   };
+}
+
+async function collectAndEmbedTexts(
+  useCase: GenUseCase
+): Promise<EmbeddedText[]> {
+  const textsToEmbed: string[] = [];
+  const textSources: EmbeddedText["source"][] = [];
+
+  for (const flow of useCase.flows) {
+    for (const step of flow.steps) {
+      textsToEmbed.push(step.description);
+      textSources.push({
+        type: "step",
+        flowId: flow.id,
+        stepIndex: step.index,
+        step,
+        flow,
+      });
+    }
+
+    if (flow.condition && flow.kind !== "MAIN") {
+      textsToEmbed.push(flow.condition);
+      textSources.push({ type: "condition", flowId: flow.id, flow });
+    }
+  }
+
+  if (textsToEmbed.length === 0) return [];
+
+  const embeddings = await semanticService.embedBatch(textsToEmbed);
+
+  return textsToEmbed.map((text, i) => ({
+    text,
+    embedding: embeddings[i],
+    source: textSources[i],
+  }));
+}
+
+async function analyzeStepsAgainstCategories(
+  embeddedTexts: EmbeddedText[],
+  categories: GapCategory[],
+  useCase: GenUseCase
+): Promise<Gap[]> {
+  const gaps: Gap[] = [];
+  const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
+  const relevantCategories = categories.filter(
+    (c) => c.requiresExceptionCheck && c.centroid
+  );
+
+  for (const item of stepItems) {
+    const src = item.source as StepSource;
+
+    for (const category of relevantCategories) {
+      const similarity = await semanticService.cosineSimilarity(
+        item.embedding,
+        category.centroid!
+      );
+
+      if (similarity >= category.threshold) {
+        const hasException = useCase.flows.some(
+          (f) =>
+            (f.kind === "EXCEPTION" || f.kind === "ALTERNATIVE") &&
+            f.parentFlow === src.flowId &&
+            (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined)
+        );
+
+        if (!hasException) {
+          gaps.push({
+            type: category.gapType,
+            severity: "high",
+            description: `Step ${src.stepIndex} in flow ${src.flowId} matches "${category.name}" pattern but has no exception handling.`,
+            relatedStep: src.stepIndex,
+            relatedFlow: src.flowId,
+            suggestedQuestion: generateQuestionForCategory(
+              category.name,
+              src.step
+            ),
+          });
+        }
+      }
+    }
+  }
+
+  return gaps;
+}
+
+async function analyzeConditionQuality(
+  embeddedTexts: EmbeddedText[],
+  categories: GapCategory[]
+): Promise<{ gaps: Gap[]; uncertainFlowIds: string[] }> {
+  const gaps: Gap[] = [];
+  const uncertainFlowIds: string[] = [];
+
+  const conditionItems = embeddedTexts.filter((e) =>
+    isConditionSource(e.source)
+  );
+  const vagueCentroid = categories.find(
+    (c) => c.name === "vague_condition"
+  )?.centroid;
+
+  for (const item of conditionItems) {
+    const src = item.source as ConditionSource;
+    const issues: string[] = [];
+    let qualityScore = 0.7;
+
+    // Check semantic vagueness
+    if (vagueCentroid) {
+      const vagueSim = await semanticService.cosineSimilarity(
+        item.embedding,
+        vagueCentroid
+      );
+      if (vagueSim > 0.6) {
+        qualityScore -= 0.3;
+        issues.push("Condition is semantically vague");
+      }
+    }
+
+    // Check relation to anchor step
+    if (src.flow.fromStepIndex !== undefined && src.flow.parentFlow) {
+      const anchorStep = embeddedTexts.find(
+        (e) =>
+          isStepSource(e.source) &&
+          e.source.flowId === src.flow.parentFlow &&
+          e.source.stepIndex === src.flow.fromStepIndex
+      );
+
+      if (anchorStep) {
+        const anchorSim = await semanticService.cosineSimilarity(
+          item.embedding,
+          anchorStep.embedding
+        );
+        if (anchorSim < 0.3) {
+          qualityScore -= 0.2;
+          issues.push("Condition unrelated to anchor step");
+        }
+      }
+    }
+
+    // Length check fallback
+    if (src.flow.condition && src.flow.condition.trim().length < 10) {
+      qualityScore -= 0.2;
+      issues.push("Condition too short");
+    }
+
+    if (qualityScore < 0.5) {
+      uncertainFlowIds.push(src.flowId);
+      gaps.push({
+        type: "uncertain_conditions",
+        severity: qualityScore < 0.3 ? "high" : "medium",
+        description: `Flow "${src.flowId}" has weak condition: ${issues.join(", ")}`,
+        relatedFlow: src.flowId,
+        suggestedQuestion: `What specific trigger causes flow "${src.flowId}" to occur?`,
+      });
+    }
+  }
+
+  return { gaps, uncertainFlowIds };
+}
+
+function calculateCompletenessScore(
+  validationFeedback: UseCaseTermScore,
+  gaps: Gap[],
+  missingExceptionFlows: boolean,
+  missingAlternativeFlows: boolean
+): number {
+  let score = validationFeedback.overall / 100;
+
+  if (missingExceptionFlows) {
+    score *= 0.6;
+  }
+
+  const validationGapCount = gaps.filter(
+    (g) =>
+      g.type === "missing_validation_handling" ||
+      g.type === "missing_system_failure_handling"
+  ).length;
+  if (validationGapCount > 0) {
+    score *= Math.max(0.5, 1 - validationGapCount * 0.1);
+  }
+
+  const dataQualityGapCount = gaps.filter(
+    (g) => g.type === "missing_data_quality_handling"
+  ).length;
+  if (dataQualityGapCount > 0) {
+    score *= Math.max(0.5, 1 - dataQualityGapCount * 0.15);
+  }
+
+  const resourceGapCount = gaps.filter(
+    (g) => g.type === "missing_resource_availability"
+  ).length;
+  if (resourceGapCount > 0) {
+    score *= Math.max(0.6, 1 - resourceGapCount * 0.1);
+  }
+
+  if (missingAlternativeFlows) {
+    score *= 0.85;
+  }
+
+  return score;
+}
+
+function computePriorityGaps(gaps: Gap[]): GapType[] {
+  const priorityGaps: GapType[] = [];
+
+  // Add high-severity gaps first, then others
+  for (const type of GAP_TYPE_PRIORITY) {
+    const hasHighSeverity = gaps.some(
+      (g) => g.type === type && g.severity === "high"
+    );
+    if (hasHighSeverity) {
+      priorityGaps.push(type);
+    }
+  }
+
+  for (const type of GAP_TYPE_PRIORITY) {
+    if (!priorityGaps.includes(type) && gaps.some((g) => g.type === type)) {
+      priorityGaps.push(type);
+    }
+  }
+
+  return priorityGaps;
+}
+
+// Description-based detectors for scenarios not captured by semantic analysis
+
+function detectTemporalExceptions(
+  useCase: GenUseCase,
+  originalDescription: string
+): Gap[] {
+  const descLower = originalDescription.toLowerCase();
+  const temporalKeywords = [
+    "at any time",
+    "anytime",
+    "at all times",
+    "throughout",
+    "during any",
+    "while",
+  ];
+
+  const hasTemporalMention = temporalKeywords.some((kw) =>
+    descLower.includes(kw)
+  );
+  if (!hasTemporalMention) return [];
+
+  const hasGlobalException = useCase.flows.some(
+    (f) =>
+      f.kind === "EXCEPTION" &&
+      (f.fromStepIndex === undefined || f.fromStepIndex === null)
+  );
+
+  if (hasGlobalException) return [];
+
+  return [
+    {
+      type: "missing_temporal_exceptions",
+      severity: "high",
+      description:
+        "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
+      suggestedQuestion:
+        "Are there any conditions that can occur at any time during the process (e.g., system failures, interruptions)?",
+    },
+  ];
+}
+
+function detectNestedExceptions(
+  useCase: GenUseCase,
+  originalDescription: string
+): Gap[] {
+  const descLower = originalDescription.toLowerCase();
+  const nestedKeywords = [
+    "timeout",
+    "does not respond",
+    "fails to provide",
+    "within time period",
+    "no response",
+    "does not supply",
+  ];
+
+  const hasNestedMention = nestedKeywords.some((kw) => descLower.includes(kw));
+  if (!hasNestedMention) return [];
+
+  const exceptionFlows = useCase.flows.filter((f) => f.kind === "EXCEPTION");
+  if (exceptionFlows.length === 0) return [];
+
+  const hasNestedExceptions = exceptionFlows.some((f) => {
+    const parent = useCase.flows.find((pf) => pf.id === f.parentFlow);
+    return parent && parent.kind === "EXCEPTION";
+  });
+
+  if (hasNestedExceptions) return [];
+
+  return [
+    {
+      type: "missing_nested_exceptions",
+      severity: "medium",
+      description:
+        "Description mentions timeout or non-response scenarios but no nested exception flows found.",
+      suggestedQuestion:
+        "What happens if a response or action is not received within the expected time? Are there timeouts or escalations?",
+    },
+  ];
+}
+
+function detectEnvironmentalInterruptions(
+  useCase: GenUseCase,
+  originalDescription: string
+): Gap[] {
+  const descLower = originalDescription.toLowerCase();
+  const environmentalKeywords = [
+    "fire alarm",
+    "emergency",
+    "evacuation",
+    "power outage",
+    "natural disaster",
+    "interruption",
+    "external event",
+  ];
+
+  const hasEnvironmentalMention = environmentalKeywords.some((kw) =>
+    descLower.includes(kw)
+  );
+  if (!hasEnvironmentalMention) return [];
+
+  const hasEnvironmentalException = useCase.flows.some(
+    (f) =>
+      f.kind === "EXCEPTION" &&
+      environmentalKeywords.some((kw) => f.condition?.toLowerCase().includes(kw))
+  );
+
+  if (hasEnvironmentalException) return [];
+
+  return [
+    {
+      type: "missing_environmental_interruptions",
+      severity: "medium",
+      description:
+        "Description mentions environmental or external interruptions but no related exception flows found.",
+      suggestedQuestion:
+        "How does the process handle external interruptions like emergencies, power failures, or environmental events?",
+    },
+  ];
+}
+
+function detectTechnologyVariations(
+  useCase: GenUseCase,
+  originalDescription: string
+): Gap[] {
+  const descLower = originalDescription.toLowerCase();
+  const techKeywords = [
+    "by check",
+    "by cash",
+    "electronic",
+    "paper",
+    "digital",
+    "manual",
+    "automated",
+    "online",
+    "offline",
+  ];
+
+  const hasTechMention = techKeywords.some((kw) => descLower.includes(kw));
+  if (!hasTechMention) return [];
+
+  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
+  const alternativeFlows = useCase.flows.filter((f) => f.kind === "ALTERNATIVE");
+
+  if (!mainFlow || alternativeFlows.length > 0) return [];
+
+  return [
+    {
+      type: "missing_technology_variations",
+      severity: "low",
+      description:
+        "Description mentions different technology or implementation methods but no alternative flows found.",
+      suggestedQuestion:
+        "Are there different ways to implement certain steps (e.g., electronic vs. paper, online vs. offline)?",
+    },
+  ];
 }

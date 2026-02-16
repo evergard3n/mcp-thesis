@@ -1,6 +1,8 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import { GeminiOpenRouterFunctions } from "./gemini-openrouter.service.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
+import semanticService from "../services/semantic.service.js";
+import { flowToText } from "../evaluators/three-tier.evaluator.js";
 
 export async function generateFlatUseCase({
   description,
@@ -528,8 +530,34 @@ export async function refineWithHybridAnswers(
     geminiFunctions,
   );
 
+  // Step 2.5: Deduplicate flows (Semantic Check)
+  const uniqueNewFlows: typeof newFlows = [];
+  
+  if (newFlows.length > 0) {
+    const existingFlowTexts = refined.flows.map(flowToText);
+    const existingEmbeddings = await semanticService.embedBatch(existingFlowTexts);
+    
+    const newFlowTexts = newFlows.map(flowToText);
+    const newFlowEmbeddings = await semanticService.embedBatch(newFlowTexts);
+    
+    for (let i = 0; i < newFlows.length; i++) {
+      let isDuplicate = false;
+      for (let j = 0; j < existingEmbeddings.length; j++) {
+        const score = await semanticService.cosineSimilarity(newFlowEmbeddings[i], existingEmbeddings[j]);
+        if (score > 0.85) { // Strict threshold for duplication
+          isDuplicate = true;
+          console.log(`Dropping duplicate flow ${newFlows[i].id} (similar to ${refined.flows[j].id}, score=${score.toFixed(3)})`);
+          break;
+        }
+      }
+      if (!isDuplicate) {
+        uniqueNewFlows.push(newFlows[i]);
+      }
+    }
+  }
+
   // Step 3: Integrate new flows
-  const combinedFlows = [...refined.flows, ...newFlows];
+  const combinedFlows = [...refined.flows, ...uniqueNewFlows];
 
   // Return refined use case with all flows
   return {

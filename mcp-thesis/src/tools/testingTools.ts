@@ -32,6 +32,7 @@ import {
   analyzeGaps,
   InteractionMemory,
   GapType,
+  clearGapCentroidsCache,
 } from "../analyzers/gap.analyzer.js";
 import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
 import { OpenEndedQuestion } from "../validators/llm.validator.js";
@@ -71,9 +72,13 @@ export function registerTestingTools(
             detailedDescription: z
               .string()
               .describe(
-                "Expert-level description, just contain flows, not detailed description",
+                "Expert-level description, just contain flows, not detailed steps",
               ),
-            groundTruthJson: z.string(),
+            textBasedGroundTruth: z
+              .string()
+              .describe(
+                "Text describing the ground truth use case, from which we will generate the structured flows",
+              ),
             complexity: z.enum(["simple", "medium", "complex"]).optional(),
             notes: z.string().optional(),
           }),
@@ -107,7 +112,10 @@ export function registerTestingTools(
 
       for (const tc of testCases) {
         try {
-          const groundTruth = JSON.parse(tc.groundTruthJson);
+          const groundTruth = generateFlatUseCase({
+            description: tc.textBasedGroundTruth,
+            geminiFunctions,
+          });
           const validatedTruth = genUseCaseSchema.parse(groundTruth);
 
           dataset.testCases.push({
@@ -235,7 +243,11 @@ export function registerTestingTools(
       },
     },
     async ({ datasetPath, testCaseIds }) => {
-      console.log("========================== running version: 18:20");
+      console.log("========================== running version: 1825");
+
+      // Clear gap centroids cache to ensure fresh centroids are loaded
+      clearGapCentroidsCache();
+
       const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
       const testCases = testCaseIds
         ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
@@ -253,6 +265,11 @@ export function registerTestingTools(
           geminiFunctions: geminiFunctions,
         });
 
+        const detailedBaseline = await generateFlatUseCase({
+          description: tc.inputs.detailed,
+          geminiFunctions: geminiFunctions,
+        });
+
         console.log(`  Baseline generated, starting iterative refinement...`);
 
         // Clone baseline for iterative refinement
@@ -265,6 +282,7 @@ export function registerTestingTools(
         const conversationHistory: InteractionMemory[] = [];
         const allIterations: any[] = [];
         const allQuestions: string[] = [];
+        let debugInfo: any = {};
 
         // Iterative refinement loop
         while (
@@ -275,9 +293,7 @@ export function registerTestingTools(
           console.log(`  Iteration ${iteration}...`);
 
           // Step 2: Validate and analyze gaps
-          const validation = await validateUseCaseWithFeedback(currentUseCase, {
-            projectStore,
-          });
+          const validation = await validateUseCaseWithFeedback(currentUseCase);
 
           const gapAnalysis = await analyzeGaps(
             currentUseCase,
@@ -292,6 +308,30 @@ export function registerTestingTools(
             validation.score!,
             gapAnalysis,
           );
+
+          // Debug logging
+          console.log(`  Gap analysis: ${gapAnalysis.gaps.length} gaps found`);
+          console.log(
+            `  Uncertainty: confidence=${uncertaintyAnalysis.overallConfidence.toFixed(3)}, highPriority=${uncertaintyAnalysis.highPriorityCount}`,
+          );
+
+          // Store debug info for first iteration
+          if (iteration === 1) {
+            debugInfo = {
+              gapsFound: gapAnalysis.gaps.length,
+              gapTypes: gapAnalysis.gaps.map((g) => g.type),
+              confidence: uncertaintyAnalysis.overallConfidence,
+              highPriorityCount: uncertaintyAnalysis.highPriorityCount,
+              stepPriorities: uncertaintyAnalysis.stepPriorities
+                .slice(0, 5)
+                .map((p) => ({
+                  step: p.stepIndex,
+                  rank: p.priorityRank,
+                  reasons: p.uncertaintyReasons,
+                  relatedGaps: p.relatedGaps.length,
+                })),
+            };
+          }
 
           // Stopping condition: high confidence and no high-priority gaps
           if (
@@ -311,6 +351,7 @@ export function registerTestingTools(
             uncertaintyAnalysis.stepPriorities,
             uncertaintyAnalysis.flowUncertainties,
             Math.min(6, MAX_QUESTIONS - totalQuestionsAsked),
+            allQuestions,
           );
 
           if (adaptiveQuestions.length === 0) {
@@ -327,6 +368,55 @@ export function registerTestingTools(
             tc.domain,
             geminiFunctions,
           );
+
+          // Update conversation history for deduplication (Dual-Vector Approach)
+          const contextsToEmbed: string[] = [];
+          const questionsToEmbed: string[] = [];
+          const historyRecords: any[] = []; // temporary holder
+
+          for (const q of adaptiveQuestions) {
+            const a = answers.find((ans) => ans.questionId === q.id);
+            if (!a) continue;
+
+            const stepContext = q.context.step || "Global";
+            const description = q.context.whyAsking;
+
+            // Format must match what filterStaleGaps expects: "Context: ... | Gap: ..."
+            // But here we construct the raw strings that get embedded
+            const contextString = `${stepContext} | ${description}`;
+
+            contextsToEmbed.push(contextString);
+            questionsToEmbed.push(q.question);
+
+            historyRecords.push({
+              stepContext,
+              question: q.question,
+              answer: a.answer,
+              iteration,
+              metadata: {
+                stepIndex: q.id.match(/step-(\d+)/)
+                  ? parseInt(q.id.match(/step-(\d+)/)![1])
+                  : undefined,
+                gapType: q.context.patternType as GapType,
+                flowId: q.context.flowId || "MAIN",
+              },
+            });
+          }
+
+          if (contextsToEmbed.length > 0) {
+            const contextVectors =
+              await semanticService.embedBatch(contextsToEmbed);
+            const questionVectors =
+              await semanticService.embedBatch(questionsToEmbed);
+
+            for (let i = 0; i < historyRecords.length; i++) {
+              conversationHistory.push({
+                ...historyRecords[i],
+                vector: contextVectors[i],
+                questionVector: questionVectors[i],
+              });
+            }
+          }
 
           // Step 6: Refine use case with answers
           currentUseCase = await refineWithHybridAnswers(
@@ -361,11 +451,13 @@ export function registerTestingTools(
         results.push({
           testCaseId: tc.id,
           conditionA_Baseline: baseline,
+          conditionA_DetailedBaseline: detailedBaseline,
           conditionB_EnhancedHITL: hitlUseCase,
           iterativeRefinement: {
             totalIterations: iteration,
             totalQuestionsAsked,
             iterations: allIterations,
+            debugInfo,
           },
           groundTruth: tc.groundTruth,
         });
