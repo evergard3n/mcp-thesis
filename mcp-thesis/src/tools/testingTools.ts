@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import { GenFlow } from "../interfaces/usecase.interface.new.js";
+import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
 import { writeFile, readFile } from "fs/promises";
 import { JsonProjectStore } from "../stores/projectStore.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
@@ -14,6 +14,7 @@ import {
 import {
   validateUseCaseWithFeedback,
   formatValidationForLLM,
+  UseCaseValidationResult,
 } from "../validators/flat.validator.js";
 import {
   generateLLMQuestions,
@@ -23,6 +24,7 @@ import {
   generateHybridQuestions,
   expertAnswerOpenEndedQuestions,
   generateAdaptiveQuestions,
+  OpenEndedAnswer,
 } from "../validators/llm.validator.js";
 import {
   evaluateUseCase,
@@ -33,8 +35,12 @@ import {
   InteractionMemory,
   GapType,
   clearGapCentroidsCache,
+  GapAnalysis,
 } from "../analyzers/gap.analyzer.js";
-import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
+import {
+  rankAllUncertainties,
+  UncertaintyAnalysis,
+} from "../analyzers/uncertainty.ranker.js";
 import { OpenEndedQuestion } from "../validators/llm.validator.js";
 
 interface EmbeddedFlow extends GenFlow {
@@ -52,11 +58,36 @@ interface DatasetFile {
   testCases: DatasetTestCase[];
 }
 
+interface HITLSessionState {
+  description: string | null;
+  currentUseCase: GenUseCase | null;
+  conversationHistory: InteractionMemory[];
+  allQuestions: string[];
+  iterationCount: number;
+  lastValidation: UseCaseValidationResult | null;
+  lastGapAnalysis: GapAnalysis | null;
+  lastUncertaintyAnalysis: UncertaintyAnalysis | null;
+  lastQuestions: OpenEndedQuestion[] | null;
+}
+
 export function registerTestingTools(
   server: McpServer,
   projectStore: JsonProjectStore,
   geminiFunctions: GeminiOpenRouterFunctions,
 ) {
+  // Session-level state for Interactive Demo Tools
+  const hitlState: HITLSessionState = {
+    description: null,
+    currentUseCase: null,
+    conversationHistory: [],
+    allQuestions: [],
+    iterationCount: 0,
+    lastValidation: null,
+    lastGapAnalysis: null,
+    lastUncertaintyAnalysis: null,
+    lastQuestions: null,
+  };
+
   // Tool 1: prepareTestData
   server.registerTool(
     "prepareTestData",
@@ -574,6 +605,270 @@ Results: ${outputPath}`,
           },
         ],
         structuredContent: { evaluations, summary, outputPath },
+      };
+    },
+  );
+
+  // ============================================================================
+  // Interactive Demo Tools (Split HITL Workflow)
+  // ============================================================================
+
+  // Tool 5: hitl_generateBaseline
+  server.registerTool(
+    "hitl_generateBaseline",
+    {
+      title: "Step 1: Generate Baseline",
+      description: "Generate initial use case from user description (Resets session state)",
+      inputSchema: {
+        description: z.string().describe("The user's initial vague requirement"),
+      },
+    },
+    async ({ description }: { description: string }) => {
+      console.log("Interactive HITL: Generating baseline...");
+      
+      // Reset state
+      hitlState.description = description;
+      hitlState.conversationHistory = [];
+      hitlState.allQuestions = [];
+      hitlState.iterationCount = 0;
+      hitlState.lastValidation = null;
+      hitlState.lastGapAnalysis = null;
+      hitlState.lastUncertaintyAnalysis = null;
+      hitlState.lastQuestions = null;
+
+      clearGapCentroidsCache();
+
+      const baseline = await generateFlatUseCase({
+        description,
+        geminiFunctions,
+      });
+
+      hitlState.currentUseCase = baseline;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Baseline generated for: "${description}"\nName: ${baseline.name}\nFlows: ${baseline.flows.length}`,
+          },
+        ],
+        structuredContent: { useCase: baseline },
+      };
+    },
+  );
+
+  // Tool 6: hitl_analyzeGaps
+  server.registerTool(
+    "hitl_analyzeGaps",
+    {
+      title: "Step 2: Analyze Gaps",
+      description: "Analyze current use case for gaps and rank uncertainties",
+      inputSchema: {},
+    },
+    async () => {
+      if (!hitlState.currentUseCase || !hitlState.description) {
+        return {
+          content: [{ type: "text" as const, text: "Error: No active use case. Run hitl_generateBaseline first." }],
+          isError: true,
+        };
+      }
+
+      console.log(`Interactive HITL: Analyzing gaps (Iteration ${hitlState.iterationCount + 1})...`);
+
+      const validation = await validateUseCaseWithFeedback(hitlState.currentUseCase);
+      hitlState.lastValidation = validation;
+
+      const gapAnalysis = await analyzeGaps(
+        hitlState.currentUseCase,
+        validation.score!,
+        hitlState.description,
+        hitlState.conversationHistory,
+      );
+      hitlState.lastGapAnalysis = gapAnalysis;
+
+      const uncertaintyAnalysis = rankAllUncertainties(
+        hitlState.currentUseCase,
+        validation.score!,
+        gapAnalysis,
+      );
+      hitlState.lastUncertaintyAnalysis = uncertaintyAnalysis;
+
+      const shouldStop =
+        uncertaintyAnalysis.overallConfidence > 0.85 &&
+        uncertaintyAnalysis.highPriorityCount === 0;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Analysis Complete:\n- Gaps Found: ${gapAnalysis.gaps.length}\n- Confidence: ${(uncertaintyAnalysis.overallConfidence * 100).toFixed(1)}%\n- High Priority Issues: ${uncertaintyAnalysis.highPriorityCount}\n- Should Stop: ${shouldStop}`,
+          },
+        ],
+        structuredContent: {
+          gapCount: gapAnalysis.gaps.length,
+          gaps: gapAnalysis.gaps,
+          confidence: uncertaintyAnalysis.overallConfidence,
+          highPriorityCount: uncertaintyAnalysis.highPriorityCount,
+          shouldStop,
+        },
+      };
+    },
+  );
+
+  // Tool 7: hitl_generateQuestions
+  server.registerTool(
+    "hitl_generateQuestions",
+    {
+      title: "Step 3: Generate Questions",
+      description: "Generate adaptive questions for the user based on gap analysis",
+      inputSchema: {
+        maxQuestions: z.number().optional().default(6),
+      },
+    },
+    async ({ maxQuestions }: { maxQuestions: number }) => {
+      if (!hitlState.lastUncertaintyAnalysis) {
+        return {
+          content: [{ type: "text" as const, text: "Error: No analysis results. Run hitl_analyzeGaps first." }],
+          isError: true,
+        };
+      }
+
+      console.log(`Interactive HITL: Generating questions...`);
+
+      const questions = await generateAdaptiveQuestions(
+        hitlState.lastUncertaintyAnalysis.stepPriorities,
+        hitlState.lastUncertaintyAnalysis.flowUncertainties,
+        maxQuestions,
+        hitlState.allQuestions, // Passes all previously asked questions for deduplication
+      );
+
+      hitlState.lastQuestions = questions;
+
+      if (questions.length === 0) {
+        return {
+          content: [{ type: "text" as const, text: "No new questions generated (all gaps covered or low priority)." }],
+          structuredContent: { questions: [] },
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Generated ${questions.length} questions:\n${questions.map((q, i) => `${i + 1}. ${q.question}`).join("\n")}`,
+          },
+        ],
+        structuredContent: { questions },
+      };
+    },
+  );
+
+  // Tool 8: hitl_refineUseCase
+  server.registerTool(
+    "hitl_refineUseCase",
+    {
+      title: "Step 4: Refine Use Case",
+      description: "Refine the use case using user answers",
+      inputSchema: {
+        answers: z.array(
+          z.object({
+            questionId: z.string(),
+            answer: z.string(),
+          })
+        ),
+      },
+    },
+    async ({ answers }: { answers: Array<{ questionId: string; answer: string }> }) => {
+      if (!hitlState.currentUseCase || !hitlState.lastQuestions) {
+        return {
+          content: [{ type: "text" as const, text: "Error: No questions available. Run hitl_generateQuestions first." }],
+          isError: true,
+        };
+      }
+
+      console.log(`Interactive HITL: Refining use case with ${answers.length} answers...`);
+
+      // 1. Convert simple answers to OpenEndedAnswer format (adding high confidence since it's a human)
+      const openEndedAnswers: OpenEndedAnswer[] = answers.map((a: { questionId: string; answer: string }) => ({
+        questionId: a.questionId,
+        answer: a.answer,
+        confidence: "high",
+      }));
+
+      // 2. Update conversation history (Dual-Vector Deduplication)
+      const contextsToEmbed: string[] = [];
+      const questionsToEmbed: string[] = [];
+      const historyRecords: any[] = [];
+
+      for (const q of hitlState.lastQuestions) {
+        const a = openEndedAnswers.find((ans) => ans.questionId === q.id);
+        if (!a) continue;
+
+        const stepContext = q.context.step || "Global";
+        const description = q.context.whyAsking;
+        const contextString = `${stepContext} | ${description}`;
+
+        contextsToEmbed.push(contextString);
+        questionsToEmbed.push(q.question);
+
+        historyRecords.push({
+          stepContext,
+          question: q.question,
+          answer: a.answer,
+          iteration: hitlState.iterationCount + 1,
+          metadata: {
+            stepIndex: q.id.match(/step-(\d+)/)
+              ? parseInt(q.id.match(/step-(\d+)/)![1])
+              : undefined,
+            gapType: q.context.patternType as GapType,
+            flowId: q.context.flowId || "MAIN",
+          },
+        });
+      }
+
+      if (contextsToEmbed.length > 0) {
+        const contextVectors = await semanticService.embedBatch(contextsToEmbed);
+        const questionVectors = await semanticService.embedBatch(questionsToEmbed);
+
+        for (let i = 0; i < historyRecords.length; i++) {
+          hitlState.conversationHistory.push({
+            ...historyRecords[i],
+            vector: contextVectors[i],
+            questionVector: questionVectors[i],
+          });
+        }
+      }
+
+      // 3. Update allQuestions list
+      hitlState.allQuestions.push(...hitlState.lastQuestions.map((q) => q.question));
+
+      // 4. Refine the use case
+      const updatedUseCase = await refineWithHybridAnswers(
+        hitlState.description!,
+        hitlState.currentUseCase,
+        [], // No MC questions
+        [],
+        openEndedAnswers,
+        geminiFunctions,
+      );
+
+      hitlState.currentUseCase = updatedUseCase;
+      hitlState.iterationCount++;
+
+      // Clear last cycle state
+      hitlState.lastQuestions = null;
+      hitlState.lastValidation = null;
+      hitlState.lastGapAnalysis = null;
+      hitlState.lastUncertaintyAnalysis = null;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Use case refined (Iteration ${hitlState.iterationCount}).\nFlows: ${updatedUseCase.flows.length}`,
+          },
+        ],
+        structuredContent: { useCase: updatedUseCase },
       };
     },
   );
