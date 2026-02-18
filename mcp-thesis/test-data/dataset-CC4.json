@@ -1,0 +1,131 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-18T14:06:07.342Z",
+  "testCases": [
+    {
+      "id": "CC4",
+      "domain": "Resource Locking",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 5,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "When a service client wants exclusive access to a resource it already shares, the system ensures no other clients are using or waiting for that resource. It then grants the client exclusive access and updates its lock count.",
+        "detailed": "UC CC 4: Apply a lock conversion policy\nUsed By: CC 1 Resource Locking\nMain Success Scenario\n1) Resource Lock checks that request is for exclusive access.\n2) Resource Lock checks that Service Client already has shared access.\n3) Resource Lock checks that there is no Service Client waiting to upgrade access.\n4) Resource Lock verifies that there are no other Service Clients sharing resource.\n5) Resource Lock grants Service Client exclusive access to the resource\n6) Resource Lock increments Service Client lock count.\nExtensions\n1a. Resource Lock finds that the request is for shared access:\n1a1. Resource Lock increments lock count on Service Client.\n1a2. Success!\n2a. Resource Lock finds that the Service Client already has exclusive access.\n2a1. Resource Lock increments lock count on Service Client.\n2a2. Success!\n3a. Resource Lock finds that there is another Service Client waiting to upgrade access.\n3a. Signal Service Client that requested access could not be granted.\n3b. Fail!\n4a. Resource Lock finds that there are other Service Clients using the resource.\n4a1. Make Service Client wait for resource access (see CC 5)"
+      },
+      "groundTruth": {
+        "name": "UC CC 4: Apply a lock conversion policy",
+        "summary": "This use case describes how a Resource Lock applies a lock conversion policy, handling requests for exclusive or shared access, and managing potential conflicts with other service clients.",
+        "mainActor": "Service Client",
+        "actors": [
+          "Resource Lock",
+          "Service Client"
+        ],
+        "preconditions": [],
+        "postconditions": [],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Checks that the request is for exclusive access."
+              },
+              {
+                "index": 2,
+                "actor": "Resource Lock",
+                "description": "Checks that the Service Client already has shared access."
+              },
+              {
+                "index": 3,
+                "actor": "Resource Lock",
+                "description": "Checks that there is no Service Client waiting to upgrade access."
+              },
+              {
+                "index": 4,
+                "actor": "Resource Lock",
+                "description": "Verifies that there are no other Service Clients sharing the resource."
+              },
+              {
+                "index": 5,
+                "actor": "Resource Lock",
+                "description": "Grants Service Client exclusive access to the resource."
+              },
+              {
+                "index": 6,
+                "actor": "Resource Lock",
+                "description": "Increments Service Client lock count."
+              }
+            ]
+          },
+          {
+            "id": "ALT_7a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Increments lock count on Service Client."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Indicates success."
+              }
+            ]
+          },
+          {
+            "id": "ALT_8a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Increments lock count on Service Client."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Indicates success."
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Signals Service Client that requested access could not be granted."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Indicates failure."
+              }
+            ]
+          },
+          {
+            "id": "EXT_10a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Makes Service Client wait for resource access (see CC 5)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

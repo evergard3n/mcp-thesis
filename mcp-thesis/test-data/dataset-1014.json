@@ -1,0 +1,246 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-18T14:06:39.839Z",
+  "testCases": [
+    {
+      "id": "1014",
+      "domain": "Insurance/Operations",
+      "metadata": {
+        "complexity": "complex",
+        "expectedFlows": 10,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The adjuster reviews all available documents to determine the permanent disability, calculates the claim's full value, and then establishes a final settlement range. They then seek authorization and document all activities, communicating as needed with involved parties.",
+        "detailed": "UC #: 1014 Evaluate Work Comp Claim\nScope: Insurance company Operations\nLevel: -White (Business, above single user goal level)\nContext of use: Claims Adjuster completes thorough evaluation of the facts of a loss.\nPrimary Actor: Claims Adjuster\nPreconditions:\nTrigger:\nMain Success Scenario:\nPlease Note: Investigation has ideally been completed prior to evaluation,\nalthough the depth of the investigation can vary from claim to claim.\n1. Adjuster reviews and evaluates the medical reports, lien documents, benefits paid to date\nand other supporting documents.\n2. Adjuster rates the permanent disability by using a jurisdictional formula to determine % of\ndisability.\n3. Adjuster sums the permanent disability owed, taking credit for advances and payment of\nliens to arrive at the claims full value.\n4. Adjuster determines the final settlement range.\n5. Adjuster checks reserves to make sure they are in line with settlement range.\n6. Adjuster seeks authorization for settlement and reserve increase if above their authority\nlevels.\n7. Adjuster documents the file.\n8. Adjuster sends any correspondence and or documentation to parties involved as necessary.\n9. Adjuster continues to document file regarding all settlement activity.\nExtensions: \n1a. Required documentation is missing or incomplete\n1a1. Adjuster requests missing medical reports, lien information, or payment records.\n1a2. Evaluation is paused until documentation is received, then resumes at Step 1.\n\n2a. Jurisdictional disability rating rules are unclear or disputed\n2a1. Adjuster consults legal, medical, or supervisory resources for clarification.\n2a2. Adjuster revises the disability rating based on guidance and continues evaluation.\n\n3a. Advances or lien amounts cannot be verified\n3a1. Adjuster flags discrepancies and requests verification from providers or finance systems.\n3a2. Claim valuation is updated once verification is complete.\n\n4a. Settlement range exceeds established reserves\n4a1. Adjuster updates reserve recommendation and proceeds to authorization review.\n\n6a. Settlement or reserve request is denied or modified\n6a1. Adjuster revises the settlement range or negotiation strategy.\n6a2. Adjuster documents the decision and continues claim handling.\n\n6b. Settlement authority exceeds all available approval levels\n6b1. Adjuster escalates the claim to senior management or committee review.\n6b2. Evaluation continues under supervisory direction.\n\n8a. Additional parties request clarification or dispute the evaluation\n8a1. Adjuster responds with supporting documentation and explanations.\n8a2. Adjuster re-evaluates the claim if new material information is provided.\n\n9a. New information becomes available after evaluation\n9a1. Adjuster reopens evaluation activities.\n9a2. Settlement range, reserves, and documentation are updated accordingly."
+      },
+      "groundTruth": {
+        "name": "Evaluate Work Comp Claim",
+        "summary": "The Claims Adjuster evaluates a work compensation claim by reviewing documents, calculating disability, determining claim value, and seeking settlement authorization.",
+        "mainActor": "Claims Adjuster",
+        "actors": [
+          "Claims Adjuster",
+          "System",
+          "Legal Department",
+          "Medical Department",
+          "Supervisory Resources",
+          "Providers",
+          "Finance Systems",
+          "Senior Management",
+          "Committee",
+          "Parties Involved"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Reviews and evaluates medical reports, lien documents, benefits paid to date, and other supporting documents."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Rates the permanent disability using a jurisdictional formula to determine percentage of disability."
+              },
+              {
+                "index": 3,
+                "actor": "Claims Adjuster",
+                "description": "Sums the permanent disability owed, taking credit for advances and payment of liens, to arrive at the claim's full value."
+              },
+              {
+                "index": 4,
+                "actor": "Claims Adjuster",
+                "description": "Determines the final settlement range."
+              },
+              {
+                "index": 5,
+                "actor": "Claims Adjuster",
+                "description": "Checks reserves to ensure they are in line with the settlement range."
+              },
+              {
+                "index": 6,
+                "actor": "Claims Adjuster",
+                "description": "Seeks authorization for settlement and reserve increase if above their authority levels."
+              },
+              {
+                "index": 7,
+                "actor": "Claims Adjuster",
+                "description": "Documents the file."
+              },
+              {
+                "index": 8,
+                "actor": "Claims Adjuster",
+                "description": "Sends any correspondence and/or documentation to parties involved as necessary."
+              },
+              {
+                "index": 9,
+                "actor": "Claims Adjuster",
+                "description": "Continues to document file regarding all settlement activity."
+              }
+            ]
+          },
+          {
+            "id": "EXT_18a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Requests missing medical reports, lien information, or payment records."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Pauses evaluation until documentation is received."
+              },
+              {
+                "index": 3,
+                "actor": "Claims Adjuster",
+                "description": "Resumes evaluation at Step 1."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Requests missing medical reports, lien information, or payment records."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Pauses evaluation until documentation is received, then resumes at Step 1 of MAIN."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "target": "Legal Department",
+                "description": "Consults legal, medical, or supervisory resources for clarification."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Revises the disability rating based on guidance and continues evaluation."
+              }
+            ]
+          },
+          {
+            "id": "ALT_12a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "target": "Providers",
+                "description": "Flags discrepancies and requests verification from providers or finance systems."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Updates claim valuation once verification is complete."
+              }
+            ]
+          },
+          {
+            "id": "ALT_13a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Updates reserve recommendation and proceeds to authorization review."
+              }
+            ]
+          },
+          {
+            "id": "ALT_14a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Revises the settlement range or negotiation strategy."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Documents the decision and continues claim handling."
+              }
+            ]
+          },
+          {
+            "id": "ALT_15a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "target": "Senior Management",
+                "description": "Escalates the claim to senior management or committee review."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Continues evaluation under supervisory direction."
+              }
+            ]
+          },
+          {
+            "id": "ALT_16a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "target": "Parties Involved",
+                "description": "Responds with supporting documentation and explanations."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Re-evaluates the claim if new material information is provided."
+              }
+            ]
+          },
+          {
+            "id": "ALT_17a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Reopens evaluation activities."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Updates settlement range, reserves, and documentation accordingly."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

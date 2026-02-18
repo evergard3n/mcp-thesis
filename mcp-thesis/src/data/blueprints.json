@@ -1,0 +1,347 @@
+{
+  "modelId": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+  "blueprints": [
+    {
+      "id": "approval_chain",
+      "name": "Approval Chain",
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "submitter",
+          "description": "The actor who initiates or submits a request for approval",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "initiates a request",
+            "submits a request for approval",
+            "files a request",
+            "creates a submission",
+            "sends a request for review",
+            "requests approval"
+          ]
+        },
+        {
+          "id": "approver",
+          "description": "The actor who reviews, approves, or authorizes the request",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "approves the request",
+            "reviews and accepts the submission",
+            "authorizes the request",
+            "signs off on the request",
+            "validates the approval",
+            "approves and forwards"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "reject",
+          "description": "Approver rejects or declines the request",
+          "triggerCondition": "status != approved",
+          "anchorRole": "approver",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What happens if {approver.actor} rejects or declines at step {approver.stepIndex} (\"{approver.description}\")? Can they request changes instead of outright rejection?",
+          "checkPhrases": [
+            "approver rejects the request",
+            "approver declines the submission",
+            "send back for revision",
+            "rejected by approver",
+            "approval denied"
+          ]
+        },
+        {
+          "id": "conditional_approval",
+          "description": "Approver approves with conditions or requires re-approval",
+          "triggerCondition": "approval with conditions",
+          "anchorRole": "approver",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "Can {approver.actor} approve with conditions at step {approver.stepIndex}? What changes require re-approval?",
+          "checkPhrases": [
+            "approval with conditions",
+            "conditional approval",
+            "partial approval",
+            "requires re-approval",
+            "approval contingent"
+          ]
+        },
+        {
+          "id": "delegate_approval",
+          "description": "Approver is unavailable or not authorized, and approval is delegated",
+          "triggerCondition": "approver unavailable",
+          "anchorRole": "approver",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {approver.actor} is unavailable or not the expected authority at step {approver.stepIndex}? Can someone else approve or delegate?",
+          "checkPhrases": [
+            "alternate approver",
+            "delegated approval",
+            "not the expected authority",
+            "approver unavailable",
+            "supervisor approves"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "request_lifecycle",
+      "name": "Request Fulfillment Lifecycle",
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "initiator",
+          "description": "The actor who initiates a request, order, or claim",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "initiates a request",
+            "submits an order",
+            "starts the process",
+            "files a claim",
+            "reports a claim",
+            "creates a request",
+            "places an order"
+          ]
+        },
+        {
+          "id": "fulfiller",
+          "description": "The actor or party who fulfills, delivers, or resolves the request",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "delivers the goods",
+            "fulfills the request",
+            "completes the order",
+            "resolves the claim",
+            "closes the claim",
+            "provides the service",
+            "ships the product"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "cancel_midprocess",
+          "description": "Initiator cancels or withdraws the request after submission",
+          "triggerCondition": "request withdrawn",
+          "anchorRole": "initiator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "Can {initiator.actor} cancel or withdraw the request after step {initiator.stepIndex} (\"{initiator.description}\")? What happens to downstream processing?",
+          "checkPhrases": [
+            "cancels the request",
+            "withdraws the request",
+            "removes from processing",
+            "request is canceled",
+            "claim withdrawn"
+          ]
+        },
+        {
+          "id": "modify_midprocess",
+          "description": "Initiator modifies the request during processing",
+          "triggerCondition": "request modified",
+          "anchorRole": "initiator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "Can {initiator.actor} change the request after submission at step {initiator.stepIndex}? Do modifications require re-approval or re-evaluation?",
+          "checkPhrases": [
+            "modifies the request",
+            "changes the order",
+            "updates the request",
+            "revised request",
+            "changes after submission"
+          ]
+        },
+        {
+          "id": "partial_fulfillment",
+          "description": "Request is only partially fulfilled",
+          "triggerCondition": "partial fulfillment",
+          "anchorRole": "fulfiller",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {fulfiller.actor} only partially fulfills the request at step {fulfiller.stepIndex} (\"{fulfiller.description}\")? How is the remainder handled?",
+          "checkPhrases": [
+            "partial delivery",
+            "partially fulfilled",
+            "partial settlement",
+            "incomplete fulfillment",
+            "partial coverage"
+          ]
+        },
+        {
+          "id": "wrong_fulfillment",
+          "description": "Fulfillment does not match the request",
+          "triggerCondition": "fulfillment mismatch",
+          "anchorRole": "fulfiller",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if what {fulfiller.actor} delivers at step {fulfiller.stepIndex} does not match what was requested? Who verifies and how is it resolved?",
+          "checkPhrases": [
+            "wrong goods",
+            "incorrect delivery",
+            "does not match request",
+            "incorrect fulfillment",
+            "mismatched delivery"
+          ]
+        },
+        {
+          "id": "late_fulfillment",
+          "description": "Fulfillment is delayed beyond expected timeframe",
+          "triggerCondition": "fulfillment delayed",
+          "anchorRole": "fulfiller",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What happens if {fulfiller.actor} does not fulfill by the expected time at step {fulfiller.stepIndex}? Is there a deadline or alert mechanism?",
+          "checkPhrases": [
+            "does not deliver on time",
+            "delivery delayed",
+            "overdue fulfillment",
+            "late delivery",
+            "delayed resolution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "multi_party_selection",
+      "name": "Multi-Party Selection",
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "selector",
+          "description": "The actor who selects among multiple options or parties",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "finds the best vendor",
+            "selects a provider",
+            "chooses from options",
+            "evaluates alternatives",
+            "compares suppliers",
+            "identifies the best match"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "split_request",
+          "description": "Request is split across multiple entities",
+          "triggerCondition": "multiple entities required",
+          "anchorRole": "selector",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if the request at step {selector.stepIndex} requires multiple entities? Can {selector.actor} split the request across multiple parties?",
+          "checkPhrases": [
+            "multiple vendors",
+            "split the request",
+            "generates multiple orders",
+            "multiple suppliers",
+            "separate purchase orders"
+          ]
+        },
+        {
+          "id": "merge_requests",
+          "description": "Multiple requests are merged for efficiency",
+          "triggerCondition": "requests merged",
+          "anchorRole": "selector",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "Can {selector.actor} merge multiple similar requests at step {selector.stepIndex}? How are merged items tracked?",
+          "checkPhrases": [
+            "merges requests",
+            "combines orders",
+            "batch processing",
+            "merge multiple requests",
+            "consolidate orders"
+          ]
+        },
+        {
+          "id": "no_match",
+          "description": "No suitable option is found",
+          "triggerCondition": "no suitable match",
+          "anchorRole": "selector",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {selector.actor} cannot find a suitable match at step {selector.stepIndex}? Is there a fallback or alternative source?",
+          "checkPhrases": [
+            "no vendor found",
+            "no suitable match",
+            "no available option",
+            "no provider available",
+            "unable to find vendor"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "information_completeness",
+      "name": "Information Completeness",
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "provider",
+          "description": "The actor who provides required information",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "fills in the form",
+            "provides details",
+            "specifies requirements",
+            "enters information",
+            "supplies data",
+            "inputs request details"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "missing_info",
+          "description": "Required information is unknown or unavailable",
+          "triggerCondition": "missing information",
+          "anchorRole": "provider",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {provider.actor} does not know all required information at step {provider.stepIndex} (\"{provider.description}\")? Can fields be left blank and filled later?",
+          "checkPhrases": [
+            "missing information",
+            "does not know",
+            "leave blank",
+            "incomplete information",
+            "unknown details"
+          ]
+        },
+        {
+          "id": "fill_later",
+          "description": "Missing information is filled in later by another actor",
+          "triggerCondition": "information completed later",
+          "anchorRole": "provider",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "If information is missing at step {provider.stepIndex}, who fills it in later and does this require re-approval or re-evaluation?",
+          "checkPhrases": [
+            "filled in later",
+            "completes missing information",
+            "supplies missing information later",
+            "later provides details",
+            "information completed later"
+          ]
+        }
+      ]
+    }
+  ]
+}

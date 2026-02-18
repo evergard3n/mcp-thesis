@@ -869,6 +869,11 @@ Results: ${outputPath}`,
         contextsToEmbed.push(contextString);
         questionsToEmbed.push(q.question);
 
+        const consolidatedMatch = q.id.match(/consolidated-([a-z_]+)-steps-([0-9-]+)/);
+        const consolidatedGroupId = consolidatedMatch ? consolidatedMatch[1] : undefined;
+        const consolidatedSteps = consolidatedMatch?.[2]
+          ? consolidatedMatch[2].split("-").map((value) => parseInt(value))
+          : undefined;
         historyRecords.push({
           stepContext,
           question: q.question,
@@ -878,7 +883,9 @@ Results: ${outputPath}`,
             stepIndex: q.id.match(/step-(\d+)/)
               ? parseInt(q.id.match(/step-(\d+)/)![1])
               : undefined,
+            stepIndexes: consolidatedSteps,
             gapType: q.context.patternType as GapType,
+            consolidatedGroupId,
             flowId: q.context.flowId || "MAIN",
           },
         });

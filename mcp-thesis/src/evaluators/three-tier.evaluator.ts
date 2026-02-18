@@ -24,6 +24,69 @@ export function flowToText(flow: GenFlow): string {
   return `${flow.kind}${conditionText}: ${stepsText}`;
 }
 
+type BranchInferenceContext = {
+  mainSteps: GenFlow["steps"];
+  mainStepEmbeddings: number[][];
+  actorToStepIndexes: Map<string, number[]>;
+};
+
+async function inferBranchStepIndex(
+  flow: GenFlow,
+  context: BranchInferenceContext,
+): Promise<number | null> {
+  if (flow.kind === "MAIN") return null;
+  const firstStep = flow.steps[0];
+  if (!firstStep) return null;
+
+  const actorKey = firstStep.actor.toLowerCase().trim();
+  const candidateIndexes = context.actorToStepIndexes.get(actorKey) ?? [];
+  if (candidateIndexes.length === 0) return null;
+  if (candidateIndexes.length === 1) return candidateIndexes[0];
+
+  const flowText = flowToText(flow);
+  const [flowEmbedding] = await semanticService.embedBatch([flowText]);
+  let bestScore = -Infinity;
+  let bestIndex: number | null = null;
+
+  for (const index of candidateIndexes) {
+    const mainStepEmbedding = context.mainStepEmbeddings[index - 1];
+    if (!mainStepEmbedding) continue;
+    const score = await semanticService.cosineSimilarity(
+      flowEmbedding,
+      mainStepEmbedding,
+    );
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
+}
+
+async function buildBranchInferenceContext(
+  mainFlow: GenFlow,
+): Promise<BranchInferenceContext> {
+  const mainStepTexts = mainFlow.steps.map(
+    (step) => `${step.actor} ${step.description}`,
+  );
+  const mainStepEmbeddings = await semanticService.embedBatch(mainStepTexts);
+  const actorToStepIndexes = new Map<string, number[]>();
+
+  for (const step of mainFlow.steps) {
+    const actorKey = step.actor.toLowerCase().trim();
+    const existing = actorToStepIndexes.get(actorKey) ?? [];
+    existing.push(step.index);
+    actorToStepIndexes.set(actorKey, existing);
+  }
+
+  return {
+    mainSteps: mainFlow.steps,
+    mainStepEmbeddings,
+    actorToStepIndexes,
+  };
+}
+
 async function getGroundTruthEmbeddings(
   groundTruthFlows: GroundTruthFlow[],
 ): Promise<number[][]> {
@@ -66,47 +129,104 @@ async function matchFlowsToGroundTruth(
   threshold = 0.6,
 ): Promise<Map<string, FlowMatchResult>> {
   const matchResults = new Map<string, FlowMatchResult>();
+  const duplicateThreshold = 0.75;
 
   if (generatedFlows.length === 0 || groundTruthFlows.length === 0) {
     return matchResults;
   }
+
+  const groundTruthMain = groundTruthFlows.find((flow) => flow.id === "MAIN");
+  const branchContext = groundTruthMain
+    ? await buildBranchInferenceContext(groundTruthMain)
+    : null;
 
   const groundTruthEmbeddings =
     await getGroundTruthEmbeddings(groundTruthFlows);
   const generatedTexts = generatedFlows.map(flowToText);
   const generatedEmbeddings = await semanticService.embedBatch(generatedTexts);
 
-  // First pass: compute all best match scores
+  const groundTruthBranchIndexes: Array<number | null> = [];
+  const generatedBranchIndexes: Array<number | null> = [];
+
+  for (const flow of groundTruthFlows) {
+    if (!branchContext) {
+      groundTruthBranchIndexes.push(null);
+      continue;
+    }
+    const inferred = await inferBranchStepIndex(flow, branchContext);
+    groundTruthBranchIndexes.push(inferred);
+  }
+
+  for (const flow of generatedFlows) {
+    if (typeof flow.fromStepIndex === "number") {
+      generatedBranchIndexes.push(flow.fromStepIndex);
+      continue;
+    }
+    if (!branchContext) {
+      generatedBranchIndexes.push(null);
+      continue;
+    }
+    const inferred = await inferBranchStepIndex(flow, branchContext);
+    generatedBranchIndexes.push(inferred);
+  }
+
+  // First pass: compute all match scores with structural bonuses
+  const candidatesByGen = new Map<
+    string,
+    Array<{
+      gtFlowId: string;
+      baseScore: number;
+      adjustedScore: number;
+    }>
+  >();
+
   const allMatches: {
     genFlowId: string;
-    bestGTFlowId: string | undefined;
-    bestScore: number;
+    bestAdjustedScore: number;
   }[] = [];
 
   for (let i = 0; i < generatedFlows.length; i++) {
-    let bestScore = -Infinity;
-    let bestGTFlowId: string | undefined;
+    const candidates: Array<{
+      gtFlowId: string;
+      baseScore: number;
+      adjustedScore: number;
+    }> = [];
+    let bestAdjustedScore = -Infinity;
 
     for (let j = 0; j < groundTruthEmbeddings.length; j++) {
-      const score = await semanticService.cosineSimilarity(
+      const baseScore = await semanticService.cosineSimilarity(
         generatedEmbeddings[i],
         groundTruthEmbeddings[j],
       );
-      if (score > bestScore) {
-        bestScore = score;
-        bestGTFlowId = groundTruthFlows[j].id;
+      let adjustedScore = baseScore;
+      if (generatedFlows[i].kind === groundTruthFlows[j].kind) {
+        adjustedScore += 0.05;
+      }
+      const genBranch = generatedBranchIndexes[i];
+      const gtBranch = groundTruthBranchIndexes[j];
+      if (genBranch !== null && gtBranch !== null && genBranch === gtBranch) {
+        adjustedScore += 0.1;
+      }
+      candidates.push({
+        gtFlowId: groundTruthFlows[j].id,
+        baseScore,
+        adjustedScore,
+      });
+      if (adjustedScore > bestAdjustedScore) {
+        bestAdjustedScore = adjustedScore;
       }
     }
 
+    candidates.sort((a, b) => b.adjustedScore - a.adjustedScore);
+    candidatesByGen.set(generatedFlows[i].id, candidates);
     allMatches.push({
       genFlowId: generatedFlows[i].id,
-      bestGTFlowId,
-      bestScore,
+      bestAdjustedScore,
     });
   }
 
-  // Sort by bestScore descending (best matches claim first)
-  allMatches.sort((a, b) => b.bestScore - a.bestScore);
+  // Sort by bestAdjustedScore descending (best matches claim first)
+  allMatches.sort((a, b) => b.bestAdjustedScore - a.bestAdjustedScore);
 
   // Second pass: assign claims with deduplication
   const claimedGTFlows = new Set<string>();
@@ -119,33 +239,51 @@ async function matchFlowsToGroundTruth(
   }
 
   for (const match of allMatches) {
-    if (match.bestScore < threshold || !match.bestGTFlowId) {
-      setMatchResult(match.genFlowId, {
-        inGroundTruth: false,
-        isDuplicate: false,
-        bestScore: match.bestScore,
-      });
-      continue;
-    }
+    const candidates = candidatesByGen.get(match.genFlowId) ?? [];
+    const unclaimed = candidates.find(
+      (candidate) =>
+        candidate.baseScore >= threshold &&
+        !claimedGTFlows.has(candidate.gtFlowId),
+    );
 
-    if (!claimedGTFlows.has(match.bestGTFlowId)) {
-      // First to claim this GT flow
-      claimedGTFlows.add(match.bestGTFlowId);
+    if (unclaimed) {
+      claimedGTFlows.add(unclaimed.gtFlowId);
       setMatchResult(match.genFlowId, {
         inGroundTruth: true,
         isDuplicate: false,
-        matchedFlowId: match.bestGTFlowId,
-        bestScore: match.bestScore,
+        matchedFlowId: unclaimed.gtFlowId,
+        bestScore: unclaimed.baseScore,
       });
       continue;
     }
 
-    // GT flow already claimed - this is a duplicate
+    const bestCandidate = candidates[0];
+    if (!bestCandidate || bestCandidate.baseScore < threshold) {
+      setMatchResult(match.genFlowId, {
+        inGroundTruth: false,
+        isDuplicate: false,
+        bestScore: bestCandidate?.baseScore ?? -Infinity,
+      });
+      continue;
+    }
+
+    if (
+      bestCandidate.baseScore >= duplicateThreshold &&
+      claimedGTFlows.has(bestCandidate.gtFlowId)
+    ) {
+      setMatchResult(match.genFlowId, {
+        inGroundTruth: false,
+        isDuplicate: true,
+        matchedFlowId: bestCandidate.gtFlowId,
+        bestScore: bestCandidate.baseScore,
+      });
+      continue;
+    }
+
     setMatchResult(match.genFlowId, {
       inGroundTruth: false,
-      isDuplicate: true,
-      matchedFlowId: match.bestGTFlowId,
-      bestScore: match.bestScore,
+      isDuplicate: false,
+      bestScore: bestCandidate.baseScore,
     });
   }
 

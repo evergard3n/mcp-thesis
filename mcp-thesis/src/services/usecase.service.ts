@@ -458,13 +458,36 @@ export async function extractFlowsFromOpenEndedAnswers(
     }),
   );
 
+  const questionStepMap = new Map<string, number[]>();
+
+  for (const answer of answers) {
+    const consolidatedMatch = answer.questionId.match(
+      /consolidated-[a-z_]+-steps-([0-9-]+)/,
+    );
+    if (!consolidatedMatch) continue;
+    const stepIndexes = consolidatedMatch[1]
+      .split("-")
+      .map((value) => parseInt(value))
+      .filter((value) => !Number.isNaN(value));
+    if (stepIndexes.length > 0) {
+      questionStepMap.set(answer.questionId, stepIndexes);
+    }
+  }
+
   const answersContext = answers
     .map(
-      (a, i) => `
+      (a, i) => {
+        const stepIndexes = questionStepMap.get(a.questionId);
+        const stepHint = stepIndexes
+          ? `Covered steps: ${stepIndexes.join(", ")}`
+          : "";
+        return `
 Answer ${i + 1} (ID: ${a.questionId}):
 ${a.answer}
+${stepHint}
 Confidence: ${a.confidence || "medium"}
-`,
+`;
+      },
     )
     .join("\n---\n");
 
@@ -491,6 +514,11 @@ For each answer:
 4. Determine which flow step this branches from (fromStepIndex and parentFlow)
 5. Extract the branching condition from the answer
 6. Break down the scenario into sequential steps with actors and descriptions
+
+ Consolidated question handling:
+ - If the answer references multiple steps (see "Covered steps"), map scenarios to the appropriate step.
+ - If the answer is generic (no step-specific details), apply the scenario to EACH covered step by creating separate flows with the correct fromStepIndex.
+ - If the answer explicitly states differences by step, keep them separated and assign the correct step.
 
 CRITICAL PATTERNS TO DETECT:
 

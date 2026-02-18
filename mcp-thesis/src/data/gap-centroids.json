@@ -99,6 +99,21 @@
       "gapType": "missing_post_completion_scenarios",
       "requiresExceptionCheck": true
     },
+    "save_resume": {
+      "keywords": [
+        "saves progress as draft",
+        "resumes later where left off",
+        "reopens a partially completed form",
+        "comes back to finish the entry",
+        "partially completes and returns",
+        "stores incomplete submission for later",
+        "bookmarks current state and exits"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_save_resume_handling",
+      "requiresExceptionCheck": true
+    },
     "vague_condition": {
       "keywords": [
         "something goes wrong",

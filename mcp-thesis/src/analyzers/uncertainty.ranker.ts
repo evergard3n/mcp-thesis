@@ -71,6 +71,7 @@ export interface StepCriticality {
 export interface StepPriority {
   stepIndex: number;
   flowId: string;
+  actor: string;
   description: string;
 
   uncertaintyScore: number; // 0-1 (how unclear?)
@@ -213,10 +214,21 @@ export function analyzeStepUncertainty(
 
   // Determine gap severity
   let gapSeverity: "high" | "medium" | "low" | "none" = "none";
-  if (relatedGaps.some((g) => g.severity === "high")) gapSeverity = "high";
-  else if (relatedGaps.some((g) => g.severity === "medium"))
-    gapSeverity = "medium";
-  else if (relatedGaps.length > 0) gapSeverity = "low";
+  const hasHigh = relatedGaps.some((g) => g.severity === "high");
+  const hasMedium = relatedGaps.some((g) => g.severity === "medium");
+  const hasAny = relatedGaps.length > 0;
+  const hasNonMainGap = relatedGaps.some(
+    (g) => g.relatedFlow && g.relatedFlow !== "MAIN",
+  );
+  const cappedSeverity = hasNonMainGap ? "low" : "none";
+
+  if (hasHigh) gapSeverity = "high";
+  else if (hasMedium) gapSeverity = "medium";
+  else if (hasAny) gapSeverity = "low";
+
+  if (hasNonMainGap && gapSeverity !== "none") {
+    gapSeverity = cappedSeverity;
+  }
 
   // Calculate uncertainty score (inverse of confidence)
   // Lower clarity/completeness/coverage = higher uncertainty
@@ -558,6 +570,7 @@ export function rankStepPriorities(
     priorities.push({
       stepIndex: stepUnc.stepIndex,
       flowId: stepUnc.flowId,
+      actor: step.actor,
       description: stepUnc.description,
       uncertaintyScore: stepUnc.uncertaintyScore,
       criticalityScore: criticality.criticalityScore,

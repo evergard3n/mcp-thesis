@@ -1,0 +1,317 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-16T09:04:04.881Z",
+  "testCases": [
+    {
+      "id": "BOS",
+      "domain": "Corporate/Purchasing",
+      "metadata": {
+        "complexity": "complex",
+        "expectedFlows": 19,
+        "notes": "Includes asynchronous validation and temporal patterns (Vendor does not deliver on time)."
+      },
+      "inputs": {
+        "vague": "The requestor initiates a request, which is then approved and a buyer finds the best vendor. The vendor delivers the goods, which are registered and sent to the requestor, who confirms delivery.",
+        "detailed": "Context of use: Requestor buys something through the system, gets it.\nScope: Corporate - The overall purchasing mechanism, electronic and non-electronic, as seen\nby the people in the company.\nLevel: Summary\nPreconditions: none\nSuccess End Condition: Requestor has goods, correct budget ready to be debited.\nFailed End Protection: Either order not sent or goods not being billed for.\nPrimary Actor: Requestor\nTrigger: Requestor decides to buy something.\nMain Success Scenario\n1. Requestor: initiate a request\n2. Approver: check money in the budget, check price of goods, complete request for\nsubmission\n3. Buyer: check contents of storage, find best vendor for goods\n4. Authorizer: validate approver's signature\n5. Buyer: complete request for ordering, initiate PO with Vendor\n6. Vendor: deliver goods to Receiving, get receipt for delivery (out of scope of system under\ndesign)\n7. Receiver: register delivery, send goods to Requestor\n8. Requestor: mark request delivered.\nExtensions\n1a. Requestor does not know vendor or price: leave those parts blank and continue.\n1b. At any time prior to receiving goods, Requestor can change or cancel the request.\nCanceling it removes it from any active processing. (delete from system?)\nReducing price leaves it intact in process.\nRaising price sends it back to Approver.\n2a. Approver does not know vendor or price: leave blank and let Buyer fill in or call back.\n2b. Approver is not Requestor's manager: still ok, as long as approver signs\n2c. Approver declines: send back to Requestor for change or deletion\n3a. Buyer finds goods in storage: send those up, reduce request by that amount and carry on.\n3b. Buyer fills in Vendor and price, which were missing: gets resent to Approver.\n4a. Authorizer declines Approver: send back to Requestor and remove from active processing.\n5a. Request involves multiple Vendors: Buyer generates multiple POs.\n5b. Buyer merges multiple requests: same process, but mark PO with the requests being\nmerged.\n6a. Vendor does not deliver on time: System does alert of non-delivery\n7a. Partial delivery: Receiver marks partial delivery on PO and continues\n7b. Partial delivery of multiple-request PO: Receiver assigns quantities to requests and\ncontinues.\n8a. Goods are incorrect or improper quality: Requestor does refuse delivered goods. (what\ndoes this mean?)\n8b. Requestor has quit the company: Buyer checks with Requestor's manager, either reassign\nRequestor, or return goods and cancel request.\n"
+      },
+      "groundTruth": {
+        "name": "Purchase Goods",
+        "summary": "Requestor buys something through the system, gets it.",
+        "mainActor": "Requestor",
+        "actors": [
+          "Requestor",
+          "Approver",
+          "Buyer",
+          "Authorizer",
+          "Vendor",
+          "Receiving",
+          "Receiver",
+          "System"
+        ],
+        "postconditions": [
+          "Requestor has goods",
+          "Correct budget ready to be debited"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Requestor",
+                "description": "Initiate a request for goods."
+              },
+              {
+                "index": 2,
+                "actor": "Approver",
+                "description": "Check money in the budget and price of goods, then complete request for submission."
+              },
+              {
+                "index": 3,
+                "actor": "Buyer",
+                "description": "Check contents of storage and find the best vendor for goods."
+              },
+              {
+                "index": 4,
+                "actor": "Authorizer",
+                "description": "Validate the Approver's signature."
+              },
+              {
+                "index": 5,
+                "actor": "Buyer",
+                "description": "Complete the request for ordering and initiate a Purchase Order (PO) with the Vendor."
+              },
+              {
+                "index": 6,
+                "actor": "Vendor",
+                "description": "Deliver goods to Receiving and obtain a receipt for delivery."
+              },
+              {
+                "index": 7,
+                "actor": "Receiver",
+                "description": "Register the delivery and send goods to the Requestor."
+              },
+              {
+                "index": 8,
+                "actor": "Requestor",
+                "description": "Mark the request as delivered."
+              }
+            ]
+          },
+          {
+            "id": "ALT_9a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Requestor",
+                "description": "Leave vendor or price blank in the request."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Requestor",
+                "description": "Change or cancel the request prior to receiving goods."
+              }
+            ]
+          },
+          {
+            "id": "EXT_11a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Remove the request from any active processing."
+              }
+            ]
+          },
+          {
+            "id": "ALT_12a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Keep the request intact in process if the price is reduced."
+              }
+            ]
+          },
+          {
+            "id": "ALT_13a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Send the request back to the Approver if the price is raised."
+              }
+            ]
+          },
+          {
+            "id": "ALT_14a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Approver",
+                "description": "Leave vendor or price blank for the Buyer to fill in or call back for."
+              }
+            ]
+          },
+          {
+            "id": "ALT_15a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Approver",
+                "description": "Sign the request even if not the Requestor's manager."
+              }
+            ]
+          },
+          {
+            "id": "EXT_16a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Send the request back to the Requestor for change or deletion."
+              }
+            ]
+          },
+          {
+            "id": "ALT_17a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Send available goods from storage, reduce the request amount, and continue."
+              }
+            ]
+          },
+          {
+            "id": "ALT_18a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Fill in the missing Vendor and price information."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Resend the request to the Approver."
+              }
+            ]
+          },
+          {
+            "id": "EXT_19a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Authorizer",
+                "description": "Decline the Approver's signature."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Send the request back to the Requestor and remove it from active processing."
+              }
+            ]
+          },
+          {
+            "id": "ALT_20a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Generate multiple Purchase Orders for various Vendors if the request involves multiple Vendors."
+              }
+            ]
+          },
+          {
+            "id": "ALT_21a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Merge multiple requests and mark the PO with the requests being merged."
+              }
+            ]
+          },
+          {
+            "id": "EXT_22a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alert of non-delivery if the Vendor does not deliver on time."
+              }
+            ]
+          },
+          {
+            "id": "ALT_23a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiver",
+                "description": "Mark a partial delivery on the PO and continue."
+              }
+            ]
+          },
+          {
+            "id": "ALT_24a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiver",
+                "description": "Assign quantities to specific requests for a partial delivery on a multiple-request PO and continue."
+              }
+            ]
+          },
+          {
+            "id": "EXT_25a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Requestor",
+                "description": "Refuse delivered goods if they are incorrect or of improper quality."
+              }
+            ]
+          },
+          {
+            "id": "EXT_26a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Check with the Requestor's manager if the Requestor has quit the company."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Reassign the Requestor or return goods and cancel the request based on manager's decision."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

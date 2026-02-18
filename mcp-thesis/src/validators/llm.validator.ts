@@ -2,7 +2,11 @@ import z from "zod";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import { GapAnalysis } from "../analyzers/gap.analyzer.js";
+import {
+  CONSOLIDATION_GROUPS,
+  GapAnalysis,
+  GapType,
+} from "../analyzers/gap.analyzer.js";
 import semanticService from "../services/semantic.service.js";
 
 export const COVE_LLM_QUESTIONS: string[] = [
@@ -243,6 +247,7 @@ export interface OpenEndedQuestion {
   question: string;
   context: {
     step?: string;
+    steps?: string[];
     patternType?: string;
     whyAsking: string;
     flowId?: string;
@@ -348,6 +353,7 @@ async function generateOpenEndedQuestionsFromGaps(
       question: z.string(),
       context: z.object({
         step: z.string().optional(),
+        steps: z.array(z.string()).optional(),
         patternType: z.string().optional(),
         whyAsking: z.string(),
       }),
@@ -489,7 +495,11 @@ For each question:
    - What triggers this flow
    - What steps the actors take
    - How it ends (resumes, terminates, etc.)
-5. Set confidence level:
+5. If a question lists multiple steps, explicitly address EACH step separately.
+   Do NOT answer with "same for all steps" unless you have checked each one and
+   can confirm there are truly no differences. If you claim no differences, state
+   that you verified each step explicitly.
+6. Set confidence level:
    - "high" if answer is in detailed description
    - "medium" if inferred from domain knowledge
    - "low" if making reasonable assumption
@@ -516,10 +526,17 @@ async function isQuestionDuplicate(
   if (previousQuestions.length === 0) return false;
 
   const normalizedNew = newQuestion.toLowerCase().replace(/\s+/g, " ").trim();
+  const newStepMatch = normalizedNew.match(/step\s+(\d+)/i);
+  const newStepIndex = newStepMatch ? Number(newStepMatch[1]) : null;
 
   // Layer 1: Exact/near-exact text match
   for (const prev of previousQuestions) {
     const normalizedPrev = prev.toLowerCase().replace(/\s+/g, " ").trim();
+    const prevStepMatch = normalizedPrev.match(/step\s+(\d+)/i);
+    const prevStepIndex = prevStepMatch ? Number(prevStepMatch[1]) : null;
+    if (newStepIndex !== null && prevStepIndex !== null) {
+      if (newStepIndex !== prevStepIndex) continue;
+    }
     if (normalizedNew === normalizedPrev) return true;
 
     // High substring overlap check (>85% of shorter string)
@@ -536,7 +553,19 @@ async function isQuestionDuplicate(
   }
 
   // Layer 2: Semantic similarity check
-  const allTexts = [newQuestion, ...previousQuestions];
+  const eligiblePrevious = previousQuestions.filter((prev) => {
+    const normalizedPrev = prev.toLowerCase().replace(/\s+/g, " ").trim();
+    const prevStepMatch = normalizedPrev.match(/step\s+(\d+)/i);
+    const prevStepIndex = prevStepMatch ? Number(prevStepMatch[1]) : null;
+    if (newStepIndex !== null && prevStepIndex !== null) {
+      return newStepIndex === prevStepIndex;
+    }
+    return true;
+  });
+
+  if (eligiblePrevious.length === 0) return false;
+
+  const allTexts = [newQuestion, ...eligiblePrevious];
   const embeddings = await semanticService.embedBatch(allTexts);
   const newVec = embeddings[0];
 
@@ -565,9 +594,127 @@ function getAnswerGuidanceForGapType(gapType: string): string {
       return "Describe: (1) the nature of the failure, (2) whether work in progress is preserved, (3) what the actor does while waiting or after the failure.";
     case "missing_post_completion_scenarios":
       return "Describe: (1) what minimum information is required to finish, (2) what the system does if requirements aren't met, (3) whether the actor can save and return later.";
+    case "missing_save_resume_handling":
+      return "Describe: (1) whether progress can be saved, (2) what data is preserved, (3) how resume works and whether re-validation is required.";
     default:
       return "Describe the scenario: what triggers it, what steps are taken, and how it resolves or integrates with the main flow.";
   }
+}
+
+function isBlueprintGap(gapType: string): boolean {
+  return gapType.startsWith("blueprint_");
+}
+
+function formatStepLabel(flowId: string, stepIndex: number): string {
+  if (flowId !== "MAIN") {
+    return `${flowId} Step ${stepIndex}`;
+  }
+  return `Step ${stepIndex}`;
+}
+
+interface StepPriorityShape {
+  stepIndex: number;
+  flowId: string;
+  actor: string;
+  description: string;
+  uncertaintyScore: number;
+  criticalityScore: number;
+  priorityScore: number;
+  priorityRank: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  uncertaintyReasons: string[];
+  relatedGaps: Array<{
+    type: string;
+    severity: string;
+    description: string;
+    suggestedQuestion?: string;
+  }>;
+}
+
+interface ConsolidatedGapGroup {
+  groupId: string;
+  question: string;
+  answerGuidance: string;
+  steps: Array<{
+    index: number;
+    flowId: string;
+    actor: string;
+    description: string;
+  }>;
+  memberGapTypes: GapType[];
+}
+
+function buildConsolidatedGroups(
+  gapSteps: StepPriorityShape[],
+  groupFilter: (gapType: string, flowId: string) => boolean,
+): { consolidated: ConsolidatedGapGroup[]; remaining: StepPriorityShape[] } {
+  const consolidated: ConsolidatedGapGroup[] = [];
+  const remaining: StepPriorityShape[] = [];
+  const consumed = new Set<string>();
+
+  for (const group of CONSOLIDATION_GROUPS) {
+    const memberGapTypes = new Set(group.memberGapTypes);
+    const stepMap = new Map<
+      number,
+      { flowId: string; actor: string; description: string }
+    >();
+
+    for (const priority of gapSteps) {
+      const hasMatchingGap = priority.relatedGaps.some(
+        (gap) =>
+          memberGapTypes.has(gap.type as GapType) &&
+          groupFilter(gap.type, priority.flowId),
+      );
+      if (!hasMatchingGap) continue;
+      if (stepMap.has(priority.stepIndex)) continue;
+
+      stepMap.set(priority.stepIndex, {
+        flowId: priority.flowId,
+        actor: priority.actor,
+        description: priority.description,
+      });
+    }
+
+    const steps = Array.from(stepMap.entries())
+      .map(([index, meta]) => ({
+        index,
+        flowId: meta.flowId,
+        actor: meta.actor,
+        description: meta.description,
+      }))
+      .sort((a, b) => a.index - b.index);
+
+    if (steps.length >= 2) {
+      const question = group.questionTemplate(steps);
+      consolidated.push({
+        groupId: group.groupId,
+        question,
+        answerGuidance: group.answerGuidance,
+        steps,
+        memberGapTypes: group.memberGapTypes,
+      });
+
+      for (const step of steps) {
+        for (const gapType of group.memberGapTypes) {
+          consumed.add(`${step.flowId}|${step.index}|${gapType}`);
+        }
+      }
+    }
+  }
+
+  for (const priority of gapSteps) {
+    const filteredGaps = priority.relatedGaps.filter(
+      (gap) => !consumed.has(`${priority.flowId}|${priority.stepIndex}|${gap.type}`),
+    );
+
+    if (filteredGaps.length === 0) continue;
+
+    remaining.push({
+      ...priority,
+      relatedGaps: filteredGaps,
+    });
+  }
+
+  return { consolidated, remaining };
 }
 
 /**
@@ -575,22 +722,7 @@ function getAnswerGuidanceForGapType(gapType: string): string {
  * Combines step priorities, flow uncertainties, and gap analysis
  */
 export async function generateAdaptiveQuestions(
-  stepPriorities: Array<{
-    stepIndex: number;
-    flowId: string;
-    description: string;
-    uncertaintyScore: number;
-    criticalityScore: number;
-    priorityScore: number;
-    priorityRank: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-    uncertaintyReasons: string[];
-    relatedGaps: Array<{
-      type: string;
-      severity: string;
-      description: string;
-      suggestedQuestion?: string;
-    }>;
-  }>,
+  stepPriorities: StepPriorityShape[],
   flowUncertainties: Array<{
     flowId: string;
     flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
@@ -611,30 +743,92 @@ export async function generateAdaptiveQuestions(
     .filter((p) => p.relatedGaps.length > 0)
     .sort((a, b) => b.priorityScore - a.priorityScore);
 
-  for (const priority of gapSteps) {
+  const gapGroups = [
+    {
+      label: "blueprint",
+      filter: (gapType: string, flowId: string) =>
+        isBlueprintGap(gapType),
+    },
+    {
+      label: "centroid-main",
+      filter: (gapType: string, flowId: string) =>
+        !isBlueprintGap(gapType) && flowId === "MAIN",
+    },
+    {
+      label: "centroid-non-main",
+      filter: (gapType: string, flowId: string) =>
+        !isBlueprintGap(gapType) && flowId !== "MAIN",
+    },
+  ];
+
+  for (const group of gapGroups) {
     if (questions.length >= maxQuestions) break;
 
-    for (const gap of priority.relatedGaps) {
-      if (questions.length >= maxQuestions) break;
-      if (!gap.suggestedQuestion) continue;
+    const shouldConsolidate = group.label === "centroid-main";
+    const { consolidated, remaining } = shouldConsolidate
+      ? buildConsolidatedGroups(gapSteps, group.filter)
+      : { consolidated: [], remaining: gapSteps };
 
-      const questionText = gap.suggestedQuestion;
+    for (const consolidatedGroup of consolidated) {
+      if (questions.length >= maxQuestions) break;
+
+      const questionText = consolidatedGroup.question;
       const allPrevious = [...previousQuestions, ...askedInThisBatch];
-      
       if (await isQuestionDuplicate(questionText, allPrevious)) continue;
 
+      const stepLabels = consolidatedGroup.steps.map((step) =>
+        formatStepLabel(step.flowId, step.index),
+      );
+
       questions.push({
-        id: `gap-${gap.type}-step-${priority.stepIndex}`,
+        id: `consolidated-${consolidatedGroup.groupId}-steps-${consolidatedGroup.steps
+          .map((step) => step.index)
+          .join("-")}`,
         question: questionText,
         context: {
-          step: `Step ${priority.stepIndex}`,
-          patternType: gap.type,
-          whyAsking: `Gap detected: ${gap.description} (Severity: ${gap.severity})`,
-          flowId: priority.flowId,
+          step: stepLabels.join(", "),
+          steps: stepLabels,
+          patternType: consolidatedGroup.groupId,
+          whyAsking: `Consolidated gaps across ${consolidatedGroup.steps.length} steps: ${consolidatedGroup.memberGapTypes.join(", ")}. Provide step-specific handling (do not respond with a generic statement).`,
+          flowId: consolidatedGroup.steps[0]?.flowId ?? "MAIN",
         },
-        answerGuidance: getAnswerGuidanceForGapType(gap.type),
+        answerGuidance: consolidatedGroup.answerGuidance,
       });
+
       askedInThisBatch.push(questionText);
+    }
+
+    for (const priority of remaining) {
+      if (questions.length >= maxQuestions) break;
+
+      const filteredGaps = priority.relatedGaps.filter((gap) =>
+        group.filter(gap.type, priority.flowId),
+      );
+
+      if (filteredGaps.length === 0) continue;
+
+      for (const gap of filteredGaps) {
+        if (questions.length >= maxQuestions) break;
+        if (!gap.suggestedQuestion) continue;
+
+        const questionText = gap.suggestedQuestion;
+        const allPrevious = [...previousQuestions, ...askedInThisBatch];
+
+        if (await isQuestionDuplicate(questionText, allPrevious)) continue;
+
+        questions.push({
+          id: `gap-${gap.type}-step-${priority.stepIndex}`,
+          question: questionText,
+          context: {
+            step: `Step ${priority.stepIndex}`,
+            patternType: gap.type,
+            whyAsking: `Gap detected: ${gap.description} (Severity: ${gap.severity})`,
+            flowId: priority.flowId,
+          },
+          answerGuidance: getAnswerGuidanceForGapType(gap.type),
+        });
+        askedInThisBatch.push(questionText);
+      }
     }
   }
 

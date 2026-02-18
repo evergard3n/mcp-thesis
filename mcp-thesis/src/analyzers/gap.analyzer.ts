@@ -1,8 +1,9 @@
-import { GenUseCase, GenFlow, GenStep } from "../interfaces/usecase.interface.new.js";
-import { UseCaseTermScore } from "../validators/flat.validator.js";
-import semanticService from "../services/semantic.service.js";
 import { readFile } from "fs/promises";
 import { join } from "path";
+import { GenUseCase, GenFlow, GenStep } from "../interfaces/usecase.interface.new.js";
+import semanticService from "../services/semantic.service.js";
+import { UseCaseTermScore } from "../validators/flat.validator.js";
+import { detectBlueprintGaps } from "./blueprint.detector.js";
 
 export type GapType =
   | "missing_exception_flows"
@@ -18,7 +19,9 @@ export type GapType =
   | "missing_post_completion_scenarios"
   | "missing_data_quality_handling"
   | "missing_environmental_interruptions"
-  | "missing_technology_variations";
+  | "missing_technology_variations"
+  | "missing_save_resume_handling"
+  | `blueprint_${string}`;
 
 export interface Gap {
   type: GapType;
@@ -48,10 +51,95 @@ export interface InteractionMemory {
   iteration: number;
   metadata: {
     stepIndex?: number;
+    stepIndexes?: number[];
     flowId?: string;
     gapType?: GapType;
+    consolidatedGroupId?: string;
   };
 }
+
+export interface ConsolidationGroup {
+  groupId: string;
+  memberGapTypes: GapType[];
+  questionTemplate: (
+    steps: Array<{
+      index: number;
+      actor: string;
+      description: string;
+      flowId: string;
+    }>
+  ) => string;
+  answerGuidance: string;
+}
+
+function formatConsolidatedStepLine(step: {
+  index: number;
+  actor: string;
+  description: string;
+  flowId: string;
+}): string {
+  if (step.flowId !== "MAIN") {
+    return `- ${step.flowId} Step ${step.index}: "${step.actor} ${step.description}"`;
+  }
+  return `- Step ${step.index}: "${step.actor} ${step.description}"`;
+}
+
+function formatConsolidatedStepList(
+  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+): string {
+  return steps.map((step) => formatConsolidatedStepLine(step)).join("\n");
+}
+
+function buildDataHandlingQuestion(
+  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+): string {
+  const stepList = formatConsolidatedStepList(steps);
+  return `The following steps involve data entry or validation:\n${stepList}\nHow does the system handle basic input errors (missing fields, wrong formats) versus business rule violations (duplicates, contradictory logic) at these steps? For each step, specify any differences in minimum required fields, error handling, or routing.`;
+}
+
+function buildInfrastructureQuestion(
+  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+): string {
+  const stepList = formatConsolidatedStepList(steps);
+  return `The following steps involve resource assignments or system interactions:\n${stepList}\nWhat happens if the assigned person is unavailable, the system times out, or a resource cannot be allocated at these steps? For each step, specify the fallback or escalation path.`;
+}
+
+function buildSaveResumeQuestion(
+  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+): string {
+  const stepList = formatConsolidatedStepList(steps);
+  return `The following steps involve multi-field or complex data submissions:\n${stepList}\nCan any of these steps be partially completed, saved as a draft, and resumed later? For each step, specify what state is preserved and what happens on resume.`;
+}
+
+export const CONSOLIDATION_GROUPS: ConsolidationGroup[] = [
+  {
+    groupId: "data_handling",
+    memberGapTypes: [
+      "missing_data_quality_handling",
+      "missing_validation_handling",
+    ],
+    questionTemplate: buildDataHandlingQuestion,
+    answerGuidance:
+      "For each step listed, describe: (1) what minimum data is required, (2) what happens on basic input errors, (3) what happens on business rule violations, (4) any step-specific differences. Avoid vague answers like 'the same for all steps'—state the differences or explicitly confirm no differences after checking each step.",
+  },
+  {
+    groupId: "infrastructure",
+    memberGapTypes: [
+      "missing_resource_availability",
+      "missing_system_failure_handling",
+    ],
+    questionTemplate: buildInfrastructureQuestion,
+    answerGuidance:
+      "For each step listed, describe: (1) what happens when the person/system is unavailable, (2) whether there is automatic reassignment or escalation, (3) any timeout or retry behavior. Avoid generic answers; note step-specific differences or explicitly confirm none after checking each step.",
+  },
+  {
+    groupId: "save_resume",
+    memberGapTypes: ["missing_save_resume_handling"],
+    questionTemplate: buildSaveResumeQuestion,
+    answerGuidance:
+      "For each step listed, describe: (1) whether the actor can save progress, (2) what data is preserved vs lost, (3) whether resuming requires re-validation. Avoid vague answers; specify differences or explicitly confirm none after checking each step.",
+  },
+];
 
 interface StepSource {
   type: "step";
@@ -94,6 +182,7 @@ const GAP_TYPE_PRIORITY: GapType[] = [
   "missing_search_handling",
   "missing_resource_availability",
   "missing_system_failure_handling",
+  "missing_save_resume_handling",
   "missing_post_completion_scenarios",
   "missing_temporal_exceptions",
   "missing_nested_exceptions",
@@ -186,6 +275,20 @@ export async function filterStaleGaps(
       .map((h) => `${h.metadata.stepIndex}|${h.metadata.gapType}`),
   );
 
+  for (const record of history) {
+    if (!record.metadata.consolidatedGroupId || !record.metadata.stepIndexes)
+      continue;
+    const group = CONSOLIDATION_GROUPS.find(
+      (g) => g.groupId === record.metadata.consolidatedGroupId,
+    );
+    if (!group) continue;
+    for (const stepIndex of record.metadata.stepIndexes) {
+      for (const gapType of group.memberGapTypes) {
+        exploredTuples.add(`${stepIndex}|${gapType}`);
+      }
+    }
+  }
+
   const metadataFiltered = gaps.filter((gap) => {
     if (gap.relatedStep === undefined) return true; // Keep gaps without step info
     const tuple = `${gap.relatedStep}|${gap.type}`;
@@ -261,6 +364,8 @@ function generateQuestionForCategory(
       return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when the system is unavailable, responds with a timeout, or returns a partial/corrupted response? Is data automatically saved?`;
     case "completion":
       return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens if the actor attempts to finish without completing all required information? Can the process be saved for later, reopened, or reversed after this point?`;
+    case "save_resume":
+      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. Can this step be partially completed and saved as a draft for later? What state is preserved, and what happens when the actor resumes?`;
     default:
       return `What exceptions might occur at step ${step.index}?`;
   }
@@ -291,13 +396,25 @@ export async function analyzeGaps(
 
   // Phase 1: Collect and embed all texts
   const embeddedTexts = await collectAndEmbedTexts(useCase);
+  const stepEmbeddings = embeddedTexts
+    .filter((item) => isStepSource(item.source))
+    .map((item) => ({
+      step: (item.source as StepSource).step,
+      flow: (item.source as StepSource).flow,
+      embedding: item.embedding,
+    }));
   const categories = await loadGapCentroids();
+
+  // Phase 1.5: Blueprint detection (prioritized)
+  const blueprintResult = await detectBlueprintGaps(useCase, stepEmbeddings);
+  gaps.push(...blueprintResult.gaps);
 
   // Phase 2: Analyze steps against category centroids
   const stepGaps = await analyzeStepsAgainstCategories(
     embeddedTexts,
     categories,
-    useCase
+    useCase,
+    blueprintResult.coveredStepKeys
   );
   gaps.push(...stepGaps);
 
@@ -383,7 +500,7 @@ export async function analyzeGaps(
   };
 }
 
-async function collectAndEmbedTexts(
+export async function collectAndEmbedTexts(
   useCase: GenUseCase
 ): Promise<EmbeddedText[]> {
   const textsToEmbed: string[] = [];
@@ -421,16 +538,19 @@ async function collectAndEmbedTexts(
 async function analyzeStepsAgainstCategories(
   embeddedTexts: EmbeddedText[],
   categories: GapCategory[],
-  useCase: GenUseCase
+  useCase: GenUseCase,
+  skipSteps?: Set<string>
 ): Promise<Gap[]> {
   const gaps: Gap[] = [];
   const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
   const relevantCategories = categories.filter(
     (c) => c.requiresExceptionCheck && c.centroid
   );
+  const saveResumeCategory = categories.find((c) => c.name === "save_resume");
 
   for (const item of stepItems) {
     const src = item.source as StepSource;
+    if (skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) continue;
 
     for (const category of relevantCategories) {
       const similarity = await semanticService.cosineSimilarity(
@@ -456,6 +576,49 @@ async function analyzeStepsAgainstCategories(
             suggestedQuestion: generateQuestionForCategory(
               category.name,
               src.step
+            ),
+          });
+        }
+      }
+    }
+
+    if (saveResumeCategory && !skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) {
+      const descLower = src.step.description.toLowerCase();
+      const isSaveResumeCandidate =
+        src.step.description.length > 50 ||
+        /\b(form|report|details|fields|information|submission|entry|register|complete request|finalize|fill)\b/.test(
+          descLower,
+        );
+
+      if (isSaveResumeCandidate) {
+        const alreadyFlagged = gaps.some(
+          (gap) =>
+            gap.type === "missing_save_resume_handling" &&
+            gap.relatedFlow === src.flowId &&
+            gap.relatedStep === src.stepIndex,
+        );
+        if (alreadyFlagged) continue;
+        const hasSaveResumeFlow = useCase.flows.some(
+          (f) =>
+            (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
+            f.parentFlow === src.flowId &&
+            (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined) &&
+            (f.condition?.toLowerCase().includes("draft") ||
+              f.condition?.toLowerCase().includes("save") ||
+              f.condition?.toLowerCase().includes("resume") ||
+              f.condition?.toLowerCase().includes("later")),
+        );
+
+        if (!hasSaveResumeFlow) {
+          gaps.push({
+            type: "missing_save_resume_handling",
+            severity: "medium",
+            description: `Step ${src.stepIndex} in flow ${src.flowId} appears to involve a multi-field submission but has no save/resume handling.`,
+            relatedStep: src.stepIndex,
+            relatedFlow: src.flowId,
+            suggestedQuestion: generateQuestionForCategory(
+              "save_resume",
+              src.step,
             ),
           });
         }
@@ -583,6 +746,24 @@ function calculateCompletenessScore(
 
 function computePriorityGaps(gaps: Gap[]): GapType[] {
   const priorityGaps: GapType[] = [];
+  const blueprintTypes = Array.from(
+    new Set(
+      gaps
+        .map((g) => g.type)
+        .filter((type) => type.startsWith("blueprint_")),
+    ),
+  );
+
+  for (const type of blueprintTypes) {
+    const hasHighSeverity = gaps.some(
+      (g) => g.type === type && g.severity === "high",
+    );
+    if (hasHighSeverity) priorityGaps.push(type);
+  }
+
+  for (const type of blueprintTypes) {
+    if (!priorityGaps.includes(type)) priorityGaps.push(type);
+  }
 
   // Add high-severity gaps first, then others
   for (const type of GAP_TYPE_PRIORITY) {

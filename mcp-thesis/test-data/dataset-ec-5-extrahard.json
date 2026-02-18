@@ -1,0 +1,423 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-16T09:19:53.836Z",
+  "testCases": [
+    {
+      "id": "ec-5-extrahard",
+      "domain": "web software system",
+      "metadata": {
+        "complexity": "complex",
+        "expectedFlows": 26,
+        "notes": "Includes several nested extensions (e.g., 1a.1a, 7b.1a, 7e.1.a, 7f.2a) and interactions with various external systems (e.g., Establish Identity, Generate Sales Lead, Retrieve Part Availability, Retrieve Build Schedule, View Other web-site, Retrieve Customer Information, Obtain Finance Credit Rating, Retrieve Billing History, Capture Trade-In, Obtain Finance Plan, Locate Matching Product from Inventory)."
+      },
+      "inputs": {
+        "vague": "A shopper finds a product by answering system questions, adds it to their cart, and can repeat this process for more items. The system remembers the shopper's choices throughout their journey.",
+        "detailed": "Use Case EC5 Research possible solutions\nContext of use: The Shopper gets guided through a tailored product selection process\naccording to their personal characteristics as revealed by their selections along that process\n(perhaps they answer a series of questions, or click on some pictures or text - what they click on\ninstructs the program as to what to ask or present next). At the end of the questioning process the\nshopper will be presented with product recommendations that meet their personal characteristics.\nAt any point within the questioning process the shopper can choose to bypass the remaining\nquestions and the system will move the shopper to product recommendations and present products\nbased on limited shopper’s personal characteristics. In the case that the shopper bypasses all\nquestions the shopper will be presented will all products to directly select. Having the product\nidentified, by whichever path, the shopper can add it to the shopping cart, and start over with\nanother product. The system captures market data (product selection, Shopper navigation, and\ncharacteristics) along the way.\nScope: web software system\nLevel: Task\nPreconditions: none\nSuccess End Condition: Shopper has zero or more product(s) ready to purchase, the system\nhas a log of the product selection(s), navigation moves and characteristics of the shopper.\nFailed End Condition: <the state of the world if goal abandoned>\nPrimary Actor: Shopper (any arbitrary web surfer)\nTrigger: Shopper selects to research a solution.\nMAIN SUCCESS SCENARIO\n1. Shopper initiates the search for a new solution.\n2. The system helps the shopper select a product line, model and model options, presenting\ninformation to the shopper, and asking a series of questions to determine the shopper's needs\nand interests. The series of questions and the screens presented depend on the answers the\nshopper gives along the way. The system chooses them according to programmed selection\npaths, in order to highlight and recommend what will be of probable interest to the shopper.\nThe presented information contains production information, features, benefits, comparison\ninformation, etc.\n3. The system logs the navigation information along the way.\n4. Shopper selects a final product configuration, considers it.\n5. Shopper adds it to the shopping cart.\n6. The system adds to the shopping cart the selected product, and the navigation information.\n7. The system presents a view of the shopping cart and all the products in it.\nThe shopper repeats the above steps as many times as desired, to navigate to, and select,\ndifferent tailored products, adding them to the shopping cart as desired.\nEXTENSIONS\n1a. Due to an agreement between this web site owner and the owner of the sending computer,\nthe sending computer may include information about the type of Shopper along with the request:\n1a.1. System extracts from the web request any and all user and navigation\ninformation, adds it to the logged information, and starts from some advanced point in the\nquestion/answer series.\n1a.1a. Information coming from the other site is invalid or incomprehensible: The\nsystem does the best it can, logs all the incoming information, and continues as it can.\n1b. Shopper wants to continue a previous, saved, partial solution:\n1b.1. Shopper identifies themselves (Establish Identity) and their saved solution.\n1b.2. The system recalls the solution and returns the shopper to where they left the\nsystem upon saving the solution.\n2a. Shopper chooses to bypass any or all of the question series:\n2a.1. Shopper is presented and selects from product recommendations based upon a\nlimited (or no) personal characteristics.\n2a.2. The system logs that choice.\n2b. At any time prior to adding the product to the cart, the shopper can go back and modify any\nprevious answer for new product recommendations and/or product selection.2c. At any time prior\nto adding the product to the cart, the shopper can ask to view an available test/performance\ncalculation (e.g., can this configuration tow a trailer with this weight): System carries out the\ncalculation and presents the answer.\n2d. The shopper passes a point that the web site owner has predetermined to generate sales\nleads:\n2d.1. The system issues a sales lead (Generate Sales Lead).\n2e. System has been setup to require the Shopper to identify themselves: (Establish Identity)\n2f. System is setup to interact with known other systems (parts inventory, process & planning)\nthat will affect product availability and selection:\n2f.1. System interacts with known other systems (parts inventory, process &\nplanning) to get the needed information. (Retrieve Part Availability, Retrieve Build\nSchedule).\n2f.2. System uses the results to filter or show availability of product and/or\noptions(parts).\n2g. Shopper was presented and selects a link to an Industry related web-site: (View Other\nweb-site).\n2h. System is setup to interact with known Customer Information System:\n2h.1. System interacts with Customer Information System (Retrieve Customer\nInformation).\n2h.2. System uses results to start from some advanced point in the question/answer\nseries.\n2i. Shopper indicates they want to know their finance credit rating because it will influence\ntheir product selection process: (Obtain Finance Credit Rating).\n2j. Shopper indicates they have purchased product before and the system is setup to interact\nwith a known Financial Accounting System:\n2j.1. The System will (Retrieve Billing History).\n2j.2. The System will utilize the shopper’s billing history to influence the product\nselection process.\n4a. Shopper decides to change some of the recommended options: System allows the Shopper\nto change as many options as they wish, presenting valid ones along the way, and warning of\nincompatibilities of others.\n5a. Shopper decides not to add the product to the shopping cart: System retains the navigation\ninformation for later.\n7a. Shopper wants to change the contents of the shopping cart: System permits shopper to\nchange quantities, remove items, or go back to an earlier point in the selection process.\n7b. The shopper asks to save the contents of the shopping cart:\n7b.1. The system prompts the shopper for name and id to save it under, and saves it.\n7b.1a. The Shopper’s identity has not been determined: (Establish Identity)\n7c. The shopper has a trade-in to offer: (Capture Trade-In).\n7d. Shopper decides to finance items in shopping cart: (Obtain Finance Plan)\n7e. Shopper leaves the E-Commerce System when shopping cart has not been saved:\n7e.1. The system prompts the shopper for name and id to save it under, and saves it.\n7e.1.a The system prompts the shopper for name and id to save it under, and the shopper\ndecides\nto exist without saving: system logs navigational information and ends the shopper’s\nsession.\n7f. Shopper selects an item in shopping cart and wishes to see availability of matching product\n(new or used) from inventory:\n7f.1. Shopper requests to (Locate Matching Product from Inventory).\n7f.2. Shopper wishes to fulfill (exchange) item in shopping cart with matching\nproduct from inventory.\n7f.3. System ensures there is one item in shopping cart configured to inventory item.\n7f.2a. Shopper doesn’t want the matching inventory item: System leaves the\noriginal shopping cart item the shopper was interested in matching against\ninventory alone.\n8a. At any time, the shopper can ask to be contacted (Request Contact)."
+      },
+      "groundTruth": {
+        "name": "EC5 Research possible solutions",
+        "summary": "The Shopper gets guided through a tailored product selection process, receiving recommendations based on personal characteristics. They can bypass questions, add products to a cart, or start over. The system logs market data throughout the process.",
+        "mainActor": "Shopper",
+        "actors": [
+          "Shopper",
+          "System"
+        ],
+        "postconditions": [
+          "Shopper has zero or more products ready to purchase.",
+          "System has a log of product selections, navigation moves, and shopper characteristics."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "initiates the search for a new solution."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "helps the shopper select a product line, model, and options, presenting information and asking a series of questions to determine needs and interests. The questions and screens adapt based on shopper's answers to highlight recommendations."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "logs the navigation information."
+              },
+              {
+                "index": 4,
+                "actor": "Shopper",
+                "description": "selects a final product configuration and considers it."
+              },
+              {
+                "index": 5,
+                "actor": "Shopper",
+                "description": "adds the product to the shopping cart."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "adds the selected product and navigation information to the shopping cart."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "presents a view of the shopping cart and all products within it."
+              }
+            ]
+          },
+          {
+            "id": "ALT_8a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "extracts user and navigation information from the web request from the sending computer, adds it to logged information, and starts from an advanced point in the question/answer series."
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "does the best it can, logs all incoming information, and continues as it can."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "identifies themselves and their saved solution."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "recalls the solution and returns the shopper to where they left off upon saving."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "is presented and selects from product recommendations based upon limited (or no) personal characteristics."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "logs that choice."
+              }
+            ]
+          },
+          {
+            "id": "ALT_12a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "goes back and modifies any previous answer for new product recommendations and/or product selection."
+              }
+            ]
+          },
+          {
+            "id": "ALT_13a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "asks to view an available test/performance calculation."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "carries out the calculation and presents the answer."
+              }
+            ]
+          },
+          {
+            "id": "ALT_14a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "issues a sales lead."
+              }
+            ]
+          },
+          {
+            "id": "ALT_15a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "requires the Shopper to establish identity."
+              }
+            ]
+          },
+          {
+            "id": "ALT_16a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "interacts with other known systems (parts inventory, process & planning) to get needed information (Retrieve Part Availability, Retrieve Build Schedule)."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "uses the results to filter or show availability of product and/or options/parts."
+              }
+            ]
+          },
+          {
+            "id": "ALT_17a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "selects a link to an industry related website."
+              }
+            ]
+          },
+          {
+            "id": "ALT_18a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "interacts with Customer Information System (Retrieve Customer Information)."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "uses results to start from an advanced point in the question/answer series."
+              }
+            ]
+          },
+          {
+            "id": "ALT_19a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "indicates they want to know their finance credit rating."
+              }
+            ]
+          },
+          {
+            "id": "ALT_20a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "retrieves billing history from the Financial Accounting System."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "utilizes the shopper’s billing history to influence the product selection process."
+              }
+            ]
+          },
+          {
+            "id": "ALT_21a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "allows the Shopper to change as many options as they wish, presenting valid ones and warning of incompatibilities."
+              }
+            ]
+          },
+          {
+            "id": "ALT_22a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "retains the navigation information for later."
+              }
+            ]
+          },
+          {
+            "id": "ALT_23a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "permits shopper to change quantities, remove items, or go back to an earlier point in the selection process."
+              }
+            ]
+          },
+          {
+            "id": "ALT_24a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "prompts the shopper for name and ID to save under, and saves the shopping cart."
+              }
+            ]
+          },
+          {
+            "id": "EXT_25a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "establishes the shopper's identity."
+              }
+            ]
+          },
+          {
+            "id": "ALT_26a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "captures trade-in information."
+              }
+            ]
+          },
+          {
+            "id": "ALT_27a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "obtains a finance plan for items in the shopping cart."
+              }
+            ]
+          },
+          {
+            "id": "ALT_28a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "prompts the shopper for name and ID to save the shopping cart under."
+              }
+            ]
+          },
+          {
+            "id": "EXT_29a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "logs navigational information and ends the shopper's session."
+              }
+            ]
+          },
+          {
+            "id": "ALT_30a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "requests to locate a matching product from inventory."
+              },
+              {
+                "index": 2,
+                "actor": "Shopper",
+                "description": "wishes to fulfill (exchange) item in shopping cart with matching product from inventory."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "ensures there is one item in shopping cart configured to inventory item."
+              }
+            ]
+          },
+          {
+            "id": "EXT_31a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "leaves the original shopping cart item alone."
+              }
+            ]
+          },
+          {
+            "id": "ALT_32a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Shopper",
+                "description": "requests to be contacted."
+              }
+            ]
+          }
+        ],
+        "loops": [
+          {
+            "flowRef": "MAIN",
+            "startIndex": 1,
+            "endIndex": 7,
+            "condition": "The shopper repeats the steps as many times as desired to navigate to and select different tailored products, adding them to the shopping cart."
+          }
+        ]
+      }
+    }
+  ]
+}

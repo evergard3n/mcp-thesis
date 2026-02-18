@@ -1,0 +1,120 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-16T09:19:25.811Z",
+  "testCases": [
+    {
+      "id": "CBG",
+      "domain": "Sales/Order",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 5,
+        "notes": "Payment authorization, multiple exception scenarios (bad credit, stock issues, invalid shipping)"
+      },
+      "inputs": {
+        "vague": "The customer selects the items they wish to purchase, and the system allocates those items to their order. After confirming their shipping details, the system prepares the ordered goods for delivery.",
+        "detailed": "Use case: Customer: Buy goods\nCustomer places order for goods, an invoice is generated and sent out with the ordered items.\nSuccess End Condition\nGoods have been allocated to the Customer\nInvoice has been created (Customer Invoicing Rule applies)\nPicking list has been sent to distribution\nFailure End Condition\nGoods are not allocated to the Customer\nCustomer account information unchanged\nTransaction attempt has been logged\nMain Success Scenario\n1.Customer: Select items and quantities\n2.System: Allocate required quantities to customer\n3.System: Obtain authenticated invoicing authorization\n4.Customer: Specify shipping destination\n5.System: Send picking instructions to distribution\nExtensions\n2a Insufficient stock to meet required quantity for item\n2a1 Customer: confirm reduced quantity\n2b out of stock on item\n2b1 System: determine shipping date\n2b2 Customer: Accept delayed delivery\n3a Customer is bad credit risk (link is to acceptance test case for this exception)\n4a invalid shipping destination"
+      },
+      "groundTruth": {
+        "name": "Buy goods",
+        "summary": "Customer places order for goods, an invoice is generated and sent out with the ordered items.",
+        "mainActor": "Customer",
+        "actors": [
+          "Customer",
+          "System",
+          "Distribution"
+        ],
+        "preconditions": [
+          "Customer has selected items",
+          "Customer account exists"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Selects items and quantities"
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Allocates required quantities to customer"
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Obtains authenticated invoicing authorization"
+              },
+              {
+                "index": 4,
+                "actor": "Customer",
+                "description": "Specifies shipping destination"
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "target": "Distribution",
+                "description": "Sends picking instructions to distribution"
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Confirms reduced quantity"
+              }
+            ]
+          },
+          {
+            "id": "EXT_7a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Determines shipping date"
+              },
+              {
+                "index": 2,
+                "actor": "Customer",
+                "description": "Accepts delayed delivery"
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Determines customer is bad credit risk"
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Corrects invalid shipping destination"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
