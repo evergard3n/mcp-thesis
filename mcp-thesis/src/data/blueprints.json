@@ -4,6 +4,8 @@
     {
       "id": "approval_chain",
       "name": "Approval Chain",
+      "domainType": "human-system",
+      "domainDescription": "Human-initiated approval workflows with human decision-makers",
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -92,6 +94,8 @@
     {
       "id": "request_lifecycle",
       "name": "Request Fulfillment Lifecycle",
+      "domainType": "human-system",
+      "domainDescription": "Human-initiated requests fulfilled by humans or systems",
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -214,6 +218,8 @@
     {
       "id": "multi_party_selection",
       "name": "Multi-Party Selection",
+      "domainType": "human-system",
+      "domainDescription": "Human actor selects among options, possibly involving system recommendations",
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -288,6 +294,8 @@
     {
       "id": "information_completeness",
       "name": "Information Completeness",
+      "domainType": "human-system",
+      "domainDescription": "Human provides information to system, handling incomplete data scenarios",
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -339,6 +347,556 @@
             "supplies missing information later",
             "later provides details",
             "information completed later"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "api_integration",
+      "name": "API Integration Pattern",
+      "domainType": "system-system",
+      "domainDescription": "System-to-system communication via APIs with error handling",
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "caller",
+          "description": "The system that initiates an API call or request",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "calls the API",
+            "sends request to service",
+            "invokes the endpoint",
+            "queries the service",
+            "transmits data to system",
+            "initiates API call"
+          ]
+        },
+        {
+          "id": "responder",
+          "description": "The system that processes the request and returns a response",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "returns response",
+            "processes the request",
+            "sends back result",
+            "provides API response",
+            "responds with data",
+            "returns status code"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "timeout",
+          "description": "API call times out without response",
+          "triggerCondition": "no response within timeout",
+          "anchorRole": "caller",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What happens if {responder.actor} does not respond within the timeout period at step {responder.stepIndex}? Does {caller.actor} retry or fail?",
+          "checkPhrases": [
+            "request times out",
+            "no response received",
+            "timeout error",
+            "exceeds timeout limit",
+            "connection timeout"
+          ]
+        },
+        {
+          "id": "service_unavailable",
+          "description": "Target service is unavailable or down",
+          "triggerCondition": "service unavailable",
+          "anchorRole": "responder",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {responder.actor} is unavailable at step {responder.stepIndex}? Is there a fallback service or circuit breaker?",
+          "checkPhrases": [
+            "service unavailable",
+            "service is down",
+            "connection refused",
+            "503 error",
+            "server not responding"
+          ]
+        },
+        {
+          "id": "malformed_response",
+          "description": "API returns unexpected or malformed data",
+          "triggerCondition": "invalid response format",
+          "anchorRole": "responder",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {responder.actor} returns malformed or unexpected data at step {responder.stepIndex}? How does {caller.actor} handle schema validation failures?",
+          "checkPhrases": [
+            "invalid response format",
+            "malformed data",
+            "schema validation fails",
+            "unexpected response structure",
+            "parsing error"
+          ]
+        },
+        {
+          "id": "rate_limit",
+          "description": "API rate limit exceeded",
+          "triggerCondition": "too many requests",
+          "anchorRole": "responder",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {caller.actor} exceeds rate limits at step {caller.stepIndex}? Is there retry logic with exponential backoff?",
+          "checkPhrases": [
+            "rate limit exceeded",
+            "too many requests",
+            "429 error",
+            "quota exceeded",
+            "throttling error"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "data_synchronization",
+      "name": "Data Synchronization Pattern",
+      "domainType": "system-system",
+      "domainDescription": "Systems synchronizing data across databases or services",
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "source_system",
+          "description": "The system that provides or publishes data",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "publishes data",
+            "sends update",
+            "broadcasts event",
+            "emits change notification",
+            "provides source data",
+            "triggers sync"
+          ]
+        },
+        {
+          "id": "target_system",
+          "description": "The system that receives and processes synchronized data",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "receives update",
+            "processes sync data",
+            "updates local copy",
+            "consumes event",
+            "synchronizes data",
+            "applies changes"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "sync_conflict",
+          "description": "Conflicting updates from multiple sources",
+          "triggerCondition": "concurrent modifications",
+          "anchorRole": "target_system",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {target_system.actor} receives conflicting updates at step {target_system.stepIndex}? How is conflict resolution handled (last-write-wins, versioning)?",
+          "checkPhrases": [
+            "conflicting updates",
+            "data conflict",
+            "concurrent modification",
+            "version mismatch",
+            "merge conflict"
+          ]
+        },
+        {
+          "id": "sync_failure",
+          "description": "Synchronization fails due to network or system error",
+          "triggerCondition": "sync error",
+          "anchorRole": "target_system",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if synchronization fails at step {target_system.stepIndex}? Does {source_system.actor} retry or queue updates?",
+          "checkPhrases": [
+            "sync fails",
+            "synchronization error",
+            "failed to update",
+            "sync queue backup",
+            "replication failure"
+          ]
+        },
+        {
+          "id": "partial_sync",
+          "description": "Only partial data is synchronized successfully",
+          "triggerCondition": "incomplete sync",
+          "anchorRole": "target_system",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if only partial data is synchronized at step {target_system.stepIndex}? How is data consistency maintained?",
+          "checkPhrases": [
+            "partial sync",
+            "incomplete synchronization",
+            "some records failed",
+            "batch partially succeeded",
+            "inconsistent state"
+          ]
+        },
+        {
+          "id": "stale_data",
+          "description": "Target system has stale or outdated data",
+          "triggerCondition": "data freshness issue",
+          "anchorRole": "target_system",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {target_system.actor} has stale data at step {target_system.stepIndex}? Is there a mechanism to detect and refresh outdated records?",
+          "checkPhrases": [
+            "stale data",
+            "outdated records",
+            "data freshness issue",
+            "cache expired",
+            "old version of data"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "event_driven_processing",
+      "name": "Event-Driven Processing Pattern",
+      "domainType": "system-system",
+      "domainDescription": "Asynchronous event publishing and consumption between systems",
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "publisher",
+          "description": "The system that publishes or emits events",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "publishes event",
+            "emits message",
+            "sends notification",
+            "triggers event",
+            "broadcasts message",
+            "pushes to queue"
+          ]
+        },
+        {
+          "id": "subscriber",
+          "description": "The system that subscribes to and processes events",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "consumes event",
+            "listens for message",
+            "processes notification",
+            "handles event",
+            "receives message",
+            "polls queue"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "event_loss",
+          "description": "Event is lost before being consumed",
+          "triggerCondition": "message not delivered",
+          "anchorRole": "publisher",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if an event published by {publisher.actor} at step {publisher.stepIndex} is lost? Is there guaranteed delivery or dead-letter queue?",
+          "checkPhrases": [
+            "event lost",
+            "message not delivered",
+            "dropped event",
+            "queue overflow",
+            "message expiration"
+          ]
+        },
+        {
+          "id": "duplicate_event",
+          "description": "Same event is processed multiple times",
+          "triggerCondition": "duplicate delivery",
+          "anchorRole": "subscriber",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {subscriber.actor} receives duplicate events at step {subscriber.stepIndex}? Is there idempotency handling?",
+          "checkPhrases": [
+            "duplicate event",
+            "message processed twice",
+            "idempotency issue",
+            "repeated delivery",
+            "duplicate processing"
+          ]
+        },
+        {
+          "id": "out_of_order",
+          "description": "Events are consumed out of order",
+          "triggerCondition": "ordering violation",
+          "anchorRole": "subscriber",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {subscriber.actor} receives events out of order at step {subscriber.stepIndex}? Is ordering guaranteed or does the system handle reordering?",
+          "checkPhrases": [
+            "out of order",
+            "sequence violation",
+            "wrong event order",
+            "ordering issue",
+            "events received in wrong sequence"
+          ]
+        },
+        {
+          "id": "processing_failure",
+          "description": "Subscriber fails to process event",
+          "triggerCondition": "processing error",
+          "anchorRole": "subscriber",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {subscriber.actor} fails to process an event at step {subscriber.stepIndex}? Is there retry logic or compensation?",
+          "checkPhrases": [
+            "processing fails",
+            "event handler error",
+            "failed to process message",
+            "consumer exception",
+            "processing error"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "batch_processing",
+      "name": "Batch Processing Pattern",
+      "domainType": "system-system",
+      "domainDescription": "Automated batch jobs processing large datasets across systems",
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "batch_processor",
+          "description": "The system that executes batch processing jobs",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "processes batch",
+            "runs scheduled job",
+            "executes batch job",
+            "processes dataset",
+            "performs bulk operation",
+            "runs nightly job"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "partial_batch_failure",
+          "description": "Some records in batch fail while others succeed",
+          "triggerCondition": "partial failure",
+          "anchorRole": "batch_processor",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if only some records succeed at step {batch_processor.stepIndex}? Does {batch_processor.actor} rollback successful records or continue?",
+          "checkPhrases": [
+            "partial batch failure",
+            "some records fail",
+            "batch partially succeeds",
+            "mixed results",
+            "incomplete batch processing"
+          ]
+        },
+        {
+          "id": "batch_timeout",
+          "description": "Batch job exceeds time limit",
+          "triggerCondition": "processing timeout",
+          "anchorRole": "batch_processor",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {batch_processor.actor} cannot complete within time window at step {batch_processor.stepIndex}? Can it resume or must it restart?",
+          "checkPhrases": [
+            "batch timeout",
+            "job exceeds time limit",
+            "processing window exceeded",
+            "long-running batch",
+            "batch job timeout"
+          ]
+        },
+        {
+          "id": "duplicate_batch_run",
+          "description": "Batch job runs twice due to scheduling error",
+          "triggerCondition": "duplicate execution",
+          "anchorRole": "batch_processor",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {batch_processor.actor} runs twice at step {batch_processor.stepIndex}? Is there duplicate detection or idempotency?",
+          "checkPhrases": [
+            "duplicate batch run",
+            "job runs twice",
+            "re-execution",
+            "double processing",
+            "batch overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "session_persistence",
+      "name": "Session Persistence & Recovery",
+      "domainType": "human-system",
+      "domainDescription": "User can save, pause, resume, and restart interrupted work",
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "user",
+          "description": "The actor who performs work that may be interrupted",
+          "isMandatory": true,
+          "threshold": 0.35,
+          "keywords": [
+            "enters data",
+            "fills form",
+            "completes task",
+            "processes request",
+            "performs action",
+            "works on task",
+            "inputs information",
+            "creates entry",
+            "records information",
+            "registers data",
+            "submits data",
+            "provides information",
+            "performs registration",
+            "conducts process"
+          ]
+        },
+        {
+          "id": "system",
+          "description": "The system that manages session state and recovery",
+          "isMandatory": false,
+          "threshold": 0.35,
+          "keywords": [
+            "saves state",
+            "stores progress",
+            "maintains session",
+            "persists data",
+            "tracks progress",
+            "manages session",
+            "records in system",
+            "stores in database",
+            "saves information"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "save_progress",
+          "description": "User saves work in progress to continue later",
+          "triggerCondition": "work incomplete",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "Can {user.actor} save their work at step {user.stepIndex} (\"{user.description}\") to continue later? What happens to incomplete data?",
+          "checkPhrases": [
+            "saves progress",
+            "saves work",
+            "saves state",
+            "save and exit",
+            "stores incomplete work",
+            "saves draft"
+          ]
+        },
+        {
+          "id": "pause_work",
+          "description": "User pauses or temporarily stops work",
+          "triggerCondition": "work interrupted",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What happens if {user.actor} needs to pause at step {user.stepIndex}? Is their progress preserved?",
+          "checkPhrases": [
+            "pauses work",
+            "temporarily stops",
+            "interrupts task",
+            "takes a break",
+            "suspends work",
+            "puts on hold"
+          ]
+        },
+        {
+          "id": "resume_work",
+          "description": "User resumes previously saved or paused work",
+          "triggerCondition": "returning to work",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "Can {user.actor} resume their work from where they left off? How does the system restore the previous state?",
+          "checkPhrases": [
+            "resumes work",
+            "continues work",
+            "picks up where left off",
+            "restores session",
+            "loads saved state",
+            "returns to work"
+          ]
+        },
+        {
+          "id": "restart_interrupted",
+          "description": "User needs to restart work after unexpected interruption",
+          "triggerCondition": "unexpected interruption",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What if {user.actor}'s work is unexpectedly interrupted at step {user.stepIndex} (network failure, browser crash, timeout)? Can they restart or must they start over?",
+          "checkPhrases": [
+            "restarts work",
+            "starts over",
+            "recovers from interruption",
+            "lost progress",
+            "session expired",
+            "connection lost",
+            "timeout occurred"
+          ]
+        },
+        {
+          "id": "session_timeout",
+          "description": "User's session expires due to inactivity",
+          "triggerCondition": "session timeout",
+          "anchorRole": "user",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What happens if {user.actor}'s session times out during step {user.stepIndex}? Is their work saved automatically?",
+          "checkPhrases": [
+            "session times out",
+            "session expires",
+            "inactivity timeout",
+            "logged out automatically",
+            "session expired",
+            "timed out"
+          ]
+        },
+        {
+          "id": "auto_save",
+          "description": "System automatically saves user's progress",
+          "triggerCondition": "periodic save",
+          "anchorRole": "system",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "Does the system automatically save {user.actor}'s progress during step {user.stepIndex}? How frequently?",
+          "checkPhrases": [
+            "auto-saves",
+            "automatically saves",
+            "periodic save",
+            "saves every",
+            "automatic backup",
+            "continuous save"
           ]
         }
       ]

@@ -1,9 +1,17 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { GenUseCase, GenFlow, GenStep } from "../interfaces/usecase.interface.new.js";
+import {
+  GenUseCase,
+  GenFlow,
+  GenStep,
+} from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
 import { UseCaseTermScore } from "../validators/flat.validator.js";
 import { detectBlueprintGaps } from "./blueprint.detector.js";
+import {
+  classifyUseCaseDomainHybrid,
+  type UseCaseDomainAnalysis,
+} from "../services/domain-classifier.service.js";
 
 export type GapType =
   | "missing_exception_flows"
@@ -40,6 +48,8 @@ export interface GapAnalysis {
   gaps: Gap[];
   priorityGaps: GapType[];
   completenessScore: number;
+  detectedDomains?: Set<"human-system" | "system-system">;
+  dominantDomain?: "human-system" | "system-system" | "mixed";
 }
 
 export interface InteractionMemory {
@@ -67,7 +77,7 @@ export interface ConsolidationGroup {
       actor: string;
       description: string;
       flowId: string;
-    }>
+    }>,
   ) => string;
   answerGuidance: string;
 }
@@ -85,27 +95,47 @@ function formatConsolidatedStepLine(step: {
 }
 
 function formatConsolidatedStepList(
-  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+  steps: Array<{
+    index: number;
+    actor: string;
+    description: string;
+    flowId: string;
+  }>,
 ): string {
   return steps.map((step) => formatConsolidatedStepLine(step)).join("\n");
 }
 
 function buildDataHandlingQuestion(
-  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+  steps: Array<{
+    index: number;
+    actor: string;
+    description: string;
+    flowId: string;
+  }>,
 ): string {
   const stepList = formatConsolidatedStepList(steps);
   return `The following steps involve data entry or validation:\n${stepList}\nHow does the system handle basic input errors (missing fields, wrong formats) versus business rule violations (duplicates, contradictory logic) at these steps? For each step, specify any differences in minimum required fields, error handling, or routing.`;
 }
 
 function buildInfrastructureQuestion(
-  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+  steps: Array<{
+    index: number;
+    actor: string;
+    description: string;
+    flowId: string;
+  }>,
 ): string {
   const stepList = formatConsolidatedStepList(steps);
   return `The following steps involve resource assignments or system interactions:\n${stepList}\nWhat happens if the assigned person is unavailable, the system times out, or a resource cannot be allocated at these steps? For each step, specify the fallback or escalation path.`;
 }
 
 function buildSaveResumeQuestion(
-  steps: Array<{ index: number; actor: string; description: string; flowId: string }>,
+  steps: Array<{
+    index: number;
+    actor: string;
+    description: string;
+    flowId: string;
+  }>,
 ): string {
   const stepList = formatConsolidatedStepList(steps);
   return `The following steps involve multi-field or complex data submissions:\n${stepList}\nCan any of these steps be partially completed, saved as a draft, and resumed later? For each step, specify what state is preserved and what happens on resume.`;
@@ -217,7 +247,9 @@ async function loadGapCentroids(): Promise<GapCategory[]> {
 
     for (const [name, category] of Object.entries(data.categories)) {
       if (!category.centroid) {
-        console.log(`  Computing centroid for "${name}" from ${category.keywords.length} keywords`);
+        console.log(
+          `  Computing centroid for "${name}" from ${category.keywords.length} keywords`,
+        );
         const embeddings = await semanticService.embedBatch(category.keywords);
         category.centroid = await semanticService.computeCentroid(embeddings);
         categoriesWithCentroids++;
@@ -226,15 +258,19 @@ async function loadGapCentroids(): Promise<GapCategory[]> {
     }
 
     gapCentroidsCache = Object.values(data.categories);
-    console.log(`Gap centroids loaded: ${gapCentroidsCache.length} categories (${categoriesWithCentroids} computed)`);
-    
+    console.log(
+      `Gap centroids loaded: ${gapCentroidsCache.length} categories (${categoriesWithCentroids} computed)`,
+    );
+
     // Log thresholds for verification
     for (const cat of gapCentroidsCache) {
       if (cat.requiresExceptionCheck) {
-        console.log(`  ${cat.name}: threshold=${cat.threshold}, keywords=${cat.keywords.length}`);
+        console.log(
+          `  ${cat.name}: threshold=${cat.threshold}, keywords=${cat.keywords.length}`,
+        );
       }
     }
-    
+
     return gapCentroidsCache;
   } catch (error) {
     console.error("Failed to load gap centroids:", error);
@@ -322,19 +358,19 @@ export async function filterStaleGaps(
 async function isGapCoveredByHistory(
   gapVector: number[],
   history: InteractionMemory[],
-  threshold: number
+  threshold: number,
 ): Promise<boolean> {
   for (const record of history) {
     const simToContext = await semanticService.cosineSimilarity(
       gapVector,
-      record.vector
+      record.vector,
     );
 
     let simToQuestion = 0;
     if (record.questionVector) {
       simToQuestion = await semanticService.cosineSimilarity(
         gapVector,
-        record.questionVector
+        record.questionVector,
       );
     }
 
@@ -347,10 +383,10 @@ async function isGapCoveredByHistory(
 
 function generateQuestionForCategory(
   categoryName: string,
-  step: GenStep
+  step: GenStep,
 ): string {
   const targetContext = step.target ? ` targeting ${step.target}` : "";
-  
+
   switch (categoryName) {
     case "validation":
       return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when this validation encounters partial data, format mismatches, or conflicting records? Describe the specific failure scenario and how it's handled.`;
@@ -376,7 +412,7 @@ function isStepSource(source: EmbeddedText["source"]): source is StepSource {
 }
 
 function isConditionSource(
-  source: EmbeddedText["source"]
+  source: EmbeddedText["source"],
 ): source is ConditionSource {
   return source.type === "condition";
 }
@@ -388,11 +424,19 @@ export async function analyzeGaps(
   useCase: GenUseCase,
   validationFeedback: UseCaseTermScore,
   originalDescription: string,
-  conversationHistory?: InteractionMemory[]
+  conversationHistory?: InteractionMemory[],
 ): Promise<GapAnalysis> {
   const gaps: Gap[] = [];
   const incompleteActors: string[] = [];
   const uncertainConditions: string[] = [];
+
+  // Phase 0: Classify domain to filter blueprints
+  console.log(`[Gap Analyzer] Classifying use case domain...`);
+  const domainAnalysis = await classifyUseCaseDomainHybrid(useCase);
+  const detectedDomain = domainAnalysis.dominantDomain;
+  console.log(
+    `[Gap Analyzer] Detected domain: ${detectedDomain} (used for blueprint filtering)`,
+  );
 
   // Phase 1: Collect and embed all texts
   const embeddedTexts = await collectAndEmbedTexts(useCase);
@@ -405,8 +449,18 @@ export async function analyzeGaps(
     }));
   const categories = await loadGapCentroids();
 
-  // Phase 1.5: Blueprint detection (prioritized)
-  const blueprintResult = await detectBlueprintGaps(useCase, stepEmbeddings);
+  // Phase 1.5: Blueprint detection (prioritized) with domain filtering
+  // Only apply domain filter if detection is clear (not ambiguous)
+  const domainFilter =
+    detectedDomain === "human-system" || detectedDomain === "system-system"
+      ? detectedDomain
+      : undefined;
+
+  const blueprintResult = await detectBlueprintGaps(
+    useCase,
+    stepEmbeddings,
+    domainFilter,
+  );
   gaps.push(...blueprintResult.gaps);
 
   // Phase 2: Analyze steps against category centroids
@@ -414,14 +468,14 @@ export async function analyzeGaps(
     embeddedTexts,
     categories,
     useCase,
-    blueprintResult.coveredStepKeys
+    blueprintResult.coveredStepKeys,
   );
   gaps.push(...stepGaps);
 
   // Phase 3: Analyze condition quality
   const conditionResults = await analyzeConditionQuality(
     embeddedTexts,
-    categories
+    categories,
   );
   gaps.push(...conditionResults.gaps);
   uncertainConditions.push(...conditionResults.uncertainFlowIds);
@@ -479,7 +533,7 @@ export async function analyzeGaps(
     validationFeedback,
     gaps,
     missingExceptionFlows,
-    missingAlternativeFlows
+    missingAlternativeFlows,
   );
 
   const filteredGaps =
@@ -489,6 +543,14 @@ export async function analyzeGaps(
 
   const priorityGaps = computePriorityGaps(filteredGaps);
 
+  // Determine dominant domain
+  let dominantDomain: "human-system" | "system-system" | "mixed" | undefined;
+  if (blueprintResult.detectedDomains.size === 1) {
+    dominantDomain = Array.from(blueprintResult.detectedDomains)[0];
+  } else if (blueprintResult.detectedDomains.size > 1) {
+    dominantDomain = "mixed";
+  }
+
   return {
     missingExceptionFlows,
     missingAlternativeFlows,
@@ -497,11 +559,13 @@ export async function analyzeGaps(
     gaps: filteredGaps,
     priorityGaps,
     completenessScore: Math.max(0, Math.min(1, completenessScore)),
+    detectedDomains: blueprintResult.detectedDomains,
+    dominantDomain,
   };
 }
 
 export async function collectAndEmbedTexts(
-  useCase: GenUseCase
+  useCase: GenUseCase,
 ): Promise<EmbeddedText[]> {
   const textsToEmbed: string[] = [];
   const textSources: EmbeddedText["source"][] = [];
@@ -539,12 +603,12 @@ async function analyzeStepsAgainstCategories(
   embeddedTexts: EmbeddedText[],
   categories: GapCategory[],
   useCase: GenUseCase,
-  skipSteps?: Set<string>
+  skipSteps?: Set<string>,
 ): Promise<Gap[]> {
   const gaps: Gap[] = [];
   const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
   const relevantCategories = categories.filter(
-    (c) => c.requiresExceptionCheck && c.centroid
+    (c) => c.requiresExceptionCheck && c.centroid,
   );
   const saveResumeCategory = categories.find((c) => c.name === "save_resume");
 
@@ -555,7 +619,7 @@ async function analyzeStepsAgainstCategories(
     for (const category of relevantCategories) {
       const similarity = await semanticService.cosineSimilarity(
         item.embedding,
-        category.centroid!
+        category.centroid!,
       );
 
       if (similarity >= category.threshold) {
@@ -563,7 +627,8 @@ async function analyzeStepsAgainstCategories(
           (f) =>
             (f.kind === "EXCEPTION" || f.kind === "ALTERNATIVE") &&
             f.parentFlow === src.flowId &&
-            (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined)
+            (f.fromStepIndex === src.stepIndex ||
+              f.fromStepIndex === undefined),
         );
 
         if (!hasException) {
@@ -575,14 +640,17 @@ async function analyzeStepsAgainstCategories(
             relatedFlow: src.flowId,
             suggestedQuestion: generateQuestionForCategory(
               category.name,
-              src.step
+              src.step,
             ),
           });
         }
       }
     }
 
-    if (saveResumeCategory && !skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) {
+    if (
+      saveResumeCategory &&
+      !skipSteps?.has(`${src.flowId}|${src.stepIndex}`)
+    ) {
       const descLower = src.step.description.toLowerCase();
       const isSaveResumeCandidate =
         src.step.description.length > 50 ||
@@ -602,7 +670,8 @@ async function analyzeStepsAgainstCategories(
           (f) =>
             (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
             f.parentFlow === src.flowId &&
-            (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined) &&
+            (f.fromStepIndex === src.stepIndex ||
+              f.fromStepIndex === undefined) &&
             (f.condition?.toLowerCase().includes("draft") ||
               f.condition?.toLowerCase().includes("save") ||
               f.condition?.toLowerCase().includes("resume") ||
@@ -631,16 +700,16 @@ async function analyzeStepsAgainstCategories(
 
 async function analyzeConditionQuality(
   embeddedTexts: EmbeddedText[],
-  categories: GapCategory[]
+  categories: GapCategory[],
 ): Promise<{ gaps: Gap[]; uncertainFlowIds: string[] }> {
   const gaps: Gap[] = [];
   const uncertainFlowIds: string[] = [];
 
   const conditionItems = embeddedTexts.filter((e) =>
-    isConditionSource(e.source)
+    isConditionSource(e.source),
   );
   const vagueCentroid = categories.find(
-    (c) => c.name === "vague_condition"
+    (c) => c.name === "vague_condition",
   )?.centroid;
 
   for (const item of conditionItems) {
@@ -652,7 +721,7 @@ async function analyzeConditionQuality(
     if (vagueCentroid) {
       const vagueSim = await semanticService.cosineSimilarity(
         item.embedding,
-        vagueCentroid
+        vagueCentroid,
       );
       if (vagueSim > 0.6) {
         qualityScore -= 0.3;
@@ -666,13 +735,13 @@ async function analyzeConditionQuality(
         (e) =>
           isStepSource(e.source) &&
           e.source.flowId === src.flow.parentFlow &&
-          e.source.stepIndex === src.flow.fromStepIndex
+          e.source.stepIndex === src.flow.fromStepIndex,
       );
 
       if (anchorStep) {
         const anchorSim = await semanticService.cosineSimilarity(
           item.embedding,
-          anchorStep.embedding
+          anchorStep.embedding,
         );
         if (anchorSim < 0.3) {
           qualityScore -= 0.2;
@@ -706,7 +775,7 @@ function calculateCompletenessScore(
   validationFeedback: UseCaseTermScore,
   gaps: Gap[],
   missingExceptionFlows: boolean,
-  missingAlternativeFlows: boolean
+  missingAlternativeFlows: boolean,
 ): number {
   let score = validationFeedback.overall / 100;
 
@@ -717,21 +786,21 @@ function calculateCompletenessScore(
   const validationGapCount = gaps.filter(
     (g) =>
       g.type === "missing_validation_handling" ||
-      g.type === "missing_system_failure_handling"
+      g.type === "missing_system_failure_handling",
   ).length;
   if (validationGapCount > 0) {
     score *= Math.max(0.5, 1 - validationGapCount * 0.1);
   }
 
   const dataQualityGapCount = gaps.filter(
-    (g) => g.type === "missing_data_quality_handling"
+    (g) => g.type === "missing_data_quality_handling",
   ).length;
   if (dataQualityGapCount > 0) {
     score *= Math.max(0.5, 1 - dataQualityGapCount * 0.15);
   }
 
   const resourceGapCount = gaps.filter(
-    (g) => g.type === "missing_resource_availability"
+    (g) => g.type === "missing_resource_availability",
   ).length;
   if (resourceGapCount > 0) {
     score *= Math.max(0.6, 1 - resourceGapCount * 0.1);
@@ -748,9 +817,7 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
   const priorityGaps: GapType[] = [];
   const blueprintTypes = Array.from(
     new Set(
-      gaps
-        .map((g) => g.type)
-        .filter((type) => type.startsWith("blueprint_")),
+      gaps.map((g) => g.type).filter((type) => type.startsWith("blueprint_")),
     ),
   );
 
@@ -768,7 +835,7 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
   // Add high-severity gaps first, then others
   for (const type of GAP_TYPE_PRIORITY) {
     const hasHighSeverity = gaps.some(
-      (g) => g.type === type && g.severity === "high"
+      (g) => g.type === type && g.severity === "high",
     );
     if (hasHighSeverity) {
       priorityGaps.push(type);
@@ -788,7 +855,7 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
 
 function detectTemporalExceptions(
   useCase: GenUseCase,
-  originalDescription: string
+  originalDescription: string,
 ): Gap[] {
   const descLower = originalDescription.toLowerCase();
   const temporalKeywords = [
@@ -801,14 +868,14 @@ function detectTemporalExceptions(
   ];
 
   const hasTemporalMention = temporalKeywords.some((kw) =>
-    descLower.includes(kw)
+    descLower.includes(kw),
   );
   if (!hasTemporalMention) return [];
 
   const hasGlobalException = useCase.flows.some(
     (f) =>
       f.kind === "EXCEPTION" &&
-      (f.fromStepIndex === undefined || f.fromStepIndex === null)
+      (f.fromStepIndex === undefined || f.fromStepIndex === null),
   );
 
   if (hasGlobalException) return [];
@@ -827,7 +894,7 @@ function detectTemporalExceptions(
 
 function detectNestedExceptions(
   useCase: GenUseCase,
-  originalDescription: string
+  originalDescription: string,
 ): Gap[] {
   const descLower = originalDescription.toLowerCase();
   const nestedKeywords = [
@@ -866,7 +933,7 @@ function detectNestedExceptions(
 
 function detectEnvironmentalInterruptions(
   useCase: GenUseCase,
-  originalDescription: string
+  originalDescription: string,
 ): Gap[] {
   const descLower = originalDescription.toLowerCase();
   const environmentalKeywords = [
@@ -880,14 +947,16 @@ function detectEnvironmentalInterruptions(
   ];
 
   const hasEnvironmentalMention = environmentalKeywords.some((kw) =>
-    descLower.includes(kw)
+    descLower.includes(kw),
   );
   if (!hasEnvironmentalMention) return [];
 
   const hasEnvironmentalException = useCase.flows.some(
     (f) =>
       f.kind === "EXCEPTION" &&
-      environmentalKeywords.some((kw) => f.condition?.toLowerCase().includes(kw))
+      environmentalKeywords.some((kw) =>
+        f.condition?.toLowerCase().includes(kw),
+      ),
   );
 
   if (hasEnvironmentalException) return [];
@@ -906,7 +975,7 @@ function detectEnvironmentalInterruptions(
 
 function detectTechnologyVariations(
   useCase: GenUseCase,
-  originalDescription: string
+  originalDescription: string,
 ): Gap[] {
   const descLower = originalDescription.toLowerCase();
   const techKeywords = [
@@ -925,7 +994,9 @@ function detectTechnologyVariations(
   if (!hasTechMention) return [];
 
   const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-  const alternativeFlows = useCase.flows.filter((f) => f.kind === "ALTERNATIVE");
+  const alternativeFlows = useCase.flows.filter(
+    (f) => f.kind === "ALTERNATIVE",
+  );
 
   if (!mainFlow || alternativeFlows.length > 0) return [];
 

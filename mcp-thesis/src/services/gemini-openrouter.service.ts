@@ -92,19 +92,45 @@ class GeminiOpenRouterFunctions {
     }
 
     const data = await response.json();
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error(
+        "Unexpected API response structure:",
+        JSON.stringify(data, null, 2),
+      );
+      throw new Error(`Invalid response structure from OpenRouter API`);
+    }
+
     const content = data.choices[0].message.content;
+
+    if (!content) {
+      console.error(
+        "Empty content in response:",
+        JSON.stringify(data, null, 2),
+      );
+      throw new Error("Empty content received from OpenRouter API");
+    }
+
     let cleanedText = content.trim();
     if (cleanedText.startsWith("```json")) {
-      cleanedText = cleanedText.slice(7); // Remove ```json
+      cleanedText = cleanedText.slice(7);
     } else if (cleanedText.startsWith("```")) {
-      cleanedText = cleanedText.slice(3); // Remove ```
+      cleanedText = cleanedText.slice(3);
     }
     if (cleanedText.endsWith("```")) {
-      cleanedText = cleanedText.slice(0, -3); // Remove trailing ```
+      cleanedText = cleanedText.slice(0, -3);
     }
     cleanedText = cleanedText.trim();
 
-    return schema.parse(JSON.parse(cleanedText));
+    try {
+      return schema.parse(JSON.parse(cleanedText));
+    } catch (parseError) {
+      console.error(
+        "JSON parse error. Content received:",
+        cleanedText.substring(0, 500),
+      );
+      throw parseError;
+    }
   }
 }
 

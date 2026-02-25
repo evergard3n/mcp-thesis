@@ -1,13 +1,20 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { GenUseCase, GenFlow, GenStep } from "../interfaces/usecase.interface.new.js";
+import {
+  GenUseCase,
+  GenFlow,
+  GenStep,
+} from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
 import { Gap } from "./gap.analyzer.js";
 
 export interface BlueprintGapResult {
   gaps: Gap[];
   coveredStepKeys: Set<string>;
+  detectedDomains: Set<"human-system" | "system-system">;
 }
+
+export type DomainType = "human-system" | "system-system";
 
 interface BlueprintActivationRules {
   minRolesMatched: number;
@@ -38,6 +45,8 @@ interface BlueprintScenarioDefinition {
 interface BlueprintDefinition {
   id: string;
   name: string;
+  domainType: DomainType;
+  domainDescription?: string;
   activation: BlueprintActivationRules;
   roles: BlueprintRoleDefinition[];
   expectedScenarios: BlueprintScenarioDefinition[];
@@ -93,7 +102,9 @@ async function loadBlueprints(): Promise<BlueprintDefinition[]> {
     for (const blueprint of data.blueprints) {
       for (const role of blueprint.roles) {
         if (!role.centroid) {
-          const roleEmbeddings = await semanticService.embedBatch(role.keywords);
+          const roleEmbeddings = await semanticService.embedBatch(
+            role.keywords,
+          );
           role.centroid = await semanticService.computeCentroid(roleEmbeddings);
           computedRoles++;
         }
@@ -104,9 +115,8 @@ async function loadBlueprints(): Promise<BlueprintDefinition[]> {
           const scenarioEmbeddings = await semanticService.embedBatch(
             scenario.checkPhrases,
           );
-          scenario.centroid = await semanticService.computeCentroid(
-            scenarioEmbeddings,
-          );
+          scenario.centroid =
+            await semanticService.computeCentroid(scenarioEmbeddings);
           computedScenarios++;
         }
       }
@@ -117,11 +127,40 @@ async function loadBlueprints(): Promise<BlueprintDefinition[]> {
       `Blueprints loaded: ${blueprintCache.length} (roles computed: ${computedRoles}, scenarios computed: ${computedScenarios})`,
     );
 
+    // Log domain distribution
+    const domainCounts = blueprintCache.reduce(
+      (acc, bp) => {
+        acc[bp.domainType] = (acc[bp.domainType] || 0) + 1;
+        return acc;
+      },
+      {} as Record<DomainType, number>,
+    );
+    console.log(`Domain distribution:`, domainCounts);
+
     return blueprintCache;
   } catch (error) {
     console.error("Failed to load blueprints:", error);
     return [];
   }
+}
+
+/**
+ * Get blueprints filtered by domain type
+ */
+export async function getBlueprintsByDomain(
+  domainType?: DomainType,
+): Promise<BlueprintDefinition[]> {
+  const allBlueprints = await loadBlueprints();
+  if (!domainType) return allBlueprints;
+  return allBlueprints.filter((bp) => bp.domainType === domainType);
+}
+
+/**
+ * Get available domain types from loaded blueprints
+ */
+export async function getAvailableDomains(): Promise<DomainType[]> {
+  const blueprints = await loadBlueprints();
+  return Array.from(new Set(blueprints.map((bp) => bp.domainType)));
 }
 
 function collectEmbeddedMainSteps(
@@ -237,15 +276,36 @@ async function isScenarioCovered(
   return maxSimilarity >= scenario.threshold;
 }
 
+/**
+ * Detect blueprint gaps in a use case
+ *
+ * @param useCase The use case to analyze
+ * @param embeddedSteps Embedded steps with precomputed embeddings
+ * @param filterByDomain Optional domain filter to only activate matching blueprints (prevents cross-domain overlap)
+ * @returns Blueprint gap analysis result
+ */
 export async function detectBlueprintGaps(
   useCase: GenUseCase,
   embeddedSteps: EmbeddedStep[],
+  filterByDomain?: DomainType,
 ): Promise<BlueprintGapResult> {
-  const blueprints = await loadBlueprints();
+  let blueprints = await loadBlueprints();
+
+  // FIX: Domain-based filtering to prevent cross-domain overlap
+  if (filterByDomain) {
+    const originalCount = blueprints.length;
+    blueprints = blueprints.filter((bp) => bp.domainType === filterByDomain);
+    console.log(
+      `Blueprint domain filter: ${filterByDomain} (${blueprints.length}/${originalCount} blueprints active)`,
+    );
+  }
+
   const gaps: Gap[] = [];
   const coveredStepKeys = new Set<string>();
+  const detectedDomains = new Set<DomainType>();
 
-  if (blueprints.length === 0) return { gaps, coveredStepKeys };
+  if (blueprints.length === 0)
+    return { gaps, coveredStepKeys, detectedDomains };
 
   const mainSteps = collectEmbeddedMainSteps(embeddedSteps);
   const coverageTexts: Array<{ text: string; weight: number }> = [];
@@ -267,14 +327,17 @@ export async function detectBlueprintGaps(
   }));
 
   for (const blueprint of blueprints) {
-  const candidatesMap = new Map<string, RoleCandidate[]>();
-  for (const role of blueprint.roles) {
-    const candidates = await buildCandidatesForRole(role, mainSteps);
-    candidatesMap.set(role.id, candidates);
-  }
+    const candidatesMap = new Map<string, RoleCandidate[]>();
+    for (const role of blueprint.roles) {
+      const candidates = await buildCandidatesForRole(role, mainSteps);
+      candidatesMap.set(role.id, candidates);
+    }
 
     const assignments = assignRolesOrdered(blueprint, candidatesMap);
     if (!assignments) continue;
+
+    // Track detected domain when blueprint activates
+    detectedDomains.add(blueprint.domainType);
 
     const assignmentsByRole = new Map(
       assignments.map((assignment) => [assignment.roleId, assignment]),
@@ -309,5 +372,5 @@ export async function detectBlueprintGaps(
     }
   }
 
-  return { gaps, coveredStepKeys };
+  return { gaps, coveredStepKeys, detectedDomains };
 }

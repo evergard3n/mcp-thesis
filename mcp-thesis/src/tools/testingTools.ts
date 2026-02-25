@@ -12,6 +12,10 @@ import {
   refineWithHybridAnswers,
 } from "../services/usecase.service.js";
 import {
+  classifyUseCaseDomain,
+  UseCaseDomainAnalysis,
+} from "../services/domain-classifier.service.js";
+import {
   validateUseCaseWithFeedback,
   formatValidationForLLM,
   UseCaseValidationResult,
@@ -354,10 +358,26 @@ Generate a vague summary:`;
           geminiFunctions: geminiFunctions,
         });
 
+        // Step 1.5: Classify domain (non-invasive metadata)
+        console.log(`  Classifying baseline domain...`);
+        const baselineDomainAnalysis = await classifyUseCaseDomain(
+          baseline,
+          geminiFunctions,
+        );
+        console.log(
+          `  Baseline domain: ${baselineDomainAnalysis.dominantDomain} (confidence: ${baselineDomainAnalysis.overallConfidence.toFixed(2)})`,
+        );
+
         const detailedBaseline = await generateFlatUseCase({
           description: tc.inputs.detailed,
           geminiFunctions: geminiFunctions,
         });
+
+        // Classify detailed baseline domain as well
+        const detailedDomainAnalysis = await classifyUseCaseDomain(
+          detailedBaseline,
+          geminiFunctions,
+        );
 
         console.log(`  Baseline generated, starting iterative refinement...`);
 
@@ -540,7 +560,9 @@ Generate a vague summary:`;
         results.push({
           testCaseId: tc.id,
           conditionA_Baseline: baseline,
+          conditionA_BaselineDomain: baselineDomainAnalysis,
           conditionA_DetailedBaseline: detailedBaseline,
+          conditionA_DetailedDomain: detailedDomainAnalysis,
           conditionB_EnhancedHITL: hitlUseCase,
           iterativeRefinement: {
             totalIterations: iteration,
@@ -676,14 +698,17 @@ Results: ${outputPath}`,
     "hitl_generateBaseline",
     {
       title: "Step 1: Generate Baseline",
-      description: "Generate initial use case from user description (Resets session state)",
+      description:
+        "Generate initial use case from user description (Resets session state)",
       inputSchema: {
-        description: z.string().describe("The user's initial vague requirement"),
+        description: z
+          .string()
+          .describe("The user's initial vague requirement"),
       },
     },
     async ({ description }: { description: string }) => {
       console.log("Interactive HITL: Generating baseline...");
-      
+
       // Reset state
       hitlState.description = description;
       hitlState.conversationHistory = [];
@@ -703,14 +728,31 @@ Results: ${outputPath}`,
 
       hitlState.currentUseCase = baseline;
 
+      // Classify domain after baseline generation
+      console.log("Classifying use case domain...");
+      const domainAnalysis = await classifyUseCaseDomain(
+        baseline,
+        geminiFunctions,
+      );
+
       return {
         content: [
           {
             type: "text" as const,
-            text: `Baseline generated for: "${description}"\nName: ${baseline.name}\nFlows: ${baseline.flows.length}`,
+            text: `Baseline generated for: "${description}"
+Name: ${baseline.name}
+Flows: ${baseline.flows.length}
+Domain: ${domainAnalysis.dominantDomain} (confidence: ${domainAnalysis.overallConfidence.toFixed(2)})
+${domainAnalysis.summary}
+
+Flow Classifications:
+${domainAnalysis.flowClassifications.map((fc) => `  - ${fc.flowId}: ${fc.domainType} (${(fc.confidence * 100).toFixed(0)}%) - ${fc.reasoning}`).join("\n")}`,
           },
         ],
-        structuredContent: { useCase: baseline },
+        structuredContent: {
+          useCase: baseline,
+          domainAnalysis,
+        },
       };
     },
   );
@@ -726,14 +768,23 @@ Results: ${outputPath}`,
     async () => {
       if (!hitlState.currentUseCase || !hitlState.description) {
         return {
-          content: [{ type: "text" as const, text: "Error: No active use case. Run hitl_generateBaseline first." }],
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: No active use case. Run hitl_generateBaseline first.",
+            },
+          ],
           isError: true,
         };
       }
 
-      console.log(`Interactive HITL: Analyzing gaps (Iteration ${hitlState.iterationCount + 1})...`);
+      console.log(
+        `Interactive HITL: Analyzing gaps (Iteration ${hitlState.iterationCount + 1})...`,
+      );
 
-      const validation = await validateUseCaseWithFeedback(hitlState.currentUseCase);
+      const validation = await validateUseCaseWithFeedback(
+        hitlState.currentUseCase,
+      );
       hitlState.lastValidation = validation;
 
       const gapAnalysis = await analyzeGaps(
@@ -778,7 +829,8 @@ Results: ${outputPath}`,
     "hitl_generateQuestions",
     {
       title: "Step 3: Generate Questions",
-      description: "Generate adaptive questions for the user based on gap analysis",
+      description:
+        "Generate adaptive questions for the user based on gap analysis",
       inputSchema: {
         maxQuestions: z.number().optional().default(6),
       },
@@ -786,7 +838,12 @@ Results: ${outputPath}`,
     async ({ maxQuestions }: { maxQuestions: number }) => {
       if (!hitlState.lastUncertaintyAnalysis) {
         return {
-          content: [{ type: "text" as const, text: "Error: No analysis results. Run hitl_analyzeGaps first." }],
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: No analysis results. Run hitl_analyzeGaps first.",
+            },
+          ],
           isError: true,
         };
       }
@@ -804,7 +861,12 @@ Results: ${outputPath}`,
 
       if (questions.length === 0) {
         return {
-          content: [{ type: "text" as const, text: "No new questions generated (all gaps covered or low priority)." }],
+          content: [
+            {
+              type: "text" as const,
+              text: "No new questions generated (all gaps covered or low priority).",
+            },
+          ],
           structuredContent: { questions: [] },
         };
       }
@@ -832,26 +894,39 @@ Results: ${outputPath}`,
           z.object({
             questionId: z.string(),
             answer: z.string(),
-          })
+          }),
         ),
       },
     },
-    async ({ answers }: { answers: Array<{ questionId: string; answer: string }> }) => {
+    async ({
+      answers,
+    }: {
+      answers: Array<{ questionId: string; answer: string }>;
+    }) => {
       if (!hitlState.currentUseCase || !hitlState.lastQuestions) {
         return {
-          content: [{ type: "text" as const, text: "Error: No questions available. Run hitl_generateQuestions first." }],
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: No questions available. Run hitl_generateQuestions first.",
+            },
+          ],
           isError: true,
         };
       }
 
-      console.log(`Interactive HITL: Refining use case with ${answers.length} answers...`);
+      console.log(
+        `Interactive HITL: Refining use case with ${answers.length} answers...`,
+      );
 
       // 1. Convert simple answers to OpenEndedAnswer format (adding high confidence since it's a human)
-      const openEndedAnswers: OpenEndedAnswer[] = answers.map((a: { questionId: string; answer: string }) => ({
-        questionId: a.questionId,
-        answer: a.answer,
-        confidence: "high",
-      }));
+      const openEndedAnswers: OpenEndedAnswer[] = answers.map(
+        (a: { questionId: string; answer: string }) => ({
+          questionId: a.questionId,
+          answer: a.answer,
+          confidence: "high",
+        }),
+      );
 
       // 2. Update conversation history (Dual-Vector Deduplication)
       const contextsToEmbed: string[] = [];
@@ -869,8 +944,12 @@ Results: ${outputPath}`,
         contextsToEmbed.push(contextString);
         questionsToEmbed.push(q.question);
 
-        const consolidatedMatch = q.id.match(/consolidated-([a-z_]+)-steps-([0-9-]+)/);
-        const consolidatedGroupId = consolidatedMatch ? consolidatedMatch[1] : undefined;
+        const consolidatedMatch = q.id.match(
+          /consolidated-([a-z_]+)-steps-([0-9-]+)/,
+        );
+        const consolidatedGroupId = consolidatedMatch
+          ? consolidatedMatch[1]
+          : undefined;
         const consolidatedSteps = consolidatedMatch?.[2]
           ? consolidatedMatch[2].split("-").map((value) => parseInt(value))
           : undefined;
@@ -892,8 +971,10 @@ Results: ${outputPath}`,
       }
 
       if (contextsToEmbed.length > 0) {
-        const contextVectors = await semanticService.embedBatch(contextsToEmbed);
-        const questionVectors = await semanticService.embedBatch(questionsToEmbed);
+        const contextVectors =
+          await semanticService.embedBatch(contextsToEmbed);
+        const questionVectors =
+          await semanticService.embedBatch(questionsToEmbed);
 
         for (let i = 0; i < historyRecords.length; i++) {
           hitlState.conversationHistory.push({
@@ -905,7 +986,9 @@ Results: ${outputPath}`,
       }
 
       // 3. Update allQuestions list
-      hitlState.allQuestions.push(...hitlState.lastQuestions.map((q) => q.question));
+      hitlState.allQuestions.push(
+        ...hitlState.lastQuestions.map((q) => q.question),
+      );
 
       // 4. Refine the use case
       const updatedUseCase = await refineWithHybridAnswers(
@@ -934,6 +1017,60 @@ Results: ${outputPath}`,
           },
         ],
         structuredContent: { useCase: updatedUseCase },
+      };
+    },
+  );
+
+  // Tool: Classify Use Case Domain
+  server.registerTool(
+    "classifyUseCaseDomain",
+    {
+      title: "Classify Use Case Domain",
+      description:
+        "Classify the domain type of a use case (human-system vs system-system). This is a post-processing step after baseline generation to annotate use cases with domain metadata without modifying the baseline itself.",
+      inputSchema: {
+        useCase: genUseCaseSchema.describe("The use case to classify"),
+      },
+    },
+    async ({ useCase }: { useCase: GenUseCase }) => {
+      console.log(`Classifying domain for use case: ${useCase.name}`);
+
+      const domainAnalysis = await classifyUseCaseDomain(
+        useCase,
+        geminiFunctions,
+      );
+
+      const flowDetails = domainAnalysis.flowClassifications
+        .map(
+          (fc) =>
+            `\n${fc.flowId} (${fc.domainType}):\n` +
+            `  Confidence: ${(fc.confidence * 100).toFixed(0)}%\n` +
+            `  Reasoning: ${fc.reasoning}\n` +
+            `  Actors: ${fc.actorTypes.map((at) => `${at.actor} [${at.type}]`).join(", ")}`,
+        )
+        .join("\n");
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Domain Classification Results:
+
+Use Case: ${useCase.name}
+Dominant Domain: ${domainAnalysis.dominantDomain}
+Overall Confidence: ${(domainAnalysis.overallConfidence * 100).toFixed(0)}%
+
+Summary: ${domainAnalysis.summary}
+
+Flow-Level Analysis:${flowDetails}
+
+Domain Characteristics:
+- human-system: Human actors interacting with systems (e.g., user fills form, manager approves)
+- system-system: Automated system-to-system interactions (e.g., API calls, data sync)
+- ambiguous: Cannot confidently determine domain type`,
+          },
+        ],
+        structuredContent: { domainAnalysis },
       };
     },
   );
