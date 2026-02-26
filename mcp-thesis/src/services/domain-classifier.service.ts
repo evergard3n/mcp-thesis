@@ -73,6 +73,18 @@ const HUMAN_KEYWORDS = [
 ];
 
 const SYSTEM_KEYWORDS = [
+  // Compound keywords (higher priority - checked first)
+  "client system",
+  "service client",
+  "api client",
+  "external system",
+  "third-party system",
+  "external service",
+  "resource manager",
+  "lock manager",
+  "data manager",
+  "load balancer",
+  // Single keywords
   "system",
   "server",
   "api",
@@ -94,7 +106,6 @@ const SYSTEM_KEYWORDS = [
   "queue",
   "broker",
   "router",
-  "load balancer",
   "cache",
   "storage",
 ];
@@ -178,6 +189,7 @@ const SYSTEM_ACTION_KEYWORDS = [
 /**
  * Phase 2: Heuristic-based actor type detection
  * Fast, rule-based classification using keyword matching
+ * Prioritizes compound keywords (multi-word) over single keywords
  */
 function classifyActorHeuristic(
   actor: string,
@@ -187,11 +199,39 @@ function classifyActorHeuristic(
   const descLower = description?.toLowerCase() || "";
   const combined = `${actorLower} ${descLower}`;
 
-  // Check actor name against keywords
-  const hasHumanKeyword = HUMAN_KEYWORDS.some((kw) => actorLower.includes(kw));
-  const hasSystemKeyword = SYSTEM_KEYWORDS.some((kw) =>
+  // Separate compound (multi-word) and single keywords
+  const humanCompound = HUMAN_KEYWORDS.filter((kw) => kw.includes(" "));
+  const humanSingle = HUMAN_KEYWORDS.filter((kw) => !kw.includes(" "));
+  const systemCompound = SYSTEM_KEYWORDS.filter((kw) => kw.includes(" "));
+  const systemSingle = SYSTEM_KEYWORDS.filter((kw) => !kw.includes(" "));
+
+  // Check compound keywords first (higher priority)
+  const hasHumanCompound = humanCompound.some((kw) => actorLower.includes(kw));
+  const hasSystemCompound = systemCompound.some((kw) =>
     actorLower.includes(kw),
   );
+
+  // If compound keyword matches, give strong signal
+  if (hasHumanCompound && !hasSystemCompound) {
+    return {
+      actor,
+      type: "human",
+      confidence: 0.9,
+      method: "heuristic",
+    };
+  }
+  if (hasSystemCompound && !hasHumanCompound) {
+    return {
+      actor,
+      type: "system",
+      confidence: 0.9,
+      method: "heuristic",
+    };
+  }
+
+  // Fall back to single keyword matching
+  const hasHumanKeyword = humanSingle.some((kw) => actorLower.includes(kw));
+  const hasSystemKeyword = systemSingle.some((kw) => actorLower.includes(kw));
 
   // Check description against action keywords
   const hasHumanAction = HUMAN_ACTION_KEYWORDS.some((kw) =>

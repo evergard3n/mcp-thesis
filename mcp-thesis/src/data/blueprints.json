@@ -746,6 +746,174 @@
       ]
     },
     {
+      "id": "resource_locking",
+      "name": "Resource Locking & Concurrency Control",
+      "domainType": "system-system",
+      "domainDescription": "System-to-system resource access control, lock management, and concurrency handling",
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "resource_manager",
+          "description": "The system component that manages resource access, grants/releases locks, and handles contention",
+          "isMandatory": true,
+          "threshold": 0.4,
+          "keywords": [
+            "checks resource availability",
+            "grants access to resource",
+            "releases lock",
+            "verifies lock status",
+            "manages resource access",
+            "controls access",
+            "checks if resource is available",
+            "updates lock count",
+            "increments lock",
+            "acquires lock",
+            "checks access permissions",
+            "validates access request"
+          ]
+        },
+        {
+          "id": "client_system",
+          "description": "The system or service that requests access to shared resources",
+          "isMandatory": false,
+          "threshold": 0.4,
+          "keywords": [
+            "requests access",
+            "requests exclusive access",
+            "requests shared access",
+            "waits for resource",
+            "acquires resource",
+            "releases resource",
+            "holds lock on resource"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "lock_contention",
+          "description": "Multiple clients compete for the same resource",
+          "triggerCondition": "resource conflict",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What happens when multiple clients try to access the same resource at step {resource_manager.stepIndex}? How does {resource_manager.actor} handle contention?",
+          "checkPhrases": [
+            "resource contention",
+            "multiple clients waiting",
+            "competing for resource",
+            "resource conflict",
+            "concurrent access",
+            "lock contention"
+          ]
+        },
+        {
+          "id": "upgrade_lock",
+          "description": "Client wants to upgrade from shared to exclusive access",
+          "triggerCondition": "lock conversion",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What if a client at step {resource_manager.stepIndex} wants to upgrade from shared to exclusive access? Can {resource_manager.actor} safely convert the lock?",
+          "checkPhrases": [
+            "upgrade lock",
+            "convert to exclusive",
+            "lock conversion",
+            "shared to exclusive",
+            "escalate access",
+            "upgrade access level"
+          ]
+        },
+        {
+          "id": "deadlock_prevention",
+          "description": "Circular wait for resources could cause deadlock",
+          "triggerCondition": "circular dependency",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "How does {resource_manager.actor} prevent deadlock at step {resource_manager.stepIndex} when multiple resources are involved? Is there deadlock detection?",
+          "checkPhrases": [
+            "deadlock prevention",
+            "circular wait",
+            "deadlock detection",
+            "resource ordering",
+            "prevent deadlock",
+            "deadlock avoidance"
+          ]
+        },
+        {
+          "id": "lock_timeout",
+          "description": "Client holds lock for too long without releasing",
+          "triggerCondition": "lock held indefinitely",
+          "anchorRole": "resource_manager",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What if a client holds the lock indefinitely after step {resource_manager.stepIndex}? Does {resource_manager.actor} have a timeout mechanism?",
+          "checkPhrases": [
+            "lock timeout",
+            "maximum hold time",
+            "lock expiration",
+            "timeout on lock",
+            "stale lock",
+            "abandoned lock"
+          ]
+        },
+        {
+          "id": "resource_exhaustion",
+          "description": "All resources are locked/unavailable",
+          "triggerCondition": "no available resources",
+          "anchorRole": "resource_manager",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What happens at step {resource_manager.stepIndex} when all resources are locked? How does {resource_manager.actor} handle exhaustion?",
+          "checkPhrases": [
+            "resource exhaustion",
+            "all resources locked",
+            "no available resources",
+            "resource pool empty",
+            "out of resources",
+            "maximum locks reached"
+          ]
+        },
+        {
+          "id": "lock_release_failure",
+          "description": "Client fails or crashes while holding lock",
+          "triggerCondition": "client failure with lock",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What if the client crashes or fails while holding a lock after step {resource_manager.stepIndex}? How does {resource_manager.actor} recover the lock?",
+          "checkPhrases": [
+            "client crashes with lock",
+            "failed to release lock",
+            "orphaned lock",
+            "lock recovery",
+            "cleanup after failure",
+            "release on disconnect"
+          ]
+        },
+        {
+          "id": "priority_access",
+          "description": "High-priority client needs access while resource is locked",
+          "triggerCondition": "priority request",
+          "anchorRole": "resource_manager",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What if a high-priority client requests access at step {resource_manager.stepIndex} while the resource is locked? Can {resource_manager.actor} preempt the current lock?",
+          "checkPhrases": [
+            "priority access",
+            "preempt lock",
+            "high-priority request",
+            "priority escalation",
+            "urgent access",
+            "override lock"
+          ]
+        }
+      ]
+    },
+    {
       "id": "session_persistence",
       "name": "Session Persistence & Recovery",
       "domainType": "human-system",
