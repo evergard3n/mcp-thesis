@@ -47,6 +47,7 @@ interface BlueprintDefinition {
   name: string;
   domainType: DomainType;
   domainDescription?: string;
+  probeQuestion?: string;
   activation: BlueprintActivationRules;
   roles: BlueprintRoleDefinition[];
   expectedScenarios: BlueprintScenarioDefinition[];
@@ -74,7 +75,15 @@ interface RoleAssignment {
   similarity: number;
 }
 
-interface EmbeddedStep {
+export interface BlueprintActivation {
+  blueprintId: string;
+  blueprintName: string;
+  probeQuestion: string;
+  confidence: number;
+  assignments: RoleAssignment[];
+}
+
+export interface EmbeddedStep {
   step: GenStep;
   flow: GenFlow;
   embedding: number[];
@@ -277,17 +286,63 @@ async function isScenarioCovered(
 }
 
 /**
+ * Run role matching only for all blueprints and return activations sorted by confidence.
+ * Used for the probe phase: identify which blueprints are plausibly active before
+ * asking the expert to confirm them.
+ */
+export async function detectActivatedBlueprints(
+  embeddedSteps: EmbeddedStep[],
+  filterByDomain?: DomainType,
+): Promise<BlueprintActivation[]> {
+  let blueprints = await loadBlueprints();
+  if (filterByDomain) {
+    blueprints = blueprints.filter((bp) => bp.domainType === filterByDomain);
+  }
+
+  const mainSteps = collectEmbeddedMainSteps(embeddedSteps);
+  const activations: BlueprintActivation[] = [];
+
+  for (const blueprint of blueprints) {
+    const candidatesMap = new Map<string, RoleCandidate[]>();
+    for (const role of blueprint.roles) {
+      const candidates = await buildCandidatesForRole(role, mainSteps);
+      candidatesMap.set(role.id, candidates);
+    }
+
+    const assignments = assignRolesOrdered(blueprint, candidatesMap);
+    if (!assignments) continue;
+
+    const avgConfidence =
+      assignments.reduce((sum, a) => sum + a.similarity, 0) / assignments.length;
+
+    activations.push({
+      blueprintId: blueprint.id,
+      blueprintName: blueprint.name,
+      probeQuestion: blueprint.probeQuestion ?? `Does this use case involve a ${blueprint.name} pattern?`,
+      confidence: avgConfidence,
+      assignments,
+    });
+  }
+
+  return activations.sort((a, b) => b.confidence - a.confidence);
+}
+
+/**
  * Detect blueprint gaps in a use case
  *
  * @param useCase The use case to analyze
  * @param embeddedSteps Embedded steps with precomputed embeddings
  * @param filterByDomain Optional domain filter to only activate matching blueprints (prevents cross-domain overlap)
+ * @param confirmedBlueprintIds If provided and non-empty, only process blueprints in this set
+ * @param droppedBlueprintIds If provided, skip blueprints in this set permanently
  * @returns Blueprint gap analysis result
  */
 export async function detectBlueprintGaps(
   useCase: GenUseCase,
   embeddedSteps: EmbeddedStep[],
   filterByDomain?: DomainType,
+  confirmedBlueprintIds?: Set<string>,
+  droppedBlueprintIds?: Set<string>,
 ): Promise<BlueprintGapResult> {
   let blueprints = await loadBlueprints();
 
@@ -298,6 +353,21 @@ export async function detectBlueprintGaps(
     console.log(
       `Blueprint domain filter: ${filterByDomain} (${blueprints.length}/${originalCount} blueprints active)`,
     );
+  }
+
+  // Two-phase gate: drop permanently dropped blueprints
+  if (droppedBlueprintIds && droppedBlueprintIds.size > 0) {
+    blueprints = blueprints.filter((bp) => !droppedBlueprintIds.has(bp.id));
+  }
+
+  // If confirmed set is provided but empty, probe hasn't happened yet — emit nothing
+  if (confirmedBlueprintIds !== undefined && confirmedBlueprintIds.size === 0) {
+    return { gaps: [], coveredStepKeys: new Set(), detectedDomains: new Set() };
+  }
+
+  // If confirmed set is non-empty, only process confirmed blueprints
+  if (confirmedBlueprintIds && confirmedBlueprintIds.size > 0) {
+    blueprints = blueprints.filter((bp) => confirmedBlueprintIds.has(bp.id));
   }
 
   const gaps: Gap[] = [];
@@ -339,6 +409,9 @@ export async function detectBlueprintGaps(
     // Track detected domain when blueprint activates
     detectedDomains.add(blueprint.domainType);
 
+    const blueprintConfidence =
+      assignments.reduce((sum, a) => sum + a.similarity, 0) / assignments.length;
+
     const assignmentsByRole = new Map(
       assignments.map((assignment) => [assignment.roleId, assignment]),
     );
@@ -368,6 +441,7 @@ export async function detectBlueprintGaps(
         relatedStep: anchor.stepIndex,
         relatedFlow: anchor.flowId,
         suggestedQuestion,
+        blueprintConfidence,
       });
     }
   }

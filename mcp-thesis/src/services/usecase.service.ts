@@ -1,8 +1,6 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import { GeminiOpenRouterFunctions } from "./gemini-openrouter.service.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import semanticService from "../services/semantic.service.js";
-import { flowToText } from "../evaluators/three-tier.evaluator.js";
 
 const FLOW_ID_CONVENTION = `
 <flowIdConvention>
@@ -670,45 +668,55 @@ export async function refineWithHybridAnswers(
     );
   }
 
-  // Step 2: Extract new flows from open-ended answers
-  const newFlows = await extractFlowsFromOpenEndedAnswers(
-    openEndedAnswers,
-    refined,
-    geminiFunctions,
-  );
+  // Step 2: Full LLM rebuild — preserve all existing flows, add new flows from answers,
+  // update actors list to include every actor appearing in any step.
+  // Confidence tags are included so the LLM can skip speculative/hedged answers.
+  const qaContext = openEndedAnswers
+    .map((a) => `Answer [${a.questionId}] (confidence: ${a.confidence ?? "high"}):\n${a.answer}`)
+    .join("\n\n");
 
-  // Step 2.5: Deduplicate flows (Semantic Check)
-  const uniqueNewFlows: typeof newFlows = [];
-  
-  if (newFlows.length > 0) {
-    const existingFlowTexts = refined.flows.map(flowToText);
-    const existingEmbeddings = await semanticService.embedBatch(existingFlowTexts);
-    
-    const newFlowTexts = newFlows.map(flowToText);
-    const newFlowEmbeddings = await semanticService.embedBatch(newFlowTexts);
-    
-    for (let i = 0; i < newFlows.length; i++) {
-      let isDuplicate = false;
-      for (let j = 0; j < existingEmbeddings.length; j++) {
-        const score = await semanticService.cosineSimilarity(newFlowEmbeddings[i], existingEmbeddings[j]);
-        if (score > 0.85) { // Strict threshold for duplication
-          isDuplicate = true;
-          console.log(`Dropping duplicate flow ${newFlows[i].id} (similar to ${refined.flows[j].id}, score=${score.toFixed(3)})`);
-          break;
-        }
-      }
-      if (!isDuplicate) {
-        uniqueNewFlows.push(newFlows[i]);
-      }
-    }
-  }
+  const prompt = `
+<task>
+You are a software analyst refining a use case based on expert answers to targeted questions.
+Your job is to produce a COMPLETE, updated use case that:
+1. PRESERVES every existing flow and step — do NOT remove or change existing flows.
+2. ADDS new ALTERNATIVE or EXCEPTION flows that are explicitly described in the expert answers.
+3. UPDATES the "actors" array to include every actor name that appears in any step across all flows.
+4. UPDATES "summary", "preconditions", and "postconditions" only if the answers provide new information.
 
-  // Step 3: Integrate new flows
-  const combinedFlows = [...refined.flows, ...uniqueNewFlows];
+Do NOT fabricate scenarios not mentioned in any answer.
+If an answer is tagged confidence:high or confidence:medium and describes a scenario, generate a new ALTERNATIVE or EXCEPTION flow for it. Do not skip a flow just because the answer is not written in structured format — extract the scenario and model it as a flow.
+Do NOT generate a new flow from an answer tagged confidence:low or from an answer whose text contains phrases like "not explicitly mentioned", "not explicitly stated", "drawing from general knowledge", or "hypothetically" — these are speculative and must not produce flows.
+Do NOT hallucinate actors, steps, or conditions.
+</task>
 
-  // Return refined use case with all flows
-  return normalizeFlowIds({
-    ...refined,
-    flows: combinedFlows,
+<original_description>
+${originalDescription}
+</original_description>
+
+<current_use_case>
+${JSON.stringify(refined, null, 2)}
+</current_use_case>
+
+<expert_answers>
+${qaContext}
+</expert_answers>
+
+<constraints>
+1. Output ONLY a single JSON object matching the GenUseCase schema below.
+2. MAIN flow should be rebuilt from the original description and expert answers. You MUST preserve existing steps but MAY add new steps, insert actors into existing steps, or enrich step descriptions if the answers reveal a richer sequence. Do NOT remove or reorder existing steps. The rebuilt MAIN must remain consistent with the original description.
+3. When adding new flows, follow the flow ID convention strictly.
+4. The "actors" array must reflect all actors mentioned in ALL steps (existing + new).
+5. Preserve existing flow IDs exactly.
+
+${FLOW_ID_CONVENTION}
+</constraints>
+`;
+
+  const rebuiltUseCase = await geminiFunctions.generateStructured({
+    prompt,
+    schema: genUseCaseSchema,
   });
+
+  return normalizeFlowIds(rebuiltUseCase);
 }

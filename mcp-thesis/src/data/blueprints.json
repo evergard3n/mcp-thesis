@@ -4,6 +4,7 @@
     {
       "id": "approval_chain",
       "name": "Approval Chain",
+      "probeQuestion": "Does this process involve a human approver who reviews a submission and can approve, reject, or request changes?",
       "domainType": "human-system",
       "domainDescription": "Human-initiated approval workflows with human decision-makers",
       "activation": {
@@ -94,6 +95,7 @@
     {
       "id": "request_lifecycle",
       "name": "Request Fulfillment Lifecycle",
+      "probeQuestion": "Does this process involve an initiator submitting a request that is later fulfilled, delivered, or resolved by another actor or system?",
       "domainType": "human-system",
       "domainDescription": "Human-initiated requests fulfilled by humans or systems",
       "activation": {
@@ -218,6 +220,7 @@
     {
       "id": "multi_party_selection",
       "name": "Multi-Party Selection",
+      "probeQuestion": "Does this process involve an actor choosing among multiple options, vendors, providers, or candidates — where no match or multiple matches may be found?",
       "domainType": "human-system",
       "domainDescription": "Human actor selects among options, possibly involving system recommendations",
       "activation": {
@@ -294,6 +297,7 @@
     {
       "id": "information_completeness",
       "name": "Information Completeness",
+      "probeQuestion": "Does this process require an actor to provide or fill in detailed information, where some fields may be unknown, missing, or filled in later by another actor?",
       "domainType": "human-system",
       "domainDescription": "Human provides information to system, handling incomplete data scenarios",
       "activation": {
@@ -354,6 +358,7 @@
     {
       "id": "api_integration",
       "name": "API Integration Pattern",
+      "probeQuestion": "Does this process involve one system calling another system's API or service, where timeouts, unavailability, or bad responses may occur?",
       "domainType": "system-system",
       "domainDescription": "System-to-system communication via APIs with error handling",
       "activation": {
@@ -460,6 +465,7 @@
     {
       "id": "data_synchronization",
       "name": "Data Synchronization Pattern",
+      "probeQuestion": "Does this process involve synchronizing data between two or more systems, where conflicts, failures, or stale data may occur?",
       "domainType": "system-system",
       "domainDescription": "Systems synchronizing data across databases or services",
       "activation": {
@@ -566,6 +572,7 @@
     {
       "id": "event_driven_processing",
       "name": "Event-Driven Processing Pattern",
+      "probeQuestion": "Does this process involve a system publishing events or messages that another system consumes asynchronously, where events may be lost, duplicated, or arrive out of order?",
       "domainType": "system-system",
       "domainDescription": "Asynchronous event publishing and consumption between systems",
       "activation": {
@@ -672,6 +679,7 @@
     {
       "id": "batch_processing",
       "name": "Batch Processing Pattern",
+      "probeQuestion": "Does this process involve a system executing batch or bulk operations over datasets, where partial failures, timeouts, or duplicate runs may occur?",
       "domainType": "system-system",
       "domainDescription": "Automated batch jobs processing large datasets across systems",
       "activation": {
@@ -748,6 +756,7 @@
     {
       "id": "resource_locking",
       "name": "Resource Locking & Concurrency Control",
+      "probeQuestion": "Does this process involve shared resources that multiple clients or systems may access concurrently, requiring locking, contention handling, or deadlock prevention?",
       "domainType": "system-system",
       "domainDescription": "System-to-system resource access control, lock management, and concurrency handling",
       "activation": {
@@ -916,6 +925,7 @@
     {
       "id": "session_persistence",
       "name": "Session Persistence & Recovery",
+      "probeQuestion": "Can users save their work mid-process and resume later, or recover if the session is interrupted, timed out, or unexpectedly terminated?",
       "domainType": "human-system",
       "domainDescription": "User can save, pause, resume, and restart interrupted work",
       "activation": {

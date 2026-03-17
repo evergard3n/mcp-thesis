@@ -231,10 +231,7 @@ async function matchFlowsToGroundTruth(
   // Second pass: assign claims with deduplication
   const claimedGTFlows = new Set<string>();
 
-  function setMatchResult(
-    genFlowId: string,
-    result: FlowMatchResult,
-  ): void {
+  function setMatchResult(genFlowId: string, result: FlowMatchResult): void {
     matchResults.set(genFlowId, result);
   }
 

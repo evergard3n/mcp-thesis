@@ -7,7 +7,7 @@ import {
 } from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
 import { UseCaseTermScore } from "../validators/flat.validator.js";
-import { detectBlueprintGaps } from "./blueprint.detector.js";
+import { detectBlueprintGaps, detectActivatedBlueprints, type BlueprintActivation, type EmbeddedStep } from "./blueprint.detector.js";
 import {
   classifyUseCaseDomainHybrid,
   type UseCaseDomainAnalysis,
@@ -38,6 +38,7 @@ export interface Gap {
   relatedStep?: number;
   relatedFlow?: string;
   suggestedQuestion?: string;
+  blueprintConfidence?: number;
 }
 
 export interface GapAnalysis {
@@ -50,6 +51,7 @@ export interface GapAnalysis {
   completenessScore: number;
   detectedDomains?: Set<"human-system" | "system-system">;
   dominantDomain?: "human-system" | "system-system" | "mixed";
+  activatedBlueprints: BlueprintActivation[];
 }
 
 export interface InteractionMemory {
@@ -425,6 +427,8 @@ export async function analyzeGaps(
   validationFeedback: UseCaseTermScore,
   originalDescription: string,
   conversationHistory?: InteractionMemory[],
+  confirmedBlueprintIds?: Set<string>,
+  droppedBlueprintIds?: Set<string>,
 ): Promise<GapAnalysis> {
   const gaps: Gap[] = [];
   const incompleteActors: string[] = [];
@@ -460,8 +464,16 @@ export async function analyzeGaps(
     useCase,
     stepEmbeddings,
     domainFilter,
+    confirmedBlueprintIds,
+    droppedBlueprintIds,
   );
   gaps.push(...blueprintResult.gaps);
+
+  // Detect activated blueprints for probe phase (reuses same stepEmbeddings)
+  const activatedBlueprints = await detectActivatedBlueprints(
+    stepEmbeddings,
+    domainFilter,
+  );
 
   // Phase 2: Analyze steps against category centroids
   const stepGaps = await analyzeStepsAgainstCategories(
@@ -469,6 +481,7 @@ export async function analyzeGaps(
     categories,
     useCase,
     blueprintResult.coveredStepKeys,
+    droppedBlueprintIds,
   );
   gaps.push(...stepGaps);
 
@@ -561,6 +574,7 @@ export async function analyzeGaps(
     completenessScore: Math.max(0, Math.min(1, completenessScore)),
     detectedDomains: blueprintResult.detectedDomains,
     dominantDomain,
+    activatedBlueprints,
   };
 }
 
@@ -599,22 +613,72 @@ export async function collectAndEmbedTexts(
   }));
 }
 
+/**
+ * Convenience helper: embeds all steps and returns them as EmbeddedStep[].
+ * Used by the tool layer to run detectActivatedBlueprints before analyzeGaps
+ * (probe phase must happen before gap analysis so confirmed set is populated first).
+ */
+export async function collectStepEmbeddings(
+  useCase: GenUseCase,
+): Promise<EmbeddedStep[]> {
+  const texts = await collectAndEmbedTexts(useCase);
+  return texts
+    .filter((item) => isStepSource(item.source))
+    .map((item) => ({
+      step: (item.source as StepSource).step,
+      flow: (item.source as StepSource).flow,
+      embedding: item.embedding,
+    }));
+}
+
+/**
+ * Maps dropped blueprint IDs to centroid gap types that should be suppressed.
+ * If a blueprint is dropped (the expert confirmed it doesn't apply), the linked
+ * centroid-based gap types are also suppressed to avoid generating questions for
+ * patterns the expert has already ruled out.
+ */
+const BLUEPRINT_CENTROID_SUPPRESSION: Partial<Record<string, GapType[]>> = {
+  session_persistence: ["missing_save_resume_handling"],
+};
+
 async function analyzeStepsAgainstCategories(
   embeddedTexts: EmbeddedText[],
   categories: GapCategory[],
   useCase: GenUseCase,
   skipSteps?: Set<string>,
+  droppedBlueprintIds?: Set<string>,
 ): Promise<Gap[]> {
   const gaps: Gap[] = [];
   const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
+
+  // Build the set of gap types suppressed by dropped blueprints
+  const suppressedGapTypes = new Set<GapType>();
+  if (droppedBlueprintIds) {
+    for (const blueprintId of droppedBlueprintIds) {
+      const linked = BLUEPRINT_CENTROID_SUPPRESSION[blueprintId];
+      if (linked) {
+        for (const gapType of linked) {
+          suppressedGapTypes.add(gapType);
+          console.log(`[Blueprint-Centroid Suppression] Suppressing gap type "${gapType}" because blueprint "${blueprintId}" was dropped`);
+        }
+      }
+    }
+  }
+
   const relevantCategories = categories.filter(
-    (c) => c.requiresExceptionCheck && c.centroid,
+    (c) => c.requiresExceptionCheck && c.centroid && !suppressedGapTypes.has(c.gapType),
   );
-  const saveResumeCategory = categories.find((c) => c.name === "save_resume");
+  const saveResumeCategory = suppressedGapTypes.has("missing_save_resume_handling")
+    ? undefined
+    : categories.find((c) => c.name === "save_resume");
 
   for (const item of stepItems) {
     const src = item.source as StepSource;
     if (skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) continue;
+    // Centroid gap detection only applies to MAIN flow steps.
+    // ALT/EXT steps were generated from expert answers — asking about their
+    // sub-steps creates circular meta-questions about flows we just created.
+    if (src.flowId !== "MAIN") continue;
 
     for (const category of relevantCategories) {
       const similarity = await semanticService.cosineSimilarity(

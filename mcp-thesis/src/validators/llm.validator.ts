@@ -7,6 +7,7 @@ import {
   GapAnalysis,
   GapType,
 } from "../analyzers/gap.analyzer.js";
+import { BlueprintActivation } from "../analyzers/blueprint.detector.js";
 import semanticService from "../services/semantic.service.js";
 
 export const COVE_LLM_QUESTIONS: string[] = [
@@ -537,7 +538,10 @@ async function isQuestionDuplicate(
     if (newStepIndex !== null && prevStepIndex !== null) {
       if (newStepIndex !== prevStepIndex) continue;
     }
-    if (normalizedNew === normalizedPrev) return true;
+    if (normalizedNew === normalizedPrev) {
+      console.log(`[DEDUP L1] Exact match — skipping: "${newQuestion.slice(0, 80)}..." ~ "${prev.slice(0, 80)}..."`);
+      return true;
+    }
 
     // High substring overlap check (>85% of shorter string)
     const shorter =
@@ -548,8 +552,10 @@ async function isQuestionDuplicate(
       normalizedNew.length < normalizedPrev.length
         ? normalizedPrev
         : normalizedNew;
-    if (longer.includes(shorter) && shorter.length / longer.length > 0.85)
+    if (longer.includes(shorter) && shorter.length / longer.length > 0.85) {
+      console.log(`[DEDUP L1] Substring overlap — skipping: "${newQuestion.slice(0, 80)}..." ~ "${prev.slice(0, 80)}..."`);
       return true;
+    }
   }
 
   // Layer 2: Semantic similarity check
@@ -571,7 +577,10 @@ async function isQuestionDuplicate(
 
   for (let i = 1; i < embeddings.length; i++) {
     const sim = await semanticService.cosineSimilarity(newVec, embeddings[i]);
-    if (sim >= threshold) return true;
+    if (sim >= threshold) {
+      console.log(`[DEDUP L2] Semantic match (sim=${sim.toFixed(3)}) — skipping: "${newQuestion.slice(0, 80)}..." ~ "${eligiblePrevious[i - 1].slice(0, 80)}..."`);
+      return true;
+    }
   }
 
   return false;
@@ -627,6 +636,7 @@ interface StepPriorityShape {
     severity: string;
     description: string;
     suggestedQuestion?: string;
+    blueprintConfidence?: number;
   }>;
 }
 
@@ -718,6 +728,55 @@ function buildConsolidatedGroups(
 }
 
 /**
+ * Single LLM call that presents all activated blueprint probeQuestions to the expert
+ * and returns the IDs of blueprints the expert confirms apply to this use case.
+ */
+export async function probeBlueprintsWithExpert(
+  activations: BlueprintActivation[],
+  detailedDescription: string,
+  domain: string,
+  geminiFunctions: GeminiOpenRouterFunctions,
+): Promise<string[]> {
+  if (activations.length === 0) return [];
+
+  const blueprintList = activations
+    .map(
+      (a, i) =>
+        `${i + 1}. Blueprint ID: "${a.blueprintId}" | Name: "${a.blueprintName}"\n   Probe: ${a.probeQuestion}`,
+    )
+    .join("\n");
+
+  const prompt = `You are a domain expert for a ${domain} system.
+
+Below is a detailed description of a use case:
+<description>
+${detailedDescription}
+</description>
+
+The following process patterns (blueprints) have been tentatively detected in this use case.
+For each one, answer whether the description CONFIRMS that this pattern genuinely applies.
+Only confirm a blueprint if the description explicitly or strongly implies the pattern.
+
+${blueprintList}
+
+Return ONLY a JSON array of blueprint ID strings for the blueprints that are confirmed.
+Example: ["approval_chain", "session_persistence"]
+If none apply, return [].`;
+
+  const schema = z.array(z.string());
+
+  try {
+    const result = await geminiFunctions.generateStructured({ prompt, schema });
+    // Filter to only valid IDs from the activations list
+    const validIds = new Set(activations.map((a) => a.blueprintId));
+    return result.filter((id) => validIds.has(id));
+  } catch (err) {
+    console.error("[probeBlueprintsWithExpert] LLM call failed:", err);
+    return [];
+  }
+}
+
+/**
  * Generates adaptive questions based on priority rankings
  * Combines step priorities, flow uncertainties, and gap analysis
  */
@@ -733,6 +792,9 @@ export async function generateAdaptiveQuestions(
   }>,
   maxQuestions: number = 6,
   previousQuestions: string[] = [],
+  blueprintOnly: boolean = false,
+  confirmedBlueprintCount: number = 1,
+  baselineFlowIds?: Set<string>,
 ): Promise<OpenEndedQuestion[]> {
   const questions: OpenEndedQuestion[] = [];
   const askedInThisBatch: string[] = [];
@@ -743,25 +805,36 @@ export async function generateAdaptiveQuestions(
     .filter((p) => p.relatedGaps.length > 0)
     .sort((a, b) => b.priorityScore - a.priorityScore);
 
-  const gapGroups = [
-    {
-      label: "blueprint",
-      filter: (gapType: string, flowId: string) =>
-        isBlueprintGap(gapType),
-    },
-    {
-      label: "centroid-main",
-      filter: (gapType: string, flowId: string) =>
-        !isBlueprintGap(gapType) && flowId === "MAIN",
-    },
-    {
-      label: "centroid-non-main",
-      filter: (gapType: string, flowId: string) =>
-        !isBlueprintGap(gapType) && flowId !== "MAIN",
-    },
-  ];
+  // When blueprintOnly=true: only emit blueprint gaps, capped at 2, sorted by blueprintConfidence
+  const activeGapGroups = blueprintOnly
+    ? [
+        {
+          label: "blueprint",
+          filter: (gapType: string, _flowId: string) => isBlueprintGap(gapType),
+        },
+      ]
+    : [
+        {
+          label: "blueprint",
+          filter: (gapType: string, _flowId: string) => isBlueprintGap(gapType),
+        },
+        {
+          label: "centroid-main",
+          filter: (gapType: string, flowId: string) =>
+            !isBlueprintGap(gapType) && flowId === "MAIN",
+        },
+        {
+          label: "centroid-non-main",
+          filter: (gapType: string, flowId: string) =>
+            !isBlueprintGap(gapType) && flowId !== "MAIN",
+        },
+      ];
 
-  for (const group of gapGroups) {
+  // Blueprint gap cap: 2 per confirmed blueprint in blueprintOnly mode, unlimited in explore phase
+  const BLUEPRINT_CAP = blueprintOnly ? Math.max(confirmedBlueprintCount * 2, 2) : Infinity;
+  let blueprintQuestionsEmitted = 0;
+
+  for (const group of activeGapGroups) {
     if (questions.length >= maxQuestions) break;
 
     const shouldConsolidate = group.label === "centroid-main";
@@ -774,7 +847,10 @@ export async function generateAdaptiveQuestions(
 
       const questionText = consolidatedGroup.question;
       const allPrevious = [...previousQuestions, ...askedInThisBatch];
-      if (await isQuestionDuplicate(questionText, allPrevious)) continue;
+      if (await isQuestionDuplicate(questionText, allPrevious)) {
+        console.log(`[DEDUP SKIPPED] Consolidated group "${consolidatedGroup.groupId}": "${questionText.slice(0, 100)}..."`);
+        continue;
+      }
 
       const stepLabels = consolidatedGroup.steps.map((step) =>
         formatStepLabel(step.flowId, step.index),
@@ -807,14 +883,31 @@ export async function generateAdaptiveQuestions(
 
       if (filteredGaps.length === 0) continue;
 
-      for (const gap of filteredGaps) {
+      // Sort blueprint gaps by blueprintConfidence descending so highest-confidence
+      // blueprints get their questions asked first
+      const sortedGaps =
+        group.label === "blueprint"
+          ? [...filteredGaps].sort(
+              (a, b) => (b.blueprintConfidence ?? 0) - (a.blueprintConfidence ?? 0),
+            )
+          : filteredGaps;
+
+      for (const gap of sortedGaps) {
         if (questions.length >= maxQuestions) break;
         if (!gap.suggestedQuestion) continue;
+
+        // Apply blueprint cap
+        if (group.label === "blueprint") {
+          if (blueprintQuestionsEmitted >= BLUEPRINT_CAP) break;
+        }
 
         const questionText = gap.suggestedQuestion;
         const allPrevious = [...previousQuestions, ...askedInThisBatch];
 
-        if (await isQuestionDuplicate(questionText, allPrevious)) continue;
+        if (await isQuestionDuplicate(questionText, allPrevious)) {
+          console.log(`[DEDUP SKIPPED] Gap type "${gap.type}" step ${priority.stepIndex}: "${questionText.slice(0, 100)}..."`);
+          continue;
+        }
 
         questions.push({
           id: `gap-${gap.type}-step-${priority.stepIndex}`,
@@ -828,14 +921,23 @@ export async function generateAdaptiveQuestions(
           answerGuidance: getAnswerGuidanceForGapType(gap.type),
         });
         askedInThisBatch.push(questionText);
+
+        if (group.label === "blueprint") {
+          blueprintQuestionsEmitted++;
+        }
       }
     }
   }
 
+  // PHASE 2 & 3 are skipped when blueprintOnly=true
+  if (blueprintOnly) return questions;
+
   // PHASE 2: Missing Flow Conditions (Medium Value)
-  // Only ask if a flow is completely missing a condition
+  // Only ask if a flow is completely missing a condition.
+  // Restrict to baseline flows — asking "What triggers ALT_X?" for flows we just
+  // generated this session is circular and wastes question budget.
   const missingConditions = flowUncertainties
-    .filter((f) => f.flowKind !== "MAIN" && !f.hasCondition)
+    .filter((f) => f.flowKind !== "MAIN" && !f.hasCondition && (!baselineFlowIds || baselineFlowIds.has(f.flowId)))
     .sort((a, b) => b.uncertaintyScore - a.uncertaintyScore);
 
   for (const flowUnc of missingConditions) {

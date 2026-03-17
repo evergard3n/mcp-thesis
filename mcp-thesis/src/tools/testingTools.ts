@@ -28,6 +28,7 @@ import {
   generateHybridQuestions,
   expertAnswerOpenEndedQuestions,
   generateAdaptiveQuestions,
+  probeBlueprintsWithExpert,
   OpenEndedAnswer,
 } from "../validators/llm.validator.js";
 import {
@@ -36,11 +37,13 @@ import {
 } from "../evaluators/three-tier.evaluator.js";
 import {
   analyzeGaps,
+  collectStepEmbeddings,
   InteractionMemory,
   GapType,
   clearGapCentroidsCache,
   GapAnalysis,
 } from "../analyzers/gap.analyzer.js";
+import { detectActivatedBlueprints } from "../analyzers/blueprint.detector.js";
 import {
   rankAllUncertainties,
   UncertaintyAnalysis,
@@ -384,6 +387,11 @@ Generate a vague summary:`;
         // Clone baseline for iterative refinement
         let currentUseCase = JSON.parse(JSON.stringify(baseline));
 
+        // Capture the set of flow IDs that exist at baseline — used later to
+        // prevent Phase 2 "missing condition" questions from targeting flows
+        // that were generated during the HITL session (circular questions).
+        const baselineFlowIds = new Set<string>(baseline.flows.map((f: GenFlow) => f.id));
+
         const MAX_QUESTIONS = 20;
         const MAX_ITERATIONS = 5;
         let iteration = 0;
@@ -393,6 +401,11 @@ Generate a vague summary:`;
         const allQuestions: string[] = [];
         let debugInfo: any = {};
 
+        // Blueprint two-phase gate state
+        const confirmedBlueprintIds = new Set<string>();
+        const droppedBlueprintIds = new Set<string>();
+        let blueprintsProbed = false;
+
         // Iterative refinement loop
         while (
           iteration < MAX_ITERATIONS &&
@@ -400,6 +413,40 @@ Generate a vague summary:`;
         ) {
           iteration++;
           console.log(`  Iteration ${iteration}...`);
+
+          // Step 1.5: Blueprint probe (once, before analyzeGaps so confirmed set is populated)
+          // Runs detectActivatedBlueprints directly then asks expert to confirm, so that
+          // analyzeGaps sees the confirmed set and emits blueprint gaps immediately.
+          if (!blueprintsProbed) {
+            const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
+            const domainAnalysis = await classifyUseCaseDomain(currentUseCase);
+            const domainFilter =
+              domainAnalysis.dominantDomain === "human-system" ||
+              domainAnalysis.dominantDomain === "system-system"
+                ? domainAnalysis.dominantDomain
+                : undefined;
+            const activations = await detectActivatedBlueprints(
+              stepEmbeddings,
+              domainFilter,
+            );
+            console.log(
+              `  Blueprint probe: ${activations.length} activated blueprints`,
+            );
+            const confirmed = await probeBlueprintsWithExpert(
+              activations,
+              tc.inputs.detailed,
+              tc.domain,
+              geminiFunctions,
+            );
+            confirmed.forEach((id) => confirmedBlueprintIds.add(id));
+            activations
+              .filter((a) => !confirmedBlueprintIds.has(a.blueprintId))
+              .forEach((a) => droppedBlueprintIds.add(a.blueprintId));
+            blueprintsProbed = true;
+            console.log(
+              `  Probe result: confirmed=[${confirmed.join(", ")}], dropped=[${Array.from(droppedBlueprintIds).join(", ")}]`,
+            );
+          }
 
           // Step 2: Validate and analyze gaps
           const validation = await validateUseCaseWithFeedback(currentUseCase);
@@ -409,6 +456,8 @@ Generate a vague summary:`;
             validation.score!,
             tc.inputs.vague,
             conversationHistory,
+            confirmedBlueprintIds,
+            droppedBlueprintIds,
           );
 
           // Step 3: Uncertainty analysis and priority ranking
@@ -431,6 +480,8 @@ Generate a vague summary:`;
               gapTypes: gapAnalysis.gaps.map((g) => g.type),
               confidence: uncertaintyAnalysis.overallConfidence,
               highPriorityCount: uncertaintyAnalysis.highPriorityCount,
+              confirmedBlueprints: Array.from(confirmedBlueprintIds),
+              droppedBlueprints: Array.from(droppedBlueprintIds),
               stepPriorities: uncertaintyAnalysis.stepPriorities
                 .slice(0, 5)
                 .map((p) => ({
@@ -456,11 +507,16 @@ Generate a vague summary:`;
           }
 
           // Step 4: Generate adaptive questions based on priorities
+          // Iteration 1 focuses solely on blueprints (blueprintOnly=true)
+          const isFirstIteration = iteration === 1;
           const adaptiveQuestions = await generateAdaptiveQuestions(
             uncertaintyAnalysis.stepPriorities,
             uncertaintyAnalysis.flowUncertainties,
             Math.min(6, MAX_QUESTIONS - totalQuestionsAsked),
             allQuestions,
+            isFirstIteration,
+            confirmedBlueprintIds.size,
+            baselineFlowIds,
           );
 
           if (adaptiveQuestions.length === 0) {
@@ -549,6 +605,8 @@ Generate a vague summary:`;
 
           totalQuestionsAsked += adaptiveQuestions.length;
           allQuestions.push(...adaptiveQuestions.map((q) => q.question));
+
+          if (totalQuestionsAsked >= MAX_QUESTIONS) break;
         }
 
         console.log(
@@ -624,7 +682,10 @@ Results: ${outputPath}`,
             key === "groundTruth" ||
             key === "hitlQuestions" ||
             key === "intermediateData" ||
-            key === "iterativeRefinement"
+            key === "iterativeRefinement" ||
+            key === "conditionA_BaselineDomain" ||
+            key === "conditionA_DetailedDomain" ||
+            key === "conditionB_EnhancedHITLDomain"
           )
             continue;
 
