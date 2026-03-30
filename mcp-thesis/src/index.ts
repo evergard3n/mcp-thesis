@@ -3,7 +3,9 @@
 import "dotenv/config";
 
 import express from "express";
+import swaggerUi from "swagger-ui-express";
 import { z } from "zod";
+import { openApiSpec } from "./docs/openapi.js";
 import { OPENROUTER_API_KEY } from "./helpers/env.js";
 import {
   deleteProject,
@@ -107,6 +109,12 @@ const sessions = new SessionManager(OPENROUTER_API_KEY, geminiApiKey);
 
 const app = express();
 app.use(express.json());
+
+app.get("/openapi.json", async (_req, res) => {
+  res.status(200).json(openApiSpec);
+});
+
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.get("/ping", async (_req, res) => {
   res.status(200).send("pong");

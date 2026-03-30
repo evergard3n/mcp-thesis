@@ -509,9 +509,22 @@ Keep answers concise but complete (2-4 sentences for each flow).
 </instructions>
   `;
 
-  return geminiFunctions.generateStructured({
+  const answers = await geminiFunctions.generateStructured({
     prompt,
     schema: answerSchema,
+  });
+
+  const speculativePattern = /\b(likely|typically|could|might|may|hypothetically|assume|assumption|not explicitly|not specified|general knowledge)\b/i;
+
+  return answers.map((answer) => {
+    if (speculativePattern.test(answer.answer)) {
+      return {
+        ...answer,
+        confidence: "low",
+      };
+    }
+
+    return answer;
   });
 }
 
@@ -605,6 +618,12 @@ function getAnswerGuidanceForGapType(gapType: string): string {
       return "Describe: (1) what minimum information is required to finish, (2) what the system does if requirements aren't met, (3) whether the actor can save and return later.";
     case "missing_save_resume_handling":
       return "Describe: (1) whether progress can be saved, (2) what data is preserved, (3) how resume works and whether re-validation is required.";
+    case "missing_eligibility_failure_handling":
+      return "Describe: (1) the exact validation failure trigger, (2) whether the claim is declined immediately, (3) what claimant notifications and records are required, (4) whether the process terminates or allows retry/appeal.";
+    case "missing_assignment_unavailability_handling":
+      return "Describe: (1) what happens when no assignee is available, (2) whether the case is queued/on hold, (3) who is notified, (4) how and when assignment resumes.";
+    case "missing_policy_outcome_branching":
+      return "Describe: (1) how severe vs minor policy violations are distinguished, (2) which path declines/terminates, (3) which path allows negotiation or adjusted payout, (4) who decides each outcome.";
     default:
       return "Describe the scenario: what triggers it, what steps are taken, and how it resolves or integrates with the main flow.";
   }
@@ -798,6 +817,83 @@ export async function generateAdaptiveQuestions(
 ): Promise<OpenEndedQuestion[]> {
   const questions: OpenEndedQuestion[] = [];
   const askedInThisBatch: string[] = [];
+
+  if (!blueprintOnly && previousQuestions.length === 0 && confirmedBlueprintCount <= 1) {
+    const mainSteps = stepPriorities
+      .filter((p) => p.flowId === "MAIN")
+      .sort((a, b) => a.stepIndex - b.stepIndex);
+
+    const findMainStep = (matcher: (description: string) => boolean) =>
+      mainSteps.find((step) => matcher(step.description.toLowerCase()));
+
+    const eligibilityStep = findMainStep(
+      (description) =>
+        (description.includes("policy") &&
+          (description.includes("valid") ||
+            description.includes("verify") ||
+            description.includes("align"))) ||
+        (description.includes("eligib") && description.includes("verify")),
+    );
+
+    const assignmentStep = findMainStep(
+      (description) =>
+        description.includes("assign") &&
+        (description.includes("agent") ||
+          description.includes("review") ||
+          description.includes("adjuster")),
+    );
+
+    const guidelineStep = findMainStep(
+      (description) =>
+        description.includes("guideline") ||
+        (description.includes("policy") &&
+          (description.includes("within") || description.includes("violat"))),
+    );
+
+    const seedQuestions: Array<{ question: string; step?: StepPriorityShape }> = [];
+
+    if (eligibilityStep) {
+      seedQuestions.push({
+        step: eligibilityStep,
+        question: `If eligibility/policy validation fails at MAIN step ${eligibilityStep.stepIndex} ("${eligibilityStep.description}"), what exact actions occur (decline, notify claimant, record details, terminate), and is any retry or appeal path allowed?`,
+      });
+    }
+
+    if (assignmentStep) {
+      seedQuestions.push({
+        step: assignmentStep,
+        question: `What happens if no reviewer/agent is available at MAIN step ${assignmentStep.stepIndex} ("${assignmentStep.description}")? Is the case queued or put on hold, who is notified, and when does processing resume?`,
+      });
+    }
+
+    if (guidelineStep) {
+      seedQuestions.push({
+        step: guidelineStep,
+        question: `At MAIN step ${guidelineStep.stepIndex} ("${guidelineStep.description}"), how are major policy violations handled versus minor violations? Does one path terminate the claim while another allows negotiation or adjusted payment?`,
+      });
+    }
+
+    for (const seed of seedQuestions) {
+      if (questions.length >= maxQuestions) break;
+      const allPrevious = [...previousQuestions, ...askedInThisBatch];
+      if (await isQuestionDuplicate(seed.question, allPrevious)) continue;
+
+      questions.push({
+        id: `coverage-${seed.step?.stepIndex ?? "general"}`,
+        question: seed.question,
+        context: {
+          step: seed.step ? `Step ${seed.step.stepIndex}` : undefined,
+          patternType: "coverage_first",
+          whyAsking:
+            "Coverage-first safeguard: ensure critical eligibility, availability, and policy-outcome branches are captured before deeper probing.",
+          flowId: "MAIN",
+        },
+        answerGuidance:
+          "State explicit trigger, actor actions, and end state (resume, terminate, or negotiate). If not specified in source description, say so explicitly.",
+      });
+      askedInThisBatch.push(seed.question);
+    }
+  }
 
   // PHASE 1: Prioritize Gap-Based Exception Questions (Highest Value)
   // These directly discover missing flows (what if X fails?)

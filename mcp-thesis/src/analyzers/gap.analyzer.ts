@@ -29,6 +29,9 @@ export type GapType =
   | "missing_environmental_interruptions"
   | "missing_technology_variations"
   | "missing_save_resume_handling"
+  | "missing_eligibility_failure_handling"
+  | "missing_assignment_unavailability_handling"
+  | "missing_policy_outcome_branching"
   | `blueprint_${string}`;
 
 export interface Gap {
@@ -213,6 +216,9 @@ const GAP_TYPE_PRIORITY: GapType[] = [
   "missing_validation_handling",
   "missing_search_handling",
   "missing_resource_availability",
+  "missing_eligibility_failure_handling",
+  "missing_assignment_unavailability_handling",
+  "missing_policy_outcome_branching",
   "missing_system_failure_handling",
   "missing_save_resume_handling",
   "missing_post_completion_scenarios",
@@ -536,6 +542,7 @@ export async function analyzeGaps(
   }
 
   // Phase 5: Description-based detectors
+  gaps.push(...detectClaimAdjudicationOutcomes(useCase));
   gaps.push(...detectTemporalExceptions(useCase, originalDescription));
   gaps.push(...detectNestedExceptions(useCase, originalDescription));
   gaps.push(...detectEnvironmentalInterruptions(useCase, originalDescription));
@@ -916,6 +923,112 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
 }
 
 // Description-based detectors for scenarios not captured by semantic analysis
+
+function detectClaimAdjudicationOutcomes(useCase: GenUseCase): Gap[] {
+  const mainFlow = useCase.flows.find((flow) => flow.id === "MAIN" || flow.kind === "MAIN");
+  if (!mainFlow) return [];
+
+  const mainSteps = mainFlow.steps.map((step) => ({
+    ...step,
+    descriptionLower: step.description.toLowerCase(),
+  }));
+
+  const hasPolicyValidation = mainSteps.some(
+    (step) =>
+      (step.descriptionLower.includes("policy") &&
+        (step.descriptionLower.includes("valid") ||
+          step.descriptionLower.includes("verify") ||
+          step.descriptionLower.includes("align") ||
+          step.descriptionLower.includes("guideline"))) ||
+      (step.descriptionLower.includes("eligib") && step.descriptionLower.includes("verify")),
+  );
+
+  const hasAssignment = mainSteps.some(
+    (step) =>
+      step.descriptionLower.includes("assign") &&
+      (step.descriptionLower.includes("agent") ||
+        step.descriptionLower.includes("review") ||
+        step.descriptionLower.includes("adjuster")),
+  );
+
+  const hasGuidelineReview = mainSteps.some(
+    (step) =>
+      step.descriptionLower.includes("guideline") ||
+      (step.descriptionLower.includes("policy") && step.descriptionLower.includes("within")),
+  );
+
+  const nonMainFlows = useCase.flows.filter((flow) => flow.id !== mainFlow.id);
+
+  const hasDeclineTerminationFlow = nonMainFlows.some((flow) => {
+    const text = `${flow.condition ?? ""} ${flow.steps
+      .map((step) => step.description)
+      .join(" ")}`.toLowerCase();
+    return (
+      (text.includes("decline") || text.includes("reject")) &&
+      (text.includes("terminate") || text.includes("close") || text.includes("end"))
+    );
+  });
+
+  const hasAssignmentUnavailableFlow = nonMainFlows.some((flow) => {
+    const text = `${flow.condition ?? ""} ${flow.steps
+      .map((step) => step.description)
+      .join(" ")}`.toLowerCase();
+    const waits =
+      text.includes("wait") || text.includes("hold") || text.includes("queue");
+    const assignment =
+      text.includes("assign") &&
+      (text.includes("agent") || text.includes("review") || text.includes("adjuster"));
+    return waits && assignment;
+  });
+
+  const hasNegotiationFlow = nonMainFlows.some((flow) => {
+    const text = `${flow.condition ?? ""} ${flow.steps
+      .map((step) => step.description)
+      .join(" ")}`.toLowerCase();
+    return (
+      text.includes("negotiat") ||
+      text.includes("partial payment") ||
+      text.includes("adjusted payment")
+    );
+  });
+
+  const gaps: Gap[] = [];
+
+  if (hasPolicyValidation && !hasDeclineTerminationFlow) {
+    gaps.push({
+      type: "missing_eligibility_failure_handling",
+      severity: "high",
+      description:
+        "Main flow validates policy/eligibility but no explicit decline-and-terminate outcome is modeled for invalid cases.",
+      suggestedQuestion:
+        "If eligibility or policy validation fails, what exact steps occur (decline, notify claimant, record details), and does the process terminate or allow retry/appeal?",
+    });
+  }
+
+  if (hasAssignment && !hasAssignmentUnavailableFlow) {
+    gaps.push({
+      type: "missing_assignment_unavailability_handling",
+      severity: "high",
+      description:
+        "Main flow assigns an agent/reviewer but no branch describes what happens when no assignee is available.",
+      suggestedQuestion:
+        "What happens if no reviewer/agent is available at assignment time? Is the case queued or put on hold, who is notified, and when does processing resume?",
+    });
+  }
+
+  if (hasGuidelineReview && !hasNegotiationFlow) {
+    gaps.push({
+      type: "missing_policy_outcome_branching",
+      severity: "medium",
+      description:
+        "Main flow checks policy guidelines but does not model differentiated outcomes for severe vs minor violations.",
+      suggestedQuestion:
+        "When policy guidelines are violated, how are major violations handled versus minor violations? Does one path terminate while another allows negotiation or adjusted payment?",
+    });
+  }
+
+  return gaps;
+}
 
 function detectTemporalExceptions(
   useCase: GenUseCase,

@@ -356,6 +356,96 @@
       ]
     },
     {
+      "id": "adjudication_decisioning",
+      "name": "Adjudication Decisioning",
+      "probeQuestion": "Does this process involve validating eligibility/policy rules, assigning a reviewer/agent, and deciding outcomes like decline, waitlist, or negotiated settlement?",
+      "domainType": "human-system",
+      "domainDescription": "Human-initiated claim/case review with decision branches for eligibility, assignment availability, and policy compliance",
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "claimant",
+          "description": "The actor who submits a claim or case for adjudication",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "submits claim",
+            "files a claim",
+            "reports incident",
+            "provides substantiating data",
+            "submits case details"
+          ]
+        },
+        {
+          "id": "adjudicator",
+          "description": "The actor or organization that validates policy/eligibility and decides outcomes",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "verifies policy",
+            "validates eligibility",
+            "reviews claim",
+            "assigns agent",
+            "declines claim",
+            "pays claimant"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "eligibility_failure",
+          "description": "Eligibility or policy validation fails, leading to decline/termination",
+          "triggerCondition": "policy invalid or eligibility failed",
+          "anchorRole": "adjudicator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "If policy or eligibility validation fails at step {adjudicator.stepIndex}, what exact actions occur (decline, notify, record) and does the process terminate or allow appeal?",
+          "checkPhrases": [
+            "invalid policy",
+            "claim declined",
+            "declines claim",
+            "terminates proceedings",
+            "not eligible"
+          ]
+        },
+        {
+          "id": "assignee_unavailable",
+          "description": "No reviewer/agent is available when assignment is needed",
+          "triggerCondition": "agent unavailable",
+          "anchorRole": "adjudicator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if no reviewer/agent is available at step {adjudicator.stepIndex}? Is the case queued or put on hold, who is notified, and when does processing resume?",
+          "checkPhrases": [
+            "no agents are available",
+            "agent unavailable",
+            "put on hold",
+            "wait for agent",
+            "assign once available"
+          ]
+        },
+        {
+          "id": "policy_severity_branch",
+          "description": "Policy violations branch to different outcomes based on severity",
+          "triggerCondition": "policy violation severity",
+          "anchorRole": "adjudicator",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "When policy guidelines are violated, how are major violations handled versus minor violations? Does one path terminate while another allows negotiation or adjusted payment?",
+          "checkPhrases": [
+            "violates policy guidelines",
+            "minor policy violation",
+            "major policy violation",
+            "begins negotiation",
+            "degree of payment"
+          ]
+        }
+      ]
+    },
+    {
       "id": "api_integration",
       "name": "API Integration Pattern",
       "probeQuestion": "Does this process involve one system calling another system's API or service, where timeouts, unavailability, or bad responses may occur?",

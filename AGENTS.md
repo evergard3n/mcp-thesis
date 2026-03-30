@@ -1,289 +1,192 @@
-# MCP Thesis - Agent Guidelines
-
-## Table of Contents
-
-1. [Project Overview](#1-project-overview)
-2. [Research Methodology: HITL Framework](#2-research-methodology-hitl-framework)
-3. [Architecture & Data Structure](#3-architecture--data-structure)
-4. [Code Style Guidelines](#4-code-style-guidelines)
-5. [Testing & Evaluation Framework](#5-testing--evaluation-framework)
-6. [MCP Tools Reference](#6-mcp-tools-reference)
-7. [Build & Development Commands](#7-build--development-commands)
-8. [DO NOTs](#8-do-nots)
-
----
-
-## 1. Project Overview
-
-**MCP Thesis** is a Model Context Protocol server for UML use case management, focused on LLM-assisted use case extraction, validation, and iterative improvement. It uses Gemini 2.0 Flash via OpenRouter.
-
-**Working Directory**: `/Users/arya/Documents/code/mcp-thesis/mcp-thesis/`
-
----
-
-## 2. Research Methodology: HITL Framework
-
-### 2.1 Core Concepts
-
-The framework acts as an **interviewer** (like a Business Analyst) that asks the right questions to help domain experts articulate their knowledge. It is NOT a one-shot generator that magically infers everything from input.
-
-### 2.2 Research Problem & Solution
-
-**The Core Tension**: Previous approaches (COVE) often expanded use cases with "hallucinations"—plausible but incorrect flows. The challenge is distinguishing reasonable logical additions from pure fabrications.
-
-**The Solution**:
-
-1.  **Information Asymmetry**: Separating knowledge roles.
-    - **Generator**: Sees only the vague summary.
-    - **Expert**: Has the detailed ground truth.
-2.  **Constrained Elicitation**: Using multiple-choice questions to limit invention.
-3.  **Three-Tier Evaluation**: Distinguishing between Grounded (in input), Logical (reasonable domain knowledge), and Hallucination (wrong).
-
-### 2.3 Data Structure & Information Separation
-
-Each test case contains:
-
-- **vague**: High-level description (stakeholder input)
-- **detailed**: Domain knowledge (hidden from generator, used by expert simulator)
-- **groundTruth**: Ideal final use case
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│   FRAMEWORK SEES:              │   EXPERT HAS (hidden):            │
-│   - Vague input                │   - Detailed input                │
-│   - Current generated UC       │   - Domain knowledge              │
-│   - Previous Q&A history       │                                   │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### 2.4 Iterative Flow
-
-1.  **Generate UC**: Extract initial use case from vague input.
-2.  **Gap Analyzer**: Detect missing information/ambiguities (sees vague + current UC).
-3.  **Generate Qs**: Formulate targeted questions based on gaps.
-4.  **Expert Answers**: Expert simulator answers using detailed input.
-5.  **Update UC**: Refine use case with new, grounded knowledge.
-
----
-
-## 3. Architecture & Data Structure
-
-### 3.1 Session & Store Architecture
-
-Each session has one store, and each store can contain multiple projects.
-
-**Firestore Structure**:
-
-```
-stores/
-  └── {sessionId}/
-      ├── id: string (sessionId)
-      ├── currentProjectId: string | null
-      └── projects: {
-            [projectId: string]: {
-              id: string, name: string, description: string,
-              useCases: UseCase[], actors: Actor[]
-            }
-          }
-```
-
-**Key Patterns**:
-
-- **Session Isolation**: `SessionServer`, `JsonProjectStore`, and `GeminiOpenRouterFunctions` are isolated per session.
-- **Store Pattern**: All data operations go through `JsonProjectStore`.
-- **Session-Scoped Singleton**: `GeminiOpenRouterFunctions` is instantiated once per session in `SessionServer` and passed to tools/services, replacing per-call instantiation.
-
-### 3.2 Key Architectural Components
-
-#### Semantic Embedding Service
-
-Uses `@xenova/transformers` (MiniLM-L12-v2) for semantic matching instead of regex.
-
-- **Purpose**: Detect equivalent concepts ("matches" vs "validates").
-- **Usage**: `semanticService.embedBatch()` for efficiency.
-- **Application**: Gap analysis, flow comparison, duplicate detection.
-
-#### LLM Interaction
-
-- All calls via `GeminiOpenRouterFunctions`.
-- **Batch Evaluation**: `evaluateUseCase` evaluates all flows in a single API call for performance.
-- **Zod Validation**: All LLM outputs must be validated with Zod schemas.
-
----
-
-## 4. Code Style Guidelines
-
-### 4.1 TypeScript Configuration
-
-- **Target**: ES2022, **Module**: Node16 with ES modules.
-- **Strict mode**: Enabled.
-
-### 4.2 Import Conventions
-
-**CRITICAL**: Always use `.js` extensions in imports.
-
-```typescript
-// ✅ Correct
-import { JsonProjectStore } from "./stores/projectStore.js";
-```
-
-**Order**: Node built-ins → MCP SDK → local absolute → local relative.
-
-### 4.3 Naming & Types
-
-- **Files**: `camelCase.ts`, `kebab-case.ts`, `*.interface.ts`, `*.service.ts`.
-- **Variables**: `camelCase`. Classes: `PascalCase`. Constants: `UPPER_SNAKE_CASE`.
-- **Types**: Prefer `interface` for shapes, `type` for unions. Always type params and returns.
-
-### 4.4 Error Handling
-
-- **MCP Tools**: Return structured errors, NEVER throw.
-- **Services**: Use try-catch with meaningful error wrapping.
-
-### 4.5 Async/Await
-
-- Always use `async/await`, never raw promises (`.then()`).
-
----
-
-## 5. Testing & Evaluation Framework
-
-### 5.1 Three-Tier Evaluation Metrics
-
-We evaluate generated flows against Ground Truth (GT) using three categories:
-
-1.  **GROUNDED (Score 1.0)**: Explicitly mentioned in the input description.
-2.  **LOGICAL (Score 0.7)**: Not in input, but reasonable for the domain (not a hallucination).
-3.  **HALLUCINATION (Score 0.0)**: Neither grounded nor logical; incorrect or absurd.
-
-### 5.2 Key Metrics
-
-- **Precision**: `(Grounded + Logical) / Total Generated Flows` (How accurate is the output?)
-- **Recall (Discovery Rate)**: `Flows Matching GT / Total GT Flows` (How complete is the output?)
-- **F1 Score**: Harmonic mean of Precision and Recall.
-- **Quality Score**: Weighted average: `(Grounded×1.0 + Logical×0.7) / Total Flows`.
-
-### 5.3 Current Problems (as of 2026-02-02)
-
-#### 1. Gap Analyzer: Keyword Matching is Imprecise
-
-The gap analyzer uses regex patterns to detect validation steps but misses semantic equivalents. Example: Step "Matches the loss to a policy" doesn't trigger `validat|check|verif|confirm` pattern, so policy match failures were never flagged.
-
-#### 2. Gap Analyzer: No Vague Input Structure Parsing
-
-The vague input may mention scenarios like "pause, save, resume" but the analyzer only does keyword detection, not semantic understanding. Results in generic questions instead of specific ones like "Can the clerk restart an interrupted entry?"
-
-#### 3. Duplication in Question Generation (GitHub Issue #1)
-
-The iterative HITL refinement process asks duplicate questions across iterations instead of exploring new areas. Evidence shows 18.75% of questions are exact duplicates and 62% of generated flows are duplicates.
-**Root Cause**: Ineffective semantic filtering due to wording mismatch between gap context and actual questions, plus missing metadata-based deduplication.
-**Link**: https://github.com/evergard3n/mcp-thesis/issues/1
-
-#### 4. No Diminishing Returns Mechanism
-
-The uncertainty ranker scores by `uncertainty × criticality`. When a question is answered and new flows generated, those new flows may also have high uncertainty, causing the same topic to be prioritized again instead of moving to unexplored aspects.
-
-#### 5. Limited Coverage of Common Real-World Scenarios
-
-The gap analyzer has specific detectors (temporal, nested, resource, etc.) but doesn't cover all common patterns:
-
-- Policy/data matching failures
-- User restart/resume interrupted work
-- Data changes after validation
-- Different processing paths based on data type
-
-Evidence: Only 8/23 ground truth flows discovered (34.78% discovery rate).
-
-#### Problem Summary
-
-| Problem                    | Component          | Impact                                         | Solution                                                                | Status                                                                  |
-| -------------------------- | ------------------ | ---------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Keyword matching imprecise | Gap Analyzer       | Misses validation steps with synonyms          | **SemanticService** - Use embeddings for semantic matching              | **PARTIAL** - Semantic filter integrated, but detectors still use regex |
-| No vague input parsing     | Gap Analyzer       | Can't extract implied scenarios                | **SemanticService** - Semantic clustering of vague input                | **OPEN** - Detectors still use keyword matching                         |
-| QA loop stuck (Issue #1)   | Uncertainty Ranker | Limited breadth exploration (62% duplicates)   | **Metadata Deduplication** - Filter by step/type before semantic check  | **PARTIAL** - Interface exists, logic missing                           |
-| No diminishing returns     | Uncertainty Ranker | Same topics repeated                           | **Diminishing Returns** - Reduce priority of recently explored topics   | **OPEN**                                                                |
-| Limited scenario coverage  | Gap Analyzer       | Missing common BA questions (34.78% discovery) | **New Detectors** - Add coverage for policy matching, resume work, etc. | **PARTIAL** - New detectors added, but still keyword-based              |
-
-#### Fixed Problems
-
-- ~~Evaluation: Semantic matching too permissive~~ - Fixed with one-to-one GT flow claiming
-- ~~Evaluation: Duplicate flows inflate metrics~~ - Fixed with `isDuplicate` tracking and deduplication
-- ~~Performance: High API costs~~ - Fixed with batch flow evaluation (~66% reduction)
-
-#### Planned Centroids (Pending Task 1 Results)
-
-These centroids were identified from GT coverage analysis but are **deferred until Task 1 (enriched question templates) is measured**. If enriched templates on existing centroids already elicit these scenarios from the expert, new centroids are unnecessary and would only cause question overlap on the same step.
-
-| Centroid | Type | GT Flows Covered | Domain-General? | Rationale for Deferral |
-|---|---|---|---|---|
-| `user_decision` | Semantic | 4 (cancel/override/force-proceed) | Yes — any interactive system | Enriched `completion` and `validation` templates may already prompt expert about user refusal/override |
-| `data_modification` | Semantic | 3 (change data after downstream processing) | Yes — multi-phase processes | Enriched `validation` template mentioning "conflicting records" may elicit re-validation answers |
-| Session keywords (`pause`, `save`, `resume`, `restart`) | Keyword detector | 2 (save/resume interrupted work) | Yes | Lowest risk — the vague input literally contains these words but no detector catches them. Could be added to `detectTemporalExceptions` or as a new `detectSessionPersistence` |
-
-**Decision criteria**: Run Task 1, measure discovery rate. If specific GT flow clusters remain at 0% discovery, add the corresponding centroid with empirical justification. The session keyword detector is the exception — it's a bug fix (vague input words not detected) and can be added independently.
-
-**Explicitly excluded**:
-- `business_scope` — 1 GT flow, domain-specific ("not our company")
-- `exception_resolution` — Structural pattern requiring new analysis phase, not a step-level centroid
-- `system_timeout_fallback` — 1 GT flow, coverable by enriching `resource_assignment` template
-
----
-
-## 6. MCP Tools Reference
-
-### 6.1 Test Data Management
-
-- **`prepareTestData`**: Validates test cases and creates structured dataset JSON (`test-data/dataset-*.json`).
-
-### 6.2 Comparison Tools
-
-- **`runCOVEComparison`**: Phase 1 testing. Compares COVE with Vague Input vs. COVE with Detailed Input.
-- **`runHITLComparison`**: Phase 2 testing. Compares Constrained HITL vs. COVE (Detailed).
-- **`evaluateResults`**: Runs the three-tier evaluation on results files.
-
-### 6.3 HITL Workflow Tools
-
-- **`generateQuestionsFromBaseline`**: Step 1. Validates baseline and generates questions (with optional score awareness).
-- **`refineWithHumanAnswers`**: Step 2. Refines use case using provided answers (constrained to avoid hallucination).
-- **Note**: Replaces the old monolithic `extractUseCaseWithConstrainedHITL`.
-
-### 6.4 Data Formats
-
-- **Dataset**: JSON containing `vague`, `detailed`, and `groundTruth` for each `testCaseId`.
-- **Results**: JSON mapping test cases to generated Use Cases under different conditions (e.g., `conditionA_COVEVague`, `conditionD_HITL`).
-
----
-
-## 7. Build & Development Commands
+# AGENTS.md
+
+## Scope
+This is the default operating guide for agentic coding agents in this repository.
+Primary codebase: `mcp-thesis/`.
+
+## Repo Map
+- App root: `mcp-thesis/`
+- Entrypoint: `mcp-thesis/src/index.ts`
+- Build output: `mcp-thesis/build/`
+- Test scripts: `mcp-thesis/test-scripts/`
+- Data/eval files: `mcp-thesis/test-data/`
+
+## Cursor/Copilot Rules Check
+The repository was checked for additional agent rules:
+- `.cursorrules`: not found
+- `.cursor/rules/`: not found
+- `.github/copilot-instructions.md`: not found
+No extra Cursor/Copilot instruction files are currently present.
+
+## Setup
+Run commands from `mcp-thesis/` unless explicitly noted.
 
 ```bash
-npm install                    # Install dependencies
-npm run dev                    # Run server in dev mode (tsx)
-npm run watch                  # Compile TypeScript on file changes
-npm run build                  # Build production bundle (tsc)
-npm run inspector              # Run MCP inspector for debugging
+cd mcp-thesis
+npm install
 ```
 
-### Environment Variables (.env)
+## Environment
+Current runtime expects environment variables for:
+- `OPENROUTER_API_KEY`
+- `GEMINI_API_KEY`
+- Firebase config vars referenced by `src/helpers/env.ts`
+
+Security rules:
+- Never commit secrets.
+- Never print API keys in logs.
+- Treat `.env` as sensitive.
+
+## Build/Lint/Test Commands
+
+### Build
+```bash
+npm run build
+```
+- Compiles TypeScript via `tsc`.
+- Produces `build/` artifacts.
+
+### Dev Server
+```bash
+npm run dev
+```
+- Runs `tsx watch src/index.ts`.
+- Starts backend server (default port `3006`).
+
+### TypeScript Watch
+```bash
+npm run watch
+```
+
+### Lint
+- No lint script is defined in `package.json`.
+- Do not add ESLint/Prettier unless explicitly requested.
+
+## Testing Model
+This repository does not use Jest/Vitest/Mocha as primary workflow.
+Testing is script-based and dataset/evaluation driven.
+
+Important: many scripts import from `build/`.
+Compile first:
 
 ```bash
-OPENROUTER_API_KEY=...     # Server-side LLM access
-GEMINI_API_KEY=...         # Session-specific
-API_KEY=...                # Firebase config
-# ... other Firebase vars
+npm run build
 ```
 
----
+### Run a Single Test (recommended)
+Fastest single test path:
 
-## 8. DO NOTs
+```bash
+node test-scripts/test-domain-simple.js
+```
 
-- ❌ Add linting/formatting configs (ESLint, Prettier).
-- ❌ Create unit test files (Jest, Mocha) - use MCP testing tools.
-- ❌ Use `.ts` extensions in import paths.
-- ❌ Throw errors in MCP tool handlers (return error objects).
-- ❌ Share state between sessions.
-- ❌ Use `require()` (ES module project).
-- ❌ Commit `.env` file.
-- ❌ Create documentation files unless specified.
-- ❌ Create separate files for new functions if they fit in existing topic files.
--       When I explictly say use a specific testing tool (runHITLComparison), just run that tool. DO NOT edit the code unless I command it.
+Other single-test scripts:
+
+```bash
+node test-scripts/test-domain-classification.js
+node test-scripts/test-domain-detailed.js
+node test-scripts/test-domain-filtering.js
+```
+
+### Run Full Batch Test
+```bash
+node test-scripts/test-all-datasets.js
+```
+- Runs all dataset files under `test-data/dataset-*.json`.
+- Slower and API-costly.
+
+## API-level Evaluation Endpoints
+When server is running, testing endpoints in `src/index.ts` include:
+- `POST /sessions/:sessionId/testing/prepare-test-data`
+- `POST /sessions/:sessionId/testing/embed-dataset`
+- `POST /sessions/:sessionId/testing/run-hitl-comparison`
+- `POST /sessions/:sessionId/testing/evaluate-results`
+- `POST /sessions/:sessionId/testing/classify-domain`
+
+## Code Style Guidelines
+
+### Language/Module Rules
+- TypeScript strict mode is enabled.
+- ESM project (`"type": "module"`).
+- In TS source, local imports must include `.js` extension.
+
+Example:
+```ts
+import { SessionManager } from "./session/session.manager.js";
+```
+
+### Imports
+- Keep imports at top of file.
+- Preferred order:
+  1) built-in/external packages
+  2) internal relative imports
+- Prefer named imports/exports unless existing default export pattern is established.
+
+### Formatting
+- Match existing style:
+  - 2-space indentation
+  - semicolons
+  - double-quoted strings
+  - trailing commas where already used
+- Keep functions focused; avoid sprawling methods unless consistent with file pattern.
+
+### Types
+- Type function params and return values for public/service boundaries.
+- Prefer `interface` for object contracts.
+- Use `type` for unions/compositions.
+- Validate external input and LLM output with Zod before business logic.
+
+### Naming
+- variables/functions: `camelCase`
+- classes/interfaces/types: `PascalCase`
+- constants/env vars: `UPPER_SNAKE_CASE`
+- keep existing file suffix patterns:
+  - `*.service.ts`
+  - `*.validator.ts`
+  - `*.analyzer.ts`
+  - `*.interface.ts`
+
+### Error Handling
+- Express handlers:
+  - validate with `safeParse`
+  - return structured `400/404/409` for expected request/state issues
+  - use `try/catch` and return `500` for unexpected failures
+- Service functions may throw `Error` with actionable context.
+- Do not swallow exceptions silently.
+
+### Async/Concurrency
+- Prefer `async/await` over `.then()` chains.
+- Avoid uncontrolled parallel LLM/API calls.
+- Preserve deterministic loop behavior in HITL orchestration.
+
+### State/Architecture
+- Respect session isolation (`SessionManager`, session-scoped store/orchestrator).
+- Do not share mutable state across sessions.
+- Keep persistence routed through store/service abstractions.
+
+### Logging
+- Keep logs concise and diagnostic.
+- Never log secrets.
+
+## Agent Guardrails
+Do:
+- Make minimal, targeted edits.
+- Preserve existing conventions and structure.
+- Build before script tests that depend on `build/`.
+- Report what changed and how verified.
+
+Do not:
+- Add new tooling/frameworks without request.
+- Remove `.js` import extensions in TS source.
+- Mix unrelated refactors into the same task.
+- Commit credentials or sensitive files.
+
+## Quick Commands
+```bash
+cd mcp-thesis
+npm install
+npm run build
+npm run dev
+node test-scripts/test-domain-simple.js
+node test-scripts/test-all-datasets.js
+```
