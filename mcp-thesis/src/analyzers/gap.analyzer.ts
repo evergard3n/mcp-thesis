@@ -460,11 +460,12 @@ export async function analyzeGaps(
   const categories = await loadGapCentroids();
 
   // Phase 1.5: Blueprint detection (prioritized) with domain filtering
-  // Only apply domain filter if detection is clear (not ambiguous)
-  const domainFilter =
-    detectedDomain === "human-system" || detectedDomain === "system-system"
-      ? detectedDomain
-      : undefined;
+  // Only apply domain filter if detection is clear (not ambiguous).
+  // "ambiguous" falls back to "human-system" (most common domain) rather than
+  // undefined, which would disable all domain filtering and allow cross-domain
+  // blueprint pollution (e.g. session_persistence activating on system-system flows).
+  const domainFilter: "human-system" | "system-system" =
+    detectedDomain === "system-system" ? "system-system" : "human-system";
 
   const blueprintResult = await detectBlueprintGaps(
     useCase,

@@ -266,11 +266,13 @@ export class HITLOrchestrator {
       if (!this.state.blueprintsProbed) {
         const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
         const domainAnalysis = await classifyUseCaseDomain(currentUseCase);
-        const domainFilter =
-          domainAnalysis.dominantDomain === "human-system" ||
+        // When domain is ambiguous, default to "human-system" to prevent all
+        // blueprints (including software-specific ones like session_persistence)
+        // from activating on non-software use cases.
+        const domainFilter: "human-system" | "system-system" =
           domainAnalysis.dominantDomain === "system-system"
-            ? domainAnalysis.dominantDomain
-            : undefined;
+            ? "system-system"
+            : "human-system";
         const activations = await detectActivatedBlueprints(stepEmbeddings, domainFilter);
         const confirmed = await probeBlueprintsWithExpert(
           activations,
@@ -330,12 +332,13 @@ export class HITLOrchestrator {
       this.transition("GENERATING_QUESTIONS", "Generating adaptive questions");
       const remainingBudget = this.state.maxQuestions - this.state.totalQuestionsAsked;
       const isFirstIteration = this.state.iterationCount === 0;
+      const hasBlueprintsToExplore = this.state.confirmedBlueprintIds.length > 0;
       const questions = await generateAdaptiveQuestions(
         uncertaintyAnalysis.stepPriorities,
         uncertaintyAnalysis.flowUncertainties,
         Math.min(6, remainingBudget),
         this.state.allQuestions,
-        isFirstIteration,
+        isFirstIteration && hasBlueprintsToExplore,
         this.state.confirmedBlueprintIds.length,
         baselineFlowIds,
       );
@@ -373,11 +376,23 @@ export class HITLOrchestrator {
         if (this.cancelled) {
           break;
         }
-        answers = providedAnswers.map((answer) => ({
-          questionId: answer.questionId,
-          answer: answer.answer,
-          confidence: "high",
-        }));
+        answers = providedAnswers.map((answer) => {
+          const text = answer.answer.trim();
+          const wordCount = text.split(/\s+/).filter(Boolean).length;
+          const isYesNo = /^(yes|no|yeah|nope|yep|nah|ok|okay|sure|correct|incorrect|true|false)\.?$/i.test(text);
+          if (isYesNo || wordCount <= 3) {
+            return {
+              questionId: answer.questionId,
+              answer: text,
+              confidence: "low",
+            };
+          }
+          return {
+            questionId: answer.questionId,
+            answer: text,
+            confidence: "high",
+          };
+        });
       }
 
       this.transition("REFINING", "Refining use case with answers");

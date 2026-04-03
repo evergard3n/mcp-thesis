@@ -514,7 +514,7 @@ Keep answers concise but complete (2-4 sentences for each flow).
     schema: answerSchema,
   });
 
-  const speculativePattern = /\b(likely|typically|could|might|may|hypothetically|assume|assumption|not explicitly|not specified|general knowledge)\b/i;
+  const speculativePattern = /\b(likely|typically|could|might|may|hypothetically|assume|assumption|not explicitly|not specified|not mentioned|not described|not covered|does not mention|does not describe|does not cover|general knowledge)\b/i;
 
   return answers.map((answer) => {
     if (speculativePattern.test(answer.answer)) {
@@ -535,7 +535,7 @@ Keep answers concise but complete (2-4 sentences for each flow).
 async function isQuestionDuplicate(
   newQuestion: string,
   previousQuestions: string[],
-  threshold: number = 0.75,
+  threshold: number = 0.85,
 ): Promise<boolean> {
   if (previousQuestions.length === 0) return false;
 
@@ -761,7 +761,7 @@ export async function probeBlueprintsWithExpert(
   const blueprintList = activations
     .map(
       (a, i) =>
-        `${i + 1}. Blueprint ID: "${a.blueprintId}" | Name: "${a.blueprintName}"\n   Probe: ${a.probeQuestion}`,
+        `${i + 1}. Blueprint ID: "${a.blueprintId}" | Name: "${a.blueprintName}" | Domain: "${a.domainType ?? "unspecified"}"\n   Probe: ${a.probeQuestion}`,
     )
     .join("\n");
 
@@ -773,8 +773,12 @@ ${detailedDescription}
 </description>
 
 The following process patterns (blueprints) have been tentatively detected in this use case.
-For each one, answer whether the description CONFIRMS that this pattern genuinely applies.
-Only confirm a blueprint if the description explicitly or strongly implies the pattern.
+Each blueprint has a Domain field indicating the type of system it applies to.
+Only confirm a blueprint if:
+1. The description explicitly or strongly implies the pattern, AND
+2. The blueprint's Domain is consistent with the nature of this use case.
+
+For example, a blueprint with Domain "human-system" requiring digital session management should NOT be confirmed for physical/manual processes.
 
 ${blueprintList}
 

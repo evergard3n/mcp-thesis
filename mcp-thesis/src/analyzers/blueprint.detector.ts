@@ -81,6 +81,7 @@ export interface BlueprintActivation {
   probeQuestion: string;
   confidence: number;
   assignments: RoleAssignment[];
+  domainType?: string;
 }
 
 export interface EmbeddedStep {
@@ -321,6 +322,7 @@ export async function detectActivatedBlueprints(
       probeQuestion: blueprint.probeQuestion ?? `Does this use case involve a ${blueprint.name} pattern?`,
       confidence: avgConfidence,
       assignments,
+      domainType: blueprint.domainType,
     });
   }
 

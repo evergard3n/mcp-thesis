@@ -220,9 +220,9 @@
     {
       "id": "multi_party_selection",
       "name": "Multi-Party Selection",
-      "probeQuestion": "Does this process involve an actor choosing among multiple options, vendors, providers, or candidates — where no match or multiple matches may be found?",
+      "probeQuestion": "Does this process involve a procurement or sourcing actor selecting among multiple vendors, suppliers, or contractors — where no match, multiple matches, or request splitting may occur?",
       "domainType": "human-system",
-      "domainDescription": "Human actor selects among options, possibly involving system recommendations",
+      "domainDescription": "Procurement/sourcing actor selects among multiple vendors or suppliers, with scenarios for no match, split orders, or merged requests",
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -230,16 +230,16 @@
       "roles": [
         {
           "id": "selector",
-          "description": "The actor who selects among multiple options or parties",
+          "description": "The procurement or sourcing actor who selects among multiple vendors, suppliers, or contractors",
           "isMandatory": true,
-          "threshold": 0.45,
+          "threshold": 0.50,
           "keywords": [
-            "finds the best vendor",
-            "selects a provider",
-            "chooses from options",
-            "evaluates alternatives",
-            "compares suppliers",
-            "identifies the best match"
+            "identifies the best vendor for the purchase",
+            "selects a supplier to fulfill the order",
+            "evaluates vendor bids",
+            "compares supplier quotes",
+            "issues purchase order to vendor",
+            "sources from multiple contractors"
           ]
         }
       ],
@@ -297,9 +297,9 @@
     {
       "id": "information_completeness",
       "name": "Information Completeness",
-      "probeQuestion": "Does this process require an actor to provide or fill in detailed information, where some fields may be unknown, missing, or filled in later by another actor?",
+      "probeQuestion": "Does this process require an actor to fill in a form or structured data entry with required fields, where some fields may be unknown, missing, or deferred to a later step or another actor?",
       "domainType": "human-system",
-      "domainDescription": "Human provides information to system, handling incomplete data scenarios",
+      "domainDescription": "Human fills out structured forms or data entry with required fields, handling incomplete mandatory data scenarios",
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -307,16 +307,16 @@
       "roles": [
         {
           "id": "provider",
-          "description": "The actor who provides required information",
+          "description": "The actor who fills in a form or structured data entry with required fields",
           "isMandatory": true,
-          "threshold": 0.45,
+          "threshold": 0.52,
           "keywords": [
             "fills in the form",
-            "provides details",
-            "specifies requirements",
-            "enters information",
-            "supplies data",
-            "inputs request details"
+            "completes the form fields",
+            "enters required information into the form",
+            "submits the form with details",
+            "inputs mandatory fields",
+            "fills out the request form"
           ]
         }
       ],
@@ -358,9 +358,9 @@
     {
       "id": "adjudication_decisioning",
       "name": "Adjudication Decisioning",
-      "probeQuestion": "Does this process involve validating eligibility/policy rules, assigning a reviewer/agent, and deciding outcomes like decline, waitlist, or negotiated settlement?",
+      "probeQuestion": "Does this process involve an insurance claim, benefits case, or formal adjudication where eligibility/policy rules are validated and outcomes include decline, settlement, or negotiated payment?",
       "domainType": "human-system",
-      "domainDescription": "Human-initiated claim/case review with decision branches for eligibility, assignment availability, and policy compliance",
+      "domainDescription": "Insurance/benefits claim review with formal eligibility validation and adjudication outcomes (decline, settlement, negotiated payment)",
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -368,29 +368,31 @@
       "roles": [
         {
           "id": "claimant",
-          "description": "The actor who submits a claim or case for adjudication",
+          "description": "The actor who files an insurance claim or benefits case for adjudication",
           "isMandatory": true,
-          "threshold": 0.45,
+          "threshold": 0.50,
           "keywords": [
-            "submits claim",
-            "files a claim",
-            "reports incident",
-            "provides substantiating data",
-            "submits case details"
+            "files an insurance claim",
+            "submits a claim for coverage",
+            "reports an insurance incident",
+            "submits claim with supporting documents",
+            "files for benefits",
+            "provides substantiating data for claim"
           ]
         },
         {
           "id": "adjudicator",
-          "description": "The actor or organization that validates policy/eligibility and decides outcomes",
+          "description": "The insurer, adjuster, or authority that validates policy coverage and decides claim outcomes",
           "isMandatory": true,
-          "threshold": 0.45,
+          "threshold": 0.50,
           "keywords": [
-            "verifies policy",
-            "validates eligibility",
-            "reviews claim",
-            "assigns agent",
-            "declines claim",
-            "pays claimant"
+            "verifies insurance policy coverage",
+            "validates claim eligibility",
+            "reviews insurance claim",
+            "assigns claims adjuster",
+            "declines insurance claim",
+            "authorizes claim payment",
+            "settles the claim"
           ]
         }
       ],
@@ -1027,29 +1029,29 @@
           "id": "user",
           "description": "The actor who performs work that may be interrupted",
           "isMandatory": true,
-          "threshold": 0.35,
+          "threshold": 0.45,
           "keywords": [
-            "enters data",
-            "fills form",
-            "completes task",
-            "processes request",
-            "performs action",
-            "works on task",
-            "inputs information",
-            "creates entry",
-            "records information",
-            "registers data",
-            "submits data",
-            "provides information",
-            "performs registration",
-            "conducts process"
+            "saves their work",
+            "resumes their work",
+            "logs back in",
+            "picks up where they left off",
+            "session timed out",
+            "session expired",
+            "browser closed",
+            "connection lost",
+            "fills out a form",
+            "completes an online form",
+            "submits an online application",
+            "enters data in the system",
+            "works through a multi-step wizard",
+            "navigates a digital workflow"
           ]
         },
         {
           "id": "system",
           "description": "The system that manages session state and recovery",
           "isMandatory": false,
-          "threshold": 0.35,
+          "threshold": 0.45,
           "keywords": [
             "saves state",
             "stores progress",
@@ -1057,9 +1059,10 @@
             "persists data",
             "tracks progress",
             "manages session",
-            "records in system",
-            "stores in database",
-            "saves information"
+            "auto-saves",
+            "restores session",
+            "session management",
+            "saves draft"
           ]
         }
       ],
