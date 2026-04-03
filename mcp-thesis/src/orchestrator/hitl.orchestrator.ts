@@ -2,13 +2,15 @@ import {
   analyzeGaps,
   clearGapCentroidsCache,
   collectStepEmbeddings,
-  InteractionMemory,
-  GapType,
 } from "../analyzers/gap.analyzer.js";
+import { buildInteractionMemories } from "../helpers/memory.builder.js";
 import { detectActivatedBlueprints } from "../analyzers/blueprint.detector.js";
 import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
-import semanticService from "../services/semantic.service.js";
+import {
+  classifyUseCaseDomainHybrid,
+  resolveDomainFilter,
+} from "../services/domain-classifier.service.js";
 import {
   generateFlatUseCase,
   refineWithHybridAnswers,
@@ -17,8 +19,9 @@ import { validateUseCaseWithFeedback } from "../validators/flat.validator.js";
 import {
   expertAnswerOpenEndedQuestions,
   generateAdaptiveQuestions,
-  OpenEndedAnswer,
+  normalizeHumanAnswers,
   probeBlueprintsWithExpert,
+  type OpenEndedAnswer,
 } from "../validators/llm.validator.js";
 import {
   AnswerInput,
@@ -27,7 +30,6 @@ import {
   HITLState,
   HITLStatus,
 } from "./hitl.state.js";
-import { classifyUseCaseDomain } from "../services/domain-classifier.service.js";
 
 type EventEmitter = (event: HITLEvent) => void;
 
@@ -171,62 +173,6 @@ export class HITLOrchestrator {
     });
   }
 
-  private async buildInteractionMemories(
-    answers: OpenEndedAnswer[],
-  ): Promise<InteractionMemory[]> {
-    const lastQuestions = this.state.lastQuestions ?? [];
-    const contextsToEmbed: string[] = [];
-    const questionsToEmbed: string[] = [];
-    const historyRecords: Omit<InteractionMemory, "vector" | "questionVector">[] = [];
-
-    for (const q of lastQuestions) {
-      const a = answers.find((ans) => ans.questionId === q.id);
-      if (!a) continue;
-
-      const stepContext = q.context.step || "Global";
-      const description = q.context.whyAsking;
-      const contextString = `${stepContext} | ${description}`;
-
-      contextsToEmbed.push(contextString);
-      questionsToEmbed.push(q.question);
-
-      const consolidatedMatch = q.id.match(/consolidated-([a-z_]+)-steps-([0-9-]+)/);
-      const consolidatedGroupId = consolidatedMatch ? consolidatedMatch[1] : undefined;
-      const consolidatedSteps = consolidatedMatch?.[2]
-        ? consolidatedMatch[2].split("-").map((value) => parseInt(value, 10))
-        : undefined;
-
-      historyRecords.push({
-        stepContext,
-        question: q.question,
-        answer: a.answer,
-        iteration: this.state.iterationCount + 1,
-        metadata: {
-          stepIndex: q.id.match(/step-(\d+)/)
-            ? parseInt(q.id.match(/step-(\d+)/)![1], 10)
-            : undefined,
-          stepIndexes: consolidatedSteps,
-          gapType: q.context.patternType as GapType,
-          consolidatedGroupId,
-          flowId: q.context.flowId || "MAIN",
-        },
-      });
-    }
-
-    if (contextsToEmbed.length === 0) {
-      return [];
-    }
-
-    const contextVectors = await semanticService.embedBatch(contextsToEmbed);
-    const questionVectors = await semanticService.embedBatch(questionsToEmbed);
-
-    return historyRecords.map((record, index) => ({
-      ...record,
-      vector: contextVectors[index],
-      questionVector: questionVectors[index],
-    }));
-  }
-
   private async runLoop(): Promise<void> {
     const vague = this.state.vague;
     if (!vague) {
@@ -265,14 +211,8 @@ export class HITLOrchestrator {
 
       if (!this.state.blueprintsProbed) {
         const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
-        const domainAnalysis = await classifyUseCaseDomain(currentUseCase);
-        // When domain is ambiguous, default to "human-system" to prevent all
-        // blueprints (including software-specific ones like session_persistence)
-        // from activating on non-software use cases.
-        const domainFilter: "human-system" | "system-system" =
-          domainAnalysis.dominantDomain === "system-system"
-            ? "system-system"
-            : "human-system";
+        const domainAnalysis = await classifyUseCaseDomainHybrid(currentUseCase);
+        const domainFilter = resolveDomainFilter(domainAnalysis);
         const activations = await detectActivatedBlueprints(stepEmbeddings, domainFilter);
         const confirmed = await probeBlueprintsWithExpert(
           activations,
@@ -376,27 +316,15 @@ export class HITLOrchestrator {
         if (this.cancelled) {
           break;
         }
-        answers = providedAnswers.map((answer) => {
-          const text = answer.answer.trim();
-          const wordCount = text.split(/\s+/).filter(Boolean).length;
-          const isYesNo = /^(yes|no|yeah|nope|yep|nah|ok|okay|sure|correct|incorrect|true|false)\.?$/i.test(text);
-          if (isYesNo || wordCount <= 3) {
-            return {
-              questionId: answer.questionId,
-              answer: text,
-              confidence: "low",
-            };
-          }
-          return {
-            questionId: answer.questionId,
-            answer: text,
-            confidence: "high",
-          };
-        });
+        answers = normalizeHumanAnswers(providedAnswers);
       }
 
       this.transition("REFINING", "Refining use case with answers");
-      const memories = await this.buildInteractionMemories(answers);
+      const memories = await buildInteractionMemories(
+        this.state.lastQuestions ?? [],
+        answers,
+        this.state.iterationCount + 1,
+      );
 
       const updatedUseCase = await refineWithHybridAnswers(
         currentVague,

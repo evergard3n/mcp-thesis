@@ -1,5 +1,3 @@
-import { readFile } from "fs/promises";
-import { join } from "path";
 import {
   GenUseCase,
   GenFlow,
@@ -10,29 +8,16 @@ import { UseCaseTermScore } from "../validators/flat.validator.js";
 import { detectBlueprintGaps, detectActivatedBlueprints, type BlueprintActivation, type EmbeddedStep } from "./blueprint.detector.js";
 import {
   classifyUseCaseDomainHybrid,
-  type UseCaseDomainAnalysis,
+  resolveDomainFilter,
 } from "../services/domain-classifier.service.js";
+import {
+  loadGapCentroids,
+  type GapCategory,
+  type GapType,
+} from "../data/gap-centroids.loader.js";
 
-export type GapType =
-  | "missing_exception_flows"
-  | "missing_alternative_flows"
-  | "incomplete_actors"
-  | "uncertain_conditions"
-  | "missing_validation_handling"
-  | "missing_search_handling"
-  | "missing_system_failure_handling"
-  | "missing_temporal_exceptions"
-  | "missing_nested_exceptions"
-  | "missing_resource_availability"
-  | "missing_post_completion_scenarios"
-  | "missing_data_quality_handling"
-  | "missing_environmental_interruptions"
-  | "missing_technology_variations"
-  | "missing_save_resume_handling"
-  | "missing_eligibility_failure_handling"
-  | "missing_assignment_unavailability_handling"
-  | "missing_policy_outcome_branching"
-  | `blueprint_${string}`;
+export type { GapType } from "../data/gap-centroids.loader.js";
+export { clearGapCentroidsCache } from "../data/gap-centroids.loader.js";
 
 export interface Gap {
   type: GapType;
@@ -196,20 +181,6 @@ interface EmbeddedText {
   source: StepSource | ConditionSource;
 }
 
-interface GapCategory {
-  name: string;
-  keywords: string[];
-  centroid: number[] | null;
-  threshold: number;
-  gapType: GapType;
-  requiresExceptionCheck: boolean;
-}
-
-interface GapCentroidData {
-  modelId: string;
-  categories: Record<string, GapCategory>;
-}
-
 const GAP_TYPE_PRIORITY: GapType[] = [
   "missing_exception_flows",
   "missing_data_quality_handling",
@@ -230,61 +201,6 @@ const GAP_TYPE_PRIORITY: GapType[] = [
   "uncertain_conditions",
   "incomplete_actors",
 ];
-
-let gapCentroidsCache: GapCategory[] | null = null;
-
-/**
- * Clear the gap centroids cache to force reloading from file.
- * Useful when gap-centroids.json has been updated.
- */
-export function clearGapCentroidsCache(): void {
-  gapCentroidsCache = null;
-  console.log("Gap centroids cache cleared");
-}
-
-async function loadGapCentroids(): Promise<GapCategory[]> {
-  if (gapCentroidsCache) return gapCentroidsCache;
-
-  try {
-    const dataPath = join(process.cwd(), "src/data/gap-centroids.json");
-    const fileContent = await readFile(dataPath, "utf-8");
-    const data = JSON.parse(fileContent) as GapCentroidData;
-
-    console.log(`Loading gap centroids from ${dataPath}`);
-    let categoriesWithCentroids = 0;
-
-    for (const [name, category] of Object.entries(data.categories)) {
-      if (!category.centroid) {
-        console.log(
-          `  Computing centroid for "${name}" from ${category.keywords.length} keywords`,
-        );
-        const embeddings = await semanticService.embedBatch(category.keywords);
-        category.centroid = await semanticService.computeCentroid(embeddings);
-        categoriesWithCentroids++;
-      }
-      category.name = name;
-    }
-
-    gapCentroidsCache = Object.values(data.categories);
-    console.log(
-      `Gap centroids loaded: ${gapCentroidsCache.length} categories (${categoriesWithCentroids} computed)`,
-    );
-
-    // Log thresholds for verification
-    for (const cat of gapCentroidsCache) {
-      if (cat.requiresExceptionCheck) {
-        console.log(
-          `  ${cat.name}: threshold=${cat.threshold}, keywords=${cat.keywords.length}`,
-        );
-      }
-    }
-
-    return gapCentroidsCache;
-  } catch (error) {
-    console.error("Failed to load gap centroids:", error);
-    return [];
-  }
-}
 
 function getStepContext(gap: Gap, useCase: GenUseCase): string {
   if (gap.relatedStep === undefined) {
@@ -464,8 +380,7 @@ export async function analyzeGaps(
   // "ambiguous" falls back to "human-system" (most common domain) rather than
   // undefined, which would disable all domain filtering and allow cross-domain
   // blueprint pollution (e.g. session_persistence activating on system-system flows).
-  const domainFilter: "human-system" | "system-system" =
-    detectedDomain === "system-system" ? "system-system" : "human-system";
+  const domainFilter = resolveDomainFilter(domainAnalysis);
 
   const blueprintResult = await detectBlueprintGaps(
     useCase,
@@ -649,60 +564,41 @@ const BLUEPRINT_CENTROID_SUPPRESSION: Partial<Record<string, GapType[]>> = {
   session_persistence: ["missing_save_resume_handling"],
 };
 
-async function analyzeStepsAgainstCategories(
-  embeddedTexts: EmbeddedText[],
-  categories: GapCategory[],
-  useCase: GenUseCase,
-  skipSteps?: Set<string>,
-  droppedBlueprintIds?: Set<string>,
-): Promise<Gap[]> {
-  const gaps: Gap[] = [];
-  const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
-
-  // Build the set of gap types suppressed by dropped blueprints
+function buildSuppressedGapTypes(droppedBlueprintIds?: Set<string>): Set<GapType> {
   const suppressedGapTypes = new Set<GapType>();
-  if (droppedBlueprintIds) {
-    for (const blueprintId of droppedBlueprintIds) {
-      const linked = BLUEPRINT_CENTROID_SUPPRESSION[blueprintId];
-      if (linked) {
-        for (const gapType of linked) {
-          suppressedGapTypes.add(gapType);
-          console.log(`[Blueprint-Centroid Suppression] Suppressing gap type "${gapType}" because blueprint "${blueprintId}" was dropped`);
-        }
+  if (!droppedBlueprintIds) return suppressedGapTypes;
+  for (const blueprintId of droppedBlueprintIds) {
+    const linked = BLUEPRINT_CENTROID_SUPPRESSION[blueprintId];
+    if (linked) {
+      for (const gapType of linked) {
+        suppressedGapTypes.add(gapType);
+        console.log(`[Blueprint-Centroid Suppression] Suppressing gap type "${gapType}" because blueprint "${blueprintId}" was dropped`);
       }
     }
   }
+  return suppressedGapTypes;
+}
 
-  const relevantCategories = categories.filter(
-    (c) => c.requiresExceptionCheck && c.centroid && !suppressedGapTypes.has(c.gapType),
-  );
-  const saveResumeCategory = suppressedGapTypes.has("missing_save_resume_handling")
-    ? undefined
-    : categories.find((c) => c.name === "save_resume");
-
+async function detectCentroidGaps(
+  stepItems: EmbeddedText[],
+  relevantCategories: GapCategory[],
+  useCase: GenUseCase,
+  skipSteps?: Set<string>,
+): Promise<Gap[]> {
+  const gaps: Gap[] = [];
   for (const item of stepItems) {
     const src = item.source as StepSource;
     if (skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) continue;
-    // Centroid gap detection only applies to MAIN flow steps.
-    // ALT/EXT steps were generated from expert answers — asking about their
-    // sub-steps creates circular meta-questions about flows we just created.
     if (src.flowId !== "MAIN") continue;
-
     for (const category of relevantCategories) {
-      const similarity = await semanticService.cosineSimilarity(
-        item.embedding,
-        category.centroid!,
-      );
-
+      const similarity = await semanticService.cosineSimilarity(item.embedding, category.centroid!);
       if (similarity >= category.threshold) {
         const hasException = useCase.flows.some(
           (f) =>
             (f.kind === "EXCEPTION" || f.kind === "ALTERNATIVE") &&
             f.parentFlow === src.flowId &&
-            (f.fromStepIndex === src.stepIndex ||
-              f.fromStepIndex === undefined),
+            (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined),
         );
-
         if (!hasException) {
           gaps.push({
             type: category.gapType,
@@ -710,64 +606,84 @@ async function analyzeStepsAgainstCategories(
             description: `Step ${src.stepIndex} in flow ${src.flowId} matches "${category.name}" pattern but has no exception handling.`,
             relatedStep: src.stepIndex,
             relatedFlow: src.flowId,
-            suggestedQuestion: generateQuestionForCategory(
-              category.name,
-              src.step,
-            ),
-          });
-        }
-      }
-    }
-
-    if (
-      saveResumeCategory &&
-      !skipSteps?.has(`${src.flowId}|${src.stepIndex}`)
-    ) {
-      const descLower = src.step.description.toLowerCase();
-      const isSaveResumeCandidate =
-        src.step.description.length > 50 ||
-        /\b(form|report|details|fields|information|submission|entry|register|complete request|finalize|fill)\b/.test(
-          descLower,
-        );
-
-      if (isSaveResumeCandidate) {
-        const alreadyFlagged = gaps.some(
-          (gap) =>
-            gap.type === "missing_save_resume_handling" &&
-            gap.relatedFlow === src.flowId &&
-            gap.relatedStep === src.stepIndex,
-        );
-        if (alreadyFlagged) continue;
-        const hasSaveResumeFlow = useCase.flows.some(
-          (f) =>
-            (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
-            f.parentFlow === src.flowId &&
-            (f.fromStepIndex === src.stepIndex ||
-              f.fromStepIndex === undefined) &&
-            (f.condition?.toLowerCase().includes("draft") ||
-              f.condition?.toLowerCase().includes("save") ||
-              f.condition?.toLowerCase().includes("resume") ||
-              f.condition?.toLowerCase().includes("later")),
-        );
-
-        if (!hasSaveResumeFlow) {
-          gaps.push({
-            type: "missing_save_resume_handling",
-            severity: "medium",
-            description: `Step ${src.stepIndex} in flow ${src.flowId} appears to involve a multi-field submission but has no save/resume handling.`,
-            relatedStep: src.stepIndex,
-            relatedFlow: src.flowId,
-            suggestedQuestion: generateQuestionForCategory(
-              "save_resume",
-              src.step,
-            ),
+            suggestedQuestion: generateQuestionForCategory(category.name, src.step),
           });
         }
       }
     }
   }
-
   return gaps;
+}
+
+async function detectSaveResumeGap(
+  stepItems: EmbeddedText[],
+  saveResumeCategory: GapCategory | undefined,
+  useCase: GenUseCase,
+  skipSteps?: Set<string>,
+  existingGaps?: Gap[],
+): Promise<Gap[]> {
+  const gaps: Gap[] = [];
+  if (!saveResumeCategory) return gaps;
+  for (const item of stepItems) {
+    const src = item.source as StepSource;
+    if (skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) continue;
+    if (src.flowId !== "MAIN") continue;
+    const descLower = src.step.description.toLowerCase();
+    const isSaveResumeCandidate =
+      src.step.description.length > 50 ||
+      /\b(form|report|details|fields|information|submission|entry|register|complete request|finalize|fill)\b/.test(descLower);
+    if (!isSaveResumeCandidate) continue;
+    const alreadyFlagged = (existingGaps ?? []).concat(gaps).some(
+      (gap) =>
+        gap.type === "missing_save_resume_handling" &&
+        gap.relatedFlow === src.flowId &&
+        gap.relatedStep === src.stepIndex,
+    );
+    if (alreadyFlagged) continue;
+    const hasSaveResumeFlow = useCase.flows.some(
+      (f) =>
+        (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
+        f.parentFlow === src.flowId &&
+        (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined) &&
+        (f.condition?.toLowerCase().includes("draft") ||
+          f.condition?.toLowerCase().includes("save") ||
+          f.condition?.toLowerCase().includes("resume") ||
+          f.condition?.toLowerCase().includes("later")),
+    );
+    if (!hasSaveResumeFlow) {
+      gaps.push({
+        type: "missing_save_resume_handling",
+        severity: "medium",
+        description: `Step ${src.stepIndex} in flow ${src.flowId} appears to involve a multi-field submission but has no save/resume handling.`,
+        relatedStep: src.stepIndex,
+        relatedFlow: src.flowId,
+        suggestedQuestion: generateQuestionForCategory("save_resume", src.step),
+      });
+    }
+  }
+  return gaps;
+}
+
+async function analyzeStepsAgainstCategories(
+  embeddedTexts: EmbeddedText[],
+  categories: GapCategory[],
+  useCase: GenUseCase,
+  skipSteps?: Set<string>,
+  droppedBlueprintIds?: Set<string>,
+): Promise<Gap[]> {
+  const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
+  const suppressedGapTypes = buildSuppressedGapTypes(droppedBlueprintIds);
+  const relevantCategories = categories.filter(
+    (c) => c.requiresExceptionCheck && c.centroid && !suppressedGapTypes.has(c.gapType),
+  );
+  const saveResumeCategory = suppressedGapTypes.has("missing_save_resume_handling")
+    ? undefined
+    : categories.find((c) => c.name === "save_resume");
+
+  const centroidGaps = await detectCentroidGaps(stepItems, relevantCategories, useCase, skipSteps);
+  const saveResumeGaps = await detectSaveResumeGap(stepItems, saveResumeCategory, useCase, skipSteps, centroidGaps);
+
+  return [...centroidGaps, ...saveResumeGaps];
 }
 
 async function analyzeConditionQuality(
@@ -1031,80 +947,60 @@ function detectClaimAdjudicationOutcomes(useCase: GenUseCase): Gap[] {
   return gaps;
 }
 
+function detectKeywordBasedGap(
+  keywords: string[],
+  originalDescription: string,
+  useCase: GenUseCase,
+  gapType: GapType,
+  severity: Gap["severity"],
+  description: string,
+  suggestedQuestion: string,
+  isCovered: (useCase: GenUseCase) => boolean,
+): Gap[] {
+  const descLower = originalDescription.toLowerCase();
+  if (!keywords.some((kw) => descLower.includes(kw))) return [];
+  if (isCovered(useCase)) return [];
+  return [{ type: gapType, severity, description, suggestedQuestion }];
+}
+
 function detectTemporalExceptions(
   useCase: GenUseCase,
   originalDescription: string,
 ): Gap[] {
-  const descLower = originalDescription.toLowerCase();
-  const temporalKeywords = [
-    "at any time",
-    "anytime",
-    "at all times",
-    "throughout",
-    "during any",
-    "while",
-  ];
-
-  const hasTemporalMention = temporalKeywords.some((kw) =>
-    descLower.includes(kw),
+  return detectKeywordBasedGap(
+    ["at any time", "anytime", "at all times", "throughout", "during any", "while"],
+    originalDescription,
+    useCase,
+    "missing_temporal_exceptions",
+    "high",
+    "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
+    "Are there any conditions that can occur at any time during the process (e.g., system failures, interruptions)?",
+    (uc) => uc.flows.some(
+      (f) => f.kind === "EXCEPTION" && (f.fromStepIndex === undefined || f.fromStepIndex === null),
+    ),
   );
-  if (!hasTemporalMention) return [];
-
-  const hasGlobalException = useCase.flows.some(
-    (f) =>
-      f.kind === "EXCEPTION" &&
-      (f.fromStepIndex === undefined || f.fromStepIndex === null),
-  );
-
-  if (hasGlobalException) return [];
-
-  return [
-    {
-      type: "missing_temporal_exceptions",
-      severity: "high",
-      description:
-        "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
-      suggestedQuestion:
-        "Are there any conditions that can occur at any time during the process (e.g., system failures, interruptions)?",
-    },
-  ];
 }
 
 function detectNestedExceptions(
   useCase: GenUseCase,
   originalDescription: string,
 ): Gap[] {
+  const nestedKeywords = ["timeout", "does not respond", "fails to provide", "within time period", "no response", "does not supply"];
   const descLower = originalDescription.toLowerCase();
-  const nestedKeywords = [
-    "timeout",
-    "does not respond",
-    "fails to provide",
-    "within time period",
-    "no response",
-    "does not supply",
-  ];
-
-  const hasNestedMention = nestedKeywords.some((kw) => descLower.includes(kw));
-  if (!hasNestedMention) return [];
-
+  if (!nestedKeywords.some((kw) => descLower.includes(kw))) return [];
   const exceptionFlows = useCase.flows.filter((f) => f.kind === "EXCEPTION");
   if (exceptionFlows.length === 0) return [];
-
   const hasNestedExceptions = exceptionFlows.some((f) => {
     const parent = useCase.flows.find((pf) => pf.id === f.parentFlow);
     return parent && parent.kind === "EXCEPTION";
   });
-
   if (hasNestedExceptions) return [];
-
   return [
     {
       type: "missing_nested_exceptions",
       severity: "medium",
-      description:
-        "Description mentions timeout or non-response scenarios but no nested exception flows found.",
-      suggestedQuestion:
-        "What happens if a response or action is not received within the expected time? Are there timeouts or escalations?",
+      description: "Description mentions timeout or non-response scenarios but no nested exception flows found.",
+      suggestedQuestion: "What happens if a response or action is not received within the expected time? Are there timeouts or escalations?",
     },
   ];
 }
@@ -1113,79 +1009,38 @@ function detectEnvironmentalInterruptions(
   useCase: GenUseCase,
   originalDescription: string,
 ): Gap[] {
-  const descLower = originalDescription.toLowerCase();
-  const environmentalKeywords = [
-    "fire alarm",
-    "emergency",
-    "evacuation",
-    "power outage",
-    "natural disaster",
-    "interruption",
-    "external event",
-  ];
-
-  const hasEnvironmentalMention = environmentalKeywords.some((kw) =>
-    descLower.includes(kw),
+  const environmentalKeywords = ["fire alarm", "emergency", "evacuation", "power outage", "natural disaster", "interruption", "external event"];
+  return detectKeywordBasedGap(
+    environmentalKeywords,
+    originalDescription,
+    useCase,
+    "missing_environmental_interruptions",
+    "medium",
+    "Description mentions environmental or external interruptions but no related exception flows found.",
+    "How does the process handle external interruptions like emergencies, power failures, or environmental events?",
+    (uc) => uc.flows.some(
+      (f) => f.kind === "EXCEPTION" && environmentalKeywords.some((kw) => f.condition?.toLowerCase().includes(kw)),
+    ),
   );
-  if (!hasEnvironmentalMention) return [];
-
-  const hasEnvironmentalException = useCase.flows.some(
-    (f) =>
-      f.kind === "EXCEPTION" &&
-      environmentalKeywords.some((kw) =>
-        f.condition?.toLowerCase().includes(kw),
-      ),
-  );
-
-  if (hasEnvironmentalException) return [];
-
-  return [
-    {
-      type: "missing_environmental_interruptions",
-      severity: "medium",
-      description:
-        "Description mentions environmental or external interruptions but no related exception flows found.",
-      suggestedQuestion:
-        "How does the process handle external interruptions like emergencies, power failures, or environmental events?",
-    },
-  ];
 }
 
 function detectTechnologyVariations(
   useCase: GenUseCase,
   originalDescription: string,
 ): Gap[] {
-  const descLower = originalDescription.toLowerCase();
-  const techKeywords = [
-    "by check",
-    "by cash",
-    "electronic",
-    "paper",
-    "digital",
-    "manual",
-    "automated",
-    "online",
-    "offline",
-  ];
-
-  const hasTechMention = techKeywords.some((kw) => descLower.includes(kw));
-  if (!hasTechMention) return [];
-
-  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
-  const alternativeFlows = useCase.flows.filter(
-    (f) => f.kind === "ALTERNATIVE",
-  );
-
-  if (!mainFlow || alternativeFlows.length > 0) return [];
-
-  return [
-    {
-      type: "missing_technology_variations",
-      severity: "low",
-      description:
-        "Description mentions different technology or implementation methods but no alternative flows found.",
-      suggestedQuestion:
-        "Are there different ways to implement certain steps (e.g., electronic vs. paper, online vs. offline)?",
+  return detectKeywordBasedGap(
+    ["by check", "by cash", "electronic", "paper", "digital", "manual", "automated", "online", "offline"],
+    originalDescription,
+    useCase,
+    "missing_technology_variations",
+    "low",
+    "Description mentions different technology or implementation methods but no alternative flows found.",
+    "Are there different ways to implement certain steps (e.g., electronic vs. paper, online vs. offline)?",
+    (uc) => {
+      const mainFlow = uc.flows.find((f) => f.kind === "MAIN");
+      const alternativeFlows = uc.flows.filter((f) => f.kind === "ALTERNATIVE");
+      return !mainFlow || alternativeFlows.length > 0;
     },
-  ];
+  );
 }
+

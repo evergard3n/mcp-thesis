@@ -6,6 +6,12 @@ import {
 import { GeminiOpenRouterFunctions } from "./gemini-openrouter.service.js";
 import semanticService from "./semantic.service.js";
 import { z } from "zod";
+import {
+  HUMAN_KEYWORDS,
+  SYSTEM_KEYWORDS,
+  HUMAN_ACTION_KEYWORDS,
+  SYSTEM_ACTION_KEYWORDS,
+} from "../data/domain-keywords.js";
 
 export type DomainType = "human-system" | "system-system" | "ambiguous";
 export type ActorType = "human" | "system" | "ambiguous";
@@ -40,151 +46,6 @@ export interface UseCaseDomainAnalysis {
 // ============================================================================
 // PHASE 2: HEURISTIC DETECTOR (Rule-Based)
 // ============================================================================
-
-const HUMAN_KEYWORDS = [
-  "user",
-  "customer",
-  "clerk",
-  "manager",
-  "admin",
-  "agent",
-  "operator",
-  "employee",
-  "staff",
-  "specialist",
-  "accountant",
-  "supervisor",
-  "director",
-  "analyst",
-  "coordinator",
-  "representative",
-  "client",
-  "buyer",
-  "seller",
-  "owner",
-  "member",
-  "participant",
-  "student",
-  "teacher",
-  "doctor",
-  "nurse",
-  "patient",
-  "visitor",
-];
-
-const SYSTEM_KEYWORDS = [
-  // Compound keywords (higher priority - checked first)
-  "client system",
-  "service client",
-  "api client",
-  "external system",
-  "third-party system",
-  "external service",
-  "resource manager",
-  "lock manager",
-  "data manager",
-  "load balancer",
-  // Single keywords
-  "system",
-  "server",
-  "api",
-  "database",
-  "service",
-  "application",
-  "bot",
-  "automation",
-  "gateway",
-  "engine",
-  "scheduler",
-  "processor",
-  "handler",
-  "controller",
-  "module",
-  "component",
-  "daemon",
-  "worker",
-  "queue",
-  "broker",
-  "router",
-  "cache",
-  "storage",
-];
-
-const HUMAN_ACTION_KEYWORDS = [
-  "fills",
-  "enters",
-  "inputs",
-  "types",
-  "selects",
-  "chooses",
-  "clicks",
-  "reviews",
-  "reads",
-  "checks",
-  "verifies",
-  "inspects",
-  "examines",
-  "approves",
-  "rejects",
-  "authorizes",
-  "signs",
-  "confirms",
-  "cancels",
-  "decides",
-  "judges",
-  "evaluates",
-  "assesses",
-  "considers",
-  "creates",
-  "writes",
-  "edits",
-  "updates",
-  "deletes",
-  "modifies",
-  "requests",
-  "submits",
-  "files",
-  "reports",
-  "notifies",
-  "contacts",
-];
-
-const SYSTEM_ACTION_KEYWORDS = [
-  "validates",
-  "processes",
-  "computes",
-  "calculates",
-  "executes",
-  "stores",
-  "retrieves",
-  "queries",
-  "fetches",
-  "loads",
-  "saves",
-  "sends",
-  "receives",
-  "transmits",
-  "broadcasts",
-  "publishes",
-  "triggers",
-  "invokes",
-  "calls",
-  "emits",
-  "fires",
-  "synchronizes",
-  "replicates",
-  "backups",
-  "restores",
-  "encrypts",
-  "decrypts",
-  "hashes",
-  "encodes",
-  "decodes",
-  "parses",
-  "serializes",
-  "deserializes",
-  "transforms",
-];
 
 /**
  * Phase 2: Heuristic-based actor type detection
@@ -612,61 +473,37 @@ const UseCaseDomainAnalysisSchema = z.object({
   summary: z.string(),
 });
 
-/**
- * Classify use case domain using hybrid approach (heuristic + semantic)
- * FASTER and MORE ACCURATE than LLM-only approach
- *
- * @param useCase The baseline use case to classify
- * @returns Domain analysis with per-flow and overall classifications
- */
-export async function classifyUseCaseDomainHybrid(
-  useCase: GenUseCase,
-): Promise<UseCaseDomainAnalysis> {
-  console.log(`Classifying domain for: ${useCase.name} (hybrid method)`);
-
-  const flowClassifications: FlowDomainClassification[] = [];
-  const allActorClassifications: ActorClassification[] = [];
-
-  // FIX: Classify ALL actors declared in useCase.actors[], not just those in flow steps
-  // This ensures coverage of actors like "Registration Operator" that are declared but may not appear in all flows
-  const allDeclaredActors = useCase.actors || [];
-
-  // Collect all steps from all flows for context when classifying actors
-  const allSteps: GenStep[] = [];
-  for (const flow of useCase.flows) {
-    allSteps.push(...flow.steps);
-  }
-
-  // Classify each declared actor using context from all steps
+async function classifyDeclaredActors(
+  allDeclaredActors: string[],
+  allSteps: GenStep[],
+): Promise<ActorClassification[]> {
   console.log(`  Classifying ${allDeclaredActors.length} declared actors...`);
+  const results: ActorClassification[] = [];
   for (const actorName of allDeclaredActors) {
-    // Get steps where this actor appears (may be empty for some actors)
     const actorSteps = allSteps.filter((s) => s.actor === actorName);
-
     if (actorSteps.length > 0) {
-      // Actor appears in steps - classify with full context
-      const classification = await classifyActorHybrid(actorName, actorSteps);
-      allActorClassifications.push(classification);
+      results.push(await classifyActorHybrid(actorName, actorSteps));
     } else {
-      // Actor declared but doesn't appear in any step - classify by name only
       console.log(
         `    Warning: Actor "${actorName}" declared but not in any step, classifying by name only`,
       );
-      const classification = await classifyActorHybrid(actorName, []);
-      allActorClassifications.push(classification);
+      results.push(await classifyActorHybrid(actorName, []));
     }
   }
+  return results;
+}
 
-  // Classify each flow based on actors that appear in that flow
-  for (const flow of useCase.flows) {
+function classifyFlows(
+  flows: GenFlow[],
+  allActorClassifications: ActorClassification[],
+): FlowDomainClassification[] {
+  return flows.map((flow) => {
     const flowActorNames = Array.from(new Set(flow.steps.map((s) => s.actor)));
     const flowActorClassifications = allActorClassifications.filter((ac) =>
       flowActorNames.includes(ac.actor),
     );
-
     const flowDomain = determineFlowDomain(flowActorClassifications);
-
-    flowClassifications.push({
+    return {
       flowId: flow.id,
       domainType: flowDomain.domainType,
       confidence: flowDomain.confidence,
@@ -675,11 +512,14 @@ export async function classifyUseCaseDomainHybrid(
         actor: a.actor,
         type: a.type,
       })),
-      method: "hybrid",
-    });
-  }
+      method: "hybrid" as const,
+    };
+  });
+}
 
-  // Determine dominant domain
+function computeDominantDomain(
+  flowClassifications: FlowDomainClassification[],
+): DomainType {
   const domainCounts = {
     "human-system": flowClassifications.filter(
       (f) => f.domainType === "human-system",
@@ -691,22 +531,23 @@ export async function classifyUseCaseDomainHybrid(
       .length,
   };
 
-  let dominantDomain: DomainType = "ambiguous";
   if (domainCounts["human-system"] > domainCounts["system-system"]) {
-    dominantDomain = "human-system";
+    return "human-system";
   } else if (domainCounts["system-system"] > domainCounts["human-system"]) {
-    dominantDomain = "system-system";
+    return "system-system";
   } else if (
     domainCounts["human-system"] === domainCounts["system-system"] &&
     domainCounts["human-system"] > 0
   ) {
-    dominantDomain = "human-system"; // Default to human-system for ties
+    return "human-system";
   }
+  return "ambiguous";
+}
 
-  const overallConfidence =
-    flowClassifications.reduce((sum, f) => sum + f.confidence, 0) /
-    flowClassifications.length;
-
+function buildSummary(
+  dominantDomain: DomainType,
+  flowClassifications: FlowDomainClassification[],
+): string {
   const humanFlows = flowClassifications.filter(
     (f) => f.domainType === "human-system",
   ).length;
@@ -714,16 +555,17 @@ export async function classifyUseCaseDomainHybrid(
     (f) => f.domainType === "system-system",
   ).length;
 
-  let summary = "";
   if (dominantDomain === "human-system") {
-    summary = `Human-system use case with ${humanFlows} human-initiated flow(s)${systemFlows > 0 ? ` and ${systemFlows} system-only flow(s)` : ""}`;
+    return `Human-system use case with ${humanFlows} human-initiated flow(s)${systemFlows > 0 ? ` and ${systemFlows} system-only flow(s)` : ""}`;
   } else if (dominantDomain === "system-system") {
-    summary = `System-to-system use case with ${systemFlows} automated flow(s)`;
-  } else {
-    summary = `Mixed or ambiguous use case with unclear actor types`;
+    return `System-to-system use case with ${systemFlows} automated flow(s)`;
   }
+  return `Mixed or ambiguous use case with unclear actor types`;
+}
 
-  // Deduplicate actor classifications
+function deduplicateActorClassifications(
+  allActorClassifications: ActorClassification[],
+): ActorClassification[] {
   const uniqueActors = new Map<string, ActorClassification>();
   for (const ac of allActorClassifications) {
     if (
@@ -733,13 +575,45 @@ export async function classifyUseCaseDomainHybrid(
       uniqueActors.set(ac.actor, ac);
     }
   }
+  return Array.from(uniqueActors.values());
+}
+
+export async function classifyUseCaseDomainHybrid(
+  useCase: GenUseCase,
+): Promise<UseCaseDomainAnalysis> {
+  console.log(`Classifying domain for: ${useCase.name} (hybrid method)`);
+
+  const allDeclaredActors = useCase.actors || [];
+  const allSteps: GenStep[] = useCase.flows.flatMap((flow) => flow.steps);
+
+  const allActorClassifications = await classifyDeclaredActors(
+    allDeclaredActors,
+    allSteps,
+  );
+
+  const flowClassifications = classifyFlows(
+    useCase.flows,
+    allActorClassifications,
+  );
+
+  const dominantDomain = computeDominantDomain(flowClassifications);
+
+  const overallConfidence =
+    flowClassifications.reduce((sum, f) => sum + f.confidence, 0) /
+    flowClassifications.length;
+
+  const summary = buildSummary(dominantDomain, flowClassifications);
+
+  const actorClassifications = deduplicateActorClassifications(
+    allActorClassifications,
+  );
 
   return {
     dominantDomain,
     flowClassifications,
     overallConfidence,
     summary,
-    actorClassifications: Array.from(uniqueActors.values()),
+    actorClassifications,
   };
 }
 
@@ -939,4 +813,12 @@ export function getDomainExplanation(domainType: DomainType): string {
  */
 export interface EnrichedBaselineUseCase extends GenUseCase {
   domainAnalysis?: UseCaseDomainAnalysis;
+}
+
+export function resolveDomainFilter(
+  analysis: UseCaseDomainAnalysis,
+): "human-system" | "system-system" {
+  return analysis.dominantDomain === "system-system"
+    ? "system-system"
+    : "human-system";
 }

@@ -39,16 +39,17 @@ export const COVE_LLM_QUESTIONS: string[] = [
   "Are applicable nonfunctional requirements captured?",
 ];
 
-export const generateLLMQuestions = async (
+// ---------------------------------------------------------------------------
+// Prompt builder functions
+// ---------------------------------------------------------------------------
+
+function buildGenerateLLMQuestionsPrompt(
   originalDescription: string,
   useCase: GenUseCase,
   formattedValidationFeedback: string,
-  geminiFunctions: GeminiOpenRouterFunctions,
-) => {
-  const questions = COVE_LLM_QUESTIONS.map((question) => `- ${question}`);
-  const questionsSchema = z.array(z.string());
-
-  const prompt = `
+  questions: string[],
+): string {
+  return `
         <instructions>
         You are a validator in a team of software analysts. Your teammates have already created an use case based on the original user description, and validated it using a predefined algorithm.
         You are given the original description, the use case, the validation feedback, and a set of further validation questions.
@@ -69,26 +70,14 @@ export const generateLLMQuestions = async (
         <questions>
         ${questions.join("\n")}</questions>
     `;
-  return geminiFunctions.generateStructured({
-    prompt: prompt,
-    schema: questionsSchema,
-  });
-};
-export async function answerLLMQuestions({
-  originalDescription,
-  baseUseCase,
-  questions,
-  geminiFunctions,
-}: {
-  originalDescription: string;
-  baseUseCase: GenUseCase;
-  questions: string[];
-  geminiFunctions: GeminiOpenRouterFunctions;
-}) {
-  const answers: string[] = [];
-  for (const question of questions) {
-    const llmAnswer = await geminiFunctions.generate({
-      prompt: `
+}
+
+function buildAnswerLLMQuestionsPrompt(
+  originalDescription: string,
+  baseUseCase: GenUseCase,
+  question: string,
+): string {
+  return `
       <instructions>
       You are a member in a team of software analysts. Your teammates have created a draft version of an use case, based on the original user description.
       Another member of yours has validated the use case, and asked you a question to improve the use case.
@@ -105,37 +94,15 @@ export async function answerLLMQuestions({
       <draftUseCase>
       ${JSON.stringify(baseUseCase)}
       </draftUseCase>
-    `,
-    });
-    console.log(new Date().toISOString() + ": " + llmAnswer + "\n");
-    answers.push(llmAnswer);
-  }
-  return answers;
+    `;
 }
 
-export async function generateMultipleChoiceQuestions(
+function buildGenerateMultipleChoiceQuestionsPrompt(
   originalDescription: string,
   useCase: GenUseCase,
   formattedValidationFeedback: string,
-  geminiFunctions: GeminiOpenRouterFunctions,
-): Promise<
-  Array<{
-    id: string;
-    question: string;
-    options: string[];
-    context: string;
-  }>
-> {
-  const mcSchema = z.array(
-    z.object({
-      id: z.string(),
-      question: z.string(),
-      options: z.array(z.string()).min(2).max(5),
-      context: z.string(),
-    }),
-  );
-
-  const prompt = `
+): string {
+  return `
 <task>
 Convert validation feedback into 3-5 specific multiple-choice questions for use case clarification.
 </task>
@@ -172,14 +139,9 @@ Focus on:
 Return 3-5 questions maximum.
 </guidelines>
   `;
-
-  return geminiFunctions.generateStructured({
-    prompt,
-    schema: mcSchema,
-  });
 }
 
-export async function expertAnswerMultipleChoice(
+function buildExpertAnswerMultipleChoicePrompt(
   questions: Array<{
     id: string;
     question: string;
@@ -188,19 +150,8 @@ export async function expertAnswerMultipleChoice(
   }>,
   detailedDescription: string,
   domain: string,
-  geminiFunctions: GeminiOpenRouterFunctions,
-): Promise<
-  Array<{ questionId: string; selectedOption: string; reasoning: string }>
-> {
-  const answerSchema = z.array(
-    z.object({
-      questionId: z.string(),
-      selectedOption: z.string(),
-      reasoning: z.string(),
-    }),
-  );
-
-  const prompt = `
+): string {
+  return `
 <role>
 You are a Senior Business Analyst with expertise in ${domain}.
 You have detailed knowledge about this use case.
@@ -233,6 +184,260 @@ For each question:
 3. Provide brief reasoning (1-2 sentences)
 </instructions>
   `;
+}
+
+function buildOpenEndedQuestionsFromGapsPrompt(
+  originalDescription: string,
+  useCase: GenUseCase,
+  gapContext: string,
+): string {
+  return `
+<task>
+Generate 3-5 specific open-ended questions to discover exception flows and alternative paths.
+These questions should help fill the gaps identified in the current use case.
+</task>
+
+<originalDescription>
+${originalDescription}
+</originalDescription>
+
+<currentUseCase>
+${JSON.stringify(useCase, null, 2)}
+</currentUseCase>
+
+<identifiedGaps>
+${gapContext}
+</identifiedGaps>
+
+<guidelines>
+Generate questions that:
+
+1. Target EXCEPTION FLOWS (error conditions, failures, invalid inputs)
+   Example: "What happens if the box ID validation fails?"
+   
+2. Target ALTERNATIVE FLOWS (different valid paths, optional steps)
+   Example: "Are there cases where the signature step can be skipped?"
+
+3. Target SYSTEM FAILURES (unavailability, timeouts, crashes)
+   Example: "What should happen if the registration system goes down?"
+
+4. Are SPECIFIC and ANSWERABLE
+   - Reference specific steps or actors
+   - Ask about concrete scenarios
+   - Guide toward describing flows, not just outcomes
+
+5. Provide ANSWER GUIDANCE
+   - Tell the expert HOW to structure their answer
+   - Example: "Describe the exception flow: What does the actor do? How is it resolved?"
+
+Format each question with:
+- id: Unique identifier (e.g., "gap_exception_step2")
+- question: The specific question
+- context.whyAsking: Brief explanation of why this matters
+- context.step: The related step description (if applicable)
+- context.patternType: Type of gap (e.g., "validation_failure", "system_unavailability")
+- answerGuidance: Instructions for how to answer
+
+
+Prioritize high-severity gaps first. Return 3-5 questions maximum.
+</guidelines>
+  `;
+}
+
+function buildExpertAnswerOpenEndedQuestionsPrompt(
+  questions: OpenEndedQuestion[],
+  detailedDescription: string,
+  domain: string,
+): string {
+  return `
+<role>
+You are a Senior Business Analyst with expertise in ${domain}.
+You have complete knowledge about this use case from the detailed description.
+</role>
+
+<detailedDescription>
+${detailedDescription}
+</detailedDescription>
+
+<questions>
+${questions
+  .map(
+    (q, i) => `
+Question ${i + 1} (ID: ${q.id}):
+${q.question}
+
+Context: ${q.context.whyAsking}
+${q.context.step ? `Related to: ${q.context.step}` : ""}
+
+How to answer: ${q.answerGuidance}
+`,
+  )
+  .join("\n---\n")}
+</questions>
+
+<instructions>
+For each question:
+1. If the detailed description explicitly mentions this scenario, describe it completely
+2. If not explicitly mentioned, use domain expertise to provide a reasonable answer
+3. Structure your answer according to the guidance provided
+4. For exception/alternative flows, describe:
+   - What triggers this flow
+   - What steps the actors take
+   - How it ends (resumes, terminates, etc.)
+5. If a question lists multiple steps, explicitly address EACH step separately.
+   Do NOT answer with "same for all steps" unless you have checked each one and
+   can confirm there are truly no differences. If you claim no differences, state
+   that you verified each step explicitly.
+6. Set confidence level:
+   - "high" if answer is in detailed description
+   - "medium" if inferred from domain knowledge
+   - "low" if making reasonable assumption
+
+Keep answers concise but complete (2-4 sentences for each flow).
+</instructions>
+  `;
+}
+
+function buildProbeBlueprintsWithExpertPrompt(
+  activations: BlueprintActivation[],
+  detailedDescription: string,
+  domain: string,
+): string {
+  const blueprintList = activations
+    .map(
+      (a, i) =>
+        `${i + 1}. Blueprint ID: "${a.blueprintId}" | Name: "${a.blueprintName}" | Domain: "${a.domainType ?? "unspecified"}"\n   Probe: ${a.probeQuestion}`,
+    )
+    .join("\n");
+
+  return `You are a domain expert for a ${domain} system.
+
+Below is a detailed description of a use case:
+<description>
+${detailedDescription}
+</description>
+
+The following process patterns (blueprints) have been tentatively detected in this use case.
+Each blueprint has a Domain field indicating the type of system it applies to.
+Only confirm a blueprint if:
+1. The description explicitly or strongly implies the pattern, AND
+2. The blueprint's Domain is consistent with the nature of this use case.
+
+For example, a blueprint with Domain "human-system" requiring digital session management should NOT be confirmed for physical/manual processes.
+
+${blueprintList}
+
+Return ONLY a JSON array of blueprint ID strings for the blueprints that are confirmed.
+Example: ["approval_chain", "session_persistence"]
+If none apply, return [].`;
+}
+
+// ---------------------------------------------------------------------------
+// Exported functions
+// ---------------------------------------------------------------------------
+
+export const generateLLMQuestions = async (
+  originalDescription: string,
+  useCase: GenUseCase,
+  formattedValidationFeedback: string,
+  geminiFunctions: GeminiOpenRouterFunctions,
+) => {
+  const questions = COVE_LLM_QUESTIONS.map((question) => `- ${question}`);
+  const questionsSchema = z.array(z.string());
+
+  const prompt = buildGenerateLLMQuestionsPrompt(
+    originalDescription,
+    useCase,
+    formattedValidationFeedback,
+    questions,
+  );
+  return geminiFunctions.generateStructured({
+    prompt: prompt,
+    schema: questionsSchema,
+  });
+};
+export async function answerLLMQuestions({
+  originalDescription,
+  baseUseCase,
+  questions,
+  geminiFunctions,
+}: {
+  originalDescription: string;
+  baseUseCase: GenUseCase;
+  questions: string[];
+  geminiFunctions: GeminiOpenRouterFunctions;
+}) {
+  const answers: string[] = [];
+  for (const question of questions) {
+    const llmAnswer = await geminiFunctions.generate({
+      prompt: buildAnswerLLMQuestionsPrompt(originalDescription, baseUseCase, question),
+    });
+    console.log(new Date().toISOString() + ": " + llmAnswer + "\n");
+    answers.push(llmAnswer);
+  }
+  return answers;
+}
+
+export async function generateMultipleChoiceQuestions(
+  originalDescription: string,
+  useCase: GenUseCase,
+  formattedValidationFeedback: string,
+  geminiFunctions: GeminiOpenRouterFunctions,
+): Promise<
+  Array<{
+    id: string;
+    question: string;
+    options: string[];
+    context: string;
+  }>
+> {
+  const mcSchema = z.array(
+    z.object({
+      id: z.string(),
+      question: z.string(),
+      options: z.array(z.string()).min(2).max(5),
+      context: z.string(),
+    }),
+  );
+
+  const prompt = buildGenerateMultipleChoiceQuestionsPrompt(
+    originalDescription,
+    useCase,
+    formattedValidationFeedback,
+  );
+
+  return geminiFunctions.generateStructured({
+    prompt,
+    schema: mcSchema,
+  });
+}
+
+export async function expertAnswerMultipleChoice(
+  questions: Array<{
+    id: string;
+    question: string;
+    options: string[];
+    context: string;
+  }>,
+  detailedDescription: string,
+  domain: string,
+  geminiFunctions: GeminiOpenRouterFunctions,
+): Promise<
+  Array<{ questionId: string; selectedOption: string; reasoning: string }>
+> {
+  const answerSchema = z.array(
+    z.object({
+      questionId: z.string(),
+      selectedOption: z.string(),
+      reasoning: z.string(),
+    }),
+  );
+
+  const prompt = buildExpertAnswerMultipleChoicePrompt(
+    questions,
+    detailedDescription,
+    domain,
+  );
 
   return geminiFunctions.generateStructured({
     prompt,
@@ -265,9 +470,29 @@ export interface OpenEndedAnswer {
   confidence?: string;
 }
 
-/**
- * Combined hybrid questions structure
- */
+export interface RawHumanAnswer {
+  questionId: string;
+  answer: string;
+}
+
+export function normalizeHumanAnswers(
+  rawAnswers: RawHumanAnswer[],
+): OpenEndedAnswer[] {
+  return rawAnswers.map((raw) => {
+    const text = raw.answer.trim();
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    const isYesNo =
+      /^(yes|no|yeah|nope|yep|nah|ok|okay|sure|correct|incorrect|true|false)\.?$/i.test(
+        text,
+      );
+    return {
+      questionId: raw.questionId,
+      answer: text,
+      confidence: isYesNo || wordCount <= 3 ? "low" : "high",
+    };
+  });
+}
+
 export interface HybridQuestions {
   mcQuestions: Array<{
     id: string;
@@ -380,56 +605,11 @@ async function generateOpenEndedQuestionsFromGaps(
     })
     .join("\n");
 
-  const prompt = `
-<task>
-Generate 3-5 specific open-ended questions to discover exception flows and alternative paths.
-These questions should help fill the gaps identified in the current use case.
-</task>
-
-<originalDescription>
-${originalDescription}
-</originalDescription>
-
-<currentUseCase>
-${JSON.stringify(useCase, null, 2)}
-</currentUseCase>
-
-<identifiedGaps>
-${gapContext}
-</identifiedGaps>
-
-<guidelines>
-Generate questions that:
-
-1. Target EXCEPTION FLOWS (error conditions, failures, invalid inputs)
-   Example: "What happens if the box ID validation fails?"
-   
-2. Target ALTERNATIVE FLOWS (different valid paths, optional steps)
-   Example: "Are there cases where the signature step can be skipped?"
-
-3. Target SYSTEM FAILURES (unavailability, timeouts, crashes)
-   Example: "What should happen if the registration system goes down?"
-
-4. Are SPECIFIC and ANSWERABLE
-   - Reference specific steps or actors
-   - Ask about concrete scenarios
-   - Guide toward describing flows, not just outcomes
-
-5. Provide ANSWER GUIDANCE
-   - Tell the expert HOW to structure their answer
-   - Example: "Describe the exception flow: What does the actor do? How is it resolved?"
-
-Format each question with:
-- id: Unique identifier (e.g., "gap_exception_step2")
-- question: The specific question
-- context.whyAsking: Brief explanation of why this matters
-- context.step: The related step description (if applicable)
-- context.patternType: Type of gap (e.g., "validation_failure", "system_unavailability")
-- answerGuidance: Instructions for how to answer
-
-Prioritize high-severity gaps first. Return 3-5 questions maximum.
-</guidelines>
-  `;
+  const prompt = buildOpenEndedQuestionsFromGapsPrompt(
+    originalDescription,
+    useCase,
+    gapContext,
+  );
 
   return geminiFunctions.generateStructured({
     prompt,
@@ -461,53 +641,11 @@ export async function expertAnswerOpenEndedQuestions(
     }),
   );
 
-  const prompt = `
-<role>
-You are a Senior Business Analyst with expertise in ${domain}.
-You have complete knowledge about this use case from the detailed description.
-</role>
-
-<detailedDescription>
-${detailedDescription}
-</detailedDescription>
-
-<questions>
-${questions
-  .map(
-    (q, i) => `
-Question ${i + 1} (ID: ${q.id}):
-${q.question}
-
-Context: ${q.context.whyAsking}
-${q.context.step ? `Related to: ${q.context.step}` : ""}
-
-How to answer: ${q.answerGuidance}
-`,
-  )
-  .join("\n---\n")}
-</questions>
-
-<instructions>
-For each question:
-1. If the detailed description explicitly mentions this scenario, describe it completely
-2. If not explicitly mentioned, use domain expertise to provide a reasonable answer
-3. Structure your answer according to the guidance provided
-4. For exception/alternative flows, describe:
-   - What triggers this flow
-   - What steps the actors take
-   - How it ends (resumes, terminates, etc.)
-5. If a question lists multiple steps, explicitly address EACH step separately.
-   Do NOT answer with "same for all steps" unless you have checked each one and
-   can confirm there are truly no differences. If you claim no differences, state
-   that you verified each step explicitly.
-6. Set confidence level:
-   - "high" if answer is in detailed description
-   - "medium" if inferred from domain knowledge
-   - "low" if making reasonable assumption
-
-Keep answers concise but complete (2-4 sentences for each flow).
-</instructions>
-  `;
+  const prompt = buildExpertAnswerOpenEndedQuestionsPrompt(
+    questions,
+    detailedDescription,
+    domain,
+  );
 
   const answers = await geminiFunctions.generateStructured({
     prompt,
@@ -758,33 +896,11 @@ export async function probeBlueprintsWithExpert(
 ): Promise<string[]> {
   if (activations.length === 0) return [];
 
-  const blueprintList = activations
-    .map(
-      (a, i) =>
-        `${i + 1}. Blueprint ID: "${a.blueprintId}" | Name: "${a.blueprintName}" | Domain: "${a.domainType ?? "unspecified"}"\n   Probe: ${a.probeQuestion}`,
-    )
-    .join("\n");
-
-  const prompt = `You are a domain expert for a ${domain} system.
-
-Below is a detailed description of a use case:
-<description>
-${detailedDescription}
-</description>
-
-The following process patterns (blueprints) have been tentatively detected in this use case.
-Each blueprint has a Domain field indicating the type of system it applies to.
-Only confirm a blueprint if:
-1. The description explicitly or strongly implies the pattern, AND
-2. The blueprint's Domain is consistent with the nature of this use case.
-
-For example, a blueprint with Domain "human-system" requiring digital session management should NOT be confirmed for physical/manual processes.
-
-${blueprintList}
-
-Return ONLY a JSON array of blueprint ID strings for the blueprints that are confirmed.
-Example: ["approval_chain", "session_persistence"]
-If none apply, return [].`;
+  const prompt = buildProbeBlueprintsWithExpertPrompt(
+    activations,
+    detailedDescription,
+    domain,
+  );
 
   const schema = z.array(z.string());
 
@@ -799,108 +915,115 @@ If none apply, return [].`;
   }
 }
 
+// ---------------------------------------------------------------------------
+// generateAdaptiveQuestions — private phase helpers
+// ---------------------------------------------------------------------------
+
 /**
- * Generates adaptive questions based on priority rankings
- * Combines step priorities, flow uncertainties, and gap analysis
+ * Phase 0: Coverage seed questions — ask about critical eligibility, assignment, and
+ * policy-outcome branches on the first pass before any gaps are known.
  */
-export async function generateAdaptiveQuestions(
+async function buildSeedQuestions(
   stepPriorities: StepPriorityShape[],
-  flowUncertainties: Array<{
-    flowId: string;
-    flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
-    conditionSpecificity: number;
-    hasCondition: boolean;
-    uncertaintyScore: number;
-    uncertaintyReasons: string[];
-  }>,
-  maxQuestions: number = 6,
-  previousQuestions: string[] = [],
-  blueprintOnly: boolean = false,
-  confirmedBlueprintCount: number = 1,
-  baselineFlowIds?: Set<string>,
-): Promise<OpenEndedQuestion[]> {
+  previousQuestions: string[],
+): Promise<{ questions: OpenEndedQuestion[]; asked: string[] }> {
   const questions: OpenEndedQuestion[] = [];
-  const askedInThisBatch: string[] = [];
+  const asked: string[] = [];
 
-  if (!blueprintOnly && previousQuestions.length === 0 && confirmedBlueprintCount <= 1) {
-    const mainSteps = stepPriorities
-      .filter((p) => p.flowId === "MAIN")
-      .sort((a, b) => a.stepIndex - b.stepIndex);
+  const mainSteps = stepPriorities
+    .filter((p) => p.flowId === "MAIN")
+    .sort((a, b) => a.stepIndex - b.stepIndex);
 
-    const findMainStep = (matcher: (description: string) => boolean) =>
-      mainSteps.find((step) => matcher(step.description.toLowerCase()));
+  const findMainStep = (matcher: (description: string) => boolean) =>
+    mainSteps.find((step) => matcher(step.description.toLowerCase()));
 
-    const eligibilityStep = findMainStep(
-      (description) =>
-        (description.includes("policy") &&
-          (description.includes("valid") ||
-            description.includes("verify") ||
-            description.includes("align"))) ||
-        (description.includes("eligib") && description.includes("verify")),
-    );
+  const eligibilityStep = findMainStep(
+    (description) =>
+      (description.includes("policy") &&
+        (description.includes("valid") ||
+          description.includes("verify") ||
+          description.includes("align"))) ||
+      (description.includes("eligib") && description.includes("verify")),
+  );
 
-    const assignmentStep = findMainStep(
-      (description) =>
-        description.includes("assign") &&
-        (description.includes("agent") ||
-          description.includes("review") ||
-          description.includes("adjuster")),
-    );
+  const assignmentStep = findMainStep(
+    (description) =>
+      description.includes("assign") &&
+      (description.includes("agent") ||
+        description.includes("review") ||
+        description.includes("adjuster")),
+  );
 
-    const guidelineStep = findMainStep(
-      (description) =>
-        description.includes("guideline") ||
-        (description.includes("policy") &&
-          (description.includes("within") || description.includes("violat"))),
-    );
+  const guidelineStep = findMainStep(
+    (description) =>
+      description.includes("guideline") ||
+      (description.includes("policy") &&
+        (description.includes("within") || description.includes("violat"))),
+  );
 
-    const seedQuestions: Array<{ question: string; step?: StepPriorityShape }> = [];
+  const seedQuestions: Array<{ question: string; step?: StepPriorityShape }> = [];
 
-    if (eligibilityStep) {
-      seedQuestions.push({
-        step: eligibilityStep,
-        question: `If eligibility/policy validation fails at MAIN step ${eligibilityStep.stepIndex} ("${eligibilityStep.description}"), what exact actions occur (decline, notify claimant, record details, terminate), and is any retry or appeal path allowed?`,
-      });
-    }
-
-    if (assignmentStep) {
-      seedQuestions.push({
-        step: assignmentStep,
-        question: `What happens if no reviewer/agent is available at MAIN step ${assignmentStep.stepIndex} ("${assignmentStep.description}")? Is the case queued or put on hold, who is notified, and when does processing resume?`,
-      });
-    }
-
-    if (guidelineStep) {
-      seedQuestions.push({
-        step: guidelineStep,
-        question: `At MAIN step ${guidelineStep.stepIndex} ("${guidelineStep.description}"), how are major policy violations handled versus minor violations? Does one path terminate the claim while another allows negotiation or adjusted payment?`,
-      });
-    }
-
-    for (const seed of seedQuestions) {
-      if (questions.length >= maxQuestions) break;
-      const allPrevious = [...previousQuestions, ...askedInThisBatch];
-      if (await isQuestionDuplicate(seed.question, allPrevious)) continue;
-
-      questions.push({
-        id: `coverage-${seed.step?.stepIndex ?? "general"}`,
-        question: seed.question,
-        context: {
-          step: seed.step ? `Step ${seed.step.stepIndex}` : undefined,
-          patternType: "coverage_first",
-          whyAsking:
-            "Coverage-first safeguard: ensure critical eligibility, availability, and policy-outcome branches are captured before deeper probing.",
-          flowId: "MAIN",
-        },
-        answerGuidance:
-          "State explicit trigger, actor actions, and end state (resume, terminate, or negotiate). If not specified in source description, say so explicitly.",
-      });
-      askedInThisBatch.push(seed.question);
-    }
+  if (eligibilityStep) {
+    seedQuestions.push({
+      step: eligibilityStep,
+      question: `If eligibility/policy validation fails at MAIN step ${eligibilityStep.stepIndex} ("${eligibilityStep.description}"), what exact actions occur (decline, notify claimant, record details, terminate), and is any retry or appeal path allowed?`,
+    });
   }
 
-  // PHASE 1: Prioritize Gap-Based Exception Questions (Highest Value)
-  // These directly discover missing flows (what if X fails?)
+  if (assignmentStep) {
+    seedQuestions.push({
+      step: assignmentStep,
+      question: `What happens if no reviewer/agent is available at MAIN step ${assignmentStep.stepIndex} ("${assignmentStep.description}")? Is the case queued or put on hold, who is notified, and when does processing resume?`,
+    });
+  }
+
+  if (guidelineStep) {
+    seedQuestions.push({
+      step: guidelineStep,
+      question: `At MAIN step ${guidelineStep.stepIndex} ("${guidelineStep.description}"), how are major policy violations handled versus minor violations? Does one path terminate the claim while another allows negotiation or adjusted payment?`,
+    });
+  }
+
+  for (const seed of seedQuestions) {
+    const allPrevious = [...previousQuestions, ...asked];
+    if (await isQuestionDuplicate(seed.question, allPrevious)) continue;
+
+    questions.push({
+      id: `coverage-${seed.step?.stepIndex ?? "general"}`,
+      question: seed.question,
+      context: {
+        step: seed.step ? `Step ${seed.step.stepIndex}` : undefined,
+        patternType: "coverage_first",
+        whyAsking:
+          "Coverage-first safeguard: ensure critical eligibility, availability, and policy-outcome branches are captured before deeper probing.",
+        flowId: "MAIN",
+      },
+      answerGuidance:
+        "State explicit trigger, actor actions, and end state (resume, terminate, or negotiate). If not specified in source description, say so explicitly.",
+    });
+    asked.push(seed.question);
+  }
+
+  return { questions, asked };
+}
+
+/**
+ * Phase 1: Gap-based exception questions (highest value).
+ * Discovers missing flows by asking about detected gaps.
+ */
+async function buildGapExceptionQuestions(
+  stepPriorities: StepPriorityShape[],
+  previousQuestions: string[],
+  askedInThisBatch: string[],
+  maxQuestions: number,
+  currentCount: number,
+  blueprintOnly: boolean,
+  blueprintCap: number,
+): Promise<{ questions: OpenEndedQuestion[]; asked: string[]; blueprintEmitted: number }> {
+  const questions: OpenEndedQuestion[] = [];
+  const asked: string[] = [...askedInThisBatch];
+  let blueprintQuestionsEmitted = 0;
+
   const gapSteps = stepPriorities
     .filter((p) => p.relatedGaps.length > 0)
     .sort((a, b) => b.priorityScore - a.priorityScore);
@@ -930,12 +1053,8 @@ export async function generateAdaptiveQuestions(
         },
       ];
 
-  // Blueprint gap cap: 2 per confirmed blueprint in blueprintOnly mode, unlimited in explore phase
-  const BLUEPRINT_CAP = blueprintOnly ? Math.max(confirmedBlueprintCount * 2, 2) : Infinity;
-  let blueprintQuestionsEmitted = 0;
-
   for (const group of activeGapGroups) {
-    if (questions.length >= maxQuestions) break;
+    if (currentCount + questions.length >= maxQuestions) break;
 
     const shouldConsolidate = group.label === "centroid-main";
     const { consolidated, remaining } = shouldConsolidate
@@ -943,10 +1062,10 @@ export async function generateAdaptiveQuestions(
       : { consolidated: [], remaining: gapSteps };
 
     for (const consolidatedGroup of consolidated) {
-      if (questions.length >= maxQuestions) break;
+      if (currentCount + questions.length >= maxQuestions) break;
 
       const questionText = consolidatedGroup.question;
-      const allPrevious = [...previousQuestions, ...askedInThisBatch];
+      const allPrevious = [...previousQuestions, ...asked];
       if (await isQuestionDuplicate(questionText, allPrevious)) {
         console.log(`[DEDUP SKIPPED] Consolidated group "${consolidatedGroup.groupId}": "${questionText.slice(0, 100)}..."`);
         continue;
@@ -971,11 +1090,11 @@ export async function generateAdaptiveQuestions(
         answerGuidance: consolidatedGroup.answerGuidance,
       });
 
-      askedInThisBatch.push(questionText);
+      asked.push(questionText);
     }
 
     for (const priority of remaining) {
-      if (questions.length >= maxQuestions) break;
+      if (currentCount + questions.length >= maxQuestions) break;
 
       const filteredGaps = priority.relatedGaps.filter((gap) =>
         group.filter(gap.type, priority.flowId),
@@ -993,16 +1112,16 @@ export async function generateAdaptiveQuestions(
           : filteredGaps;
 
       for (const gap of sortedGaps) {
-        if (questions.length >= maxQuestions) break;
+        if (currentCount + questions.length >= maxQuestions) break;
         if (!gap.suggestedQuestion) continue;
 
         // Apply blueprint cap
         if (group.label === "blueprint") {
-          if (blueprintQuestionsEmitted >= BLUEPRINT_CAP) break;
+          if (blueprintQuestionsEmitted >= blueprintCap) break;
         }
 
         const questionText = gap.suggestedQuestion;
-        const allPrevious = [...previousQuestions, ...askedInThisBatch];
+        const allPrevious = [...previousQuestions, ...asked];
 
         if (await isQuestionDuplicate(questionText, allPrevious)) {
           console.log(`[DEDUP SKIPPED] Gap type "${gap.type}" step ${priority.stepIndex}: "${questionText.slice(0, 100)}..."`);
@@ -1020,7 +1139,7 @@ export async function generateAdaptiveQuestions(
           },
           answerGuidance: getAnswerGuidanceForGapType(gap.type),
         });
-        askedInThisBatch.push(questionText);
+        asked.push(questionText);
 
         if (group.label === "blueprint") {
           blueprintQuestionsEmitted++;
@@ -1029,23 +1148,41 @@ export async function generateAdaptiveQuestions(
     }
   }
 
-  // PHASE 2 & 3 are skipped when blueprintOnly=true
-  if (blueprintOnly) return questions;
+  return { questions, asked, blueprintEmitted: blueprintQuestionsEmitted };
+}
 
-  // PHASE 2: Missing Flow Conditions (Medium Value)
-  // Only ask if a flow is completely missing a condition.
-  // Restrict to baseline flows — asking "What triggers ALT_X?" for flows we just
-  // generated this session is circular and wastes question budget.
+/**
+ * Phase 2: Missing flow condition questions (medium value).
+ * Only ask if a baseline flow is completely missing a condition.
+ */
+async function buildMissingConditionQuestions(
+  flowUncertainties: Array<{
+    flowId: string;
+    flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
+    conditionSpecificity: number;
+    hasCondition: boolean;
+    uncertaintyScore: number;
+    uncertaintyReasons: string[];
+  }>,
+  previousQuestions: string[],
+  askedInThisBatch: string[],
+  maxQuestions: number,
+  currentCount: number,
+  baselineFlowIds?: Set<string>,
+): Promise<{ questions: OpenEndedQuestion[]; asked: string[] }> {
+  const questions: OpenEndedQuestion[] = [];
+  const asked: string[] = [...askedInThisBatch];
+
   const missingConditions = flowUncertainties
     .filter((f) => f.flowKind !== "MAIN" && !f.hasCondition && (!baselineFlowIds || baselineFlowIds.has(f.flowId)))
     .sort((a, b) => b.uncertaintyScore - a.uncertaintyScore);
 
   for (const flowUnc of missingConditions) {
-    if (questions.length >= maxQuestions) break;
+    if (currentCount + questions.length >= maxQuestions) break;
 
     const questionText = `What triggers ${flowUnc.flowId}? Describe the condition that causes this flow to execute.`;
-    const allPrevious = [...previousQuestions, ...askedInThisBatch];
-    
+    const allPrevious = [...previousQuestions, ...asked];
+
     if (await isQuestionDuplicate(questionText, allPrevious)) continue;
 
     questions.push({
@@ -1059,25 +1196,40 @@ export async function generateAdaptiveQuestions(
       answerGuidance:
         "Describe the condition that causes this flow to execute, including what triggers it and when it occurs.",
     });
-    askedInThisBatch.push(questionText);
+    asked.push(questionText);
   }
 
-  // PHASE 3: Clarification Questions (Lowest Value - Only if slots remain)
-  // Only for CRITICAL steps with vague descriptions
+  return { questions, asked };
+}
+
+/**
+ * Phase 3: Clarification questions (lowest value — only if slots remain).
+ * Only for CRITICAL steps with vague descriptions.
+ */
+async function buildClarificationQuestions(
+  stepPriorities: StepPriorityShape[],
+  previousQuestions: string[],
+  askedInThisBatch: string[],
+  maxQuestions: number,
+  currentCount: number,
+): Promise<{ questions: OpenEndedQuestion[]; asked: string[] }> {
+  const questions: OpenEndedQuestion[] = [];
+  const asked: string[] = [...askedInThisBatch];
+
   const vagueSteps = stepPriorities
     .filter(
-      (p) => 
-        p.priorityRank === "CRITICAL" && 
-        p.uncertaintyReasons.includes("Vague or unclear action")
+      (p) =>
+        p.priorityRank === "CRITICAL" &&
+        p.uncertaintyReasons.includes("Vague or unclear action"),
     )
     .sort((a, b) => b.criticalityScore - a.criticalityScore);
 
   for (const priority of vagueSteps) {
-    if (questions.length >= maxQuestions) break;
+    if (currentCount + questions.length >= maxQuestions) break;
 
     const questionText = `How specifically is "${priority.description}" performed in step ${priority.stepIndex}? What are the detailed actions?`;
-    const allPrevious = [...previousQuestions, ...askedInThisBatch];
-    
+    const allPrevious = [...previousQuestions, ...asked];
+
     if (await isQuestionDuplicate(questionText, allPrevious)) continue;
 
     questions.push({
@@ -1092,8 +1244,95 @@ export async function generateAdaptiveQuestions(
       answerGuidance:
         "Describe the specific actions, tools, or procedures used in this step.",
     });
-    askedInThisBatch.push(questionText);
+    asked.push(questionText);
   }
 
-  return questions;
+  return { questions, asked };
+}
+
+/**
+ * Generates adaptive questions based on priority rankings
+ * Combines step priorities, flow uncertainties, and gap analysis
+ */
+export async function generateAdaptiveQuestions(
+  stepPriorities: StepPriorityShape[],
+  flowUncertainties: Array<{
+    flowId: string;
+    flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
+    conditionSpecificity: number;
+    hasCondition: boolean;
+    uncertaintyScore: number;
+    uncertaintyReasons: string[];
+  }>,
+  maxQuestions: number = 6,
+  previousQuestions: string[] = [],
+  blueprintOnly: boolean = false,
+  confirmedBlueprintCount: number = 1,
+  baselineFlowIds?: Set<string>,
+): Promise<OpenEndedQuestion[]> {
+  const allQuestions: OpenEndedQuestion[] = [];
+  let askedInThisBatch: string[] = [];
+
+  // Phase 0: Coverage seed questions (first pass only, non-blueprint mode)
+  if (!blueprintOnly && previousQuestions.length === 0 && confirmedBlueprintCount <= 1) {
+    const { questions: seedQs, asked: seedAsked } = await buildSeedQuestions(
+      stepPriorities,
+      previousQuestions,
+    );
+    for (const q of seedQs) {
+      if (allQuestions.length >= maxQuestions) break;
+      allQuestions.push(q);
+    }
+    askedInThisBatch = [...seedAsked];
+  }
+
+  // Phase 1: Gap-based exception questions
+  const BLUEPRINT_CAP = blueprintOnly ? Math.max(confirmedBlueprintCount * 2, 2) : Infinity;
+  const { questions: gapQs, asked: gapAsked } = await buildGapExceptionQuestions(
+    stepPriorities,
+    previousQuestions,
+    askedInThisBatch,
+    maxQuestions,
+    allQuestions.length,
+    blueprintOnly,
+    BLUEPRINT_CAP,
+  );
+  for (const q of gapQs) {
+    if (allQuestions.length >= maxQuestions) break;
+    allQuestions.push(q);
+  }
+  askedInThisBatch = gapAsked;
+
+  // Phase 2 & 3 are skipped when blueprintOnly=true
+  if (blueprintOnly) return allQuestions;
+
+  // Phase 2: Missing flow conditions
+  const { questions: condQs, asked: condAsked } = await buildMissingConditionQuestions(
+    flowUncertainties,
+    previousQuestions,
+    askedInThisBatch,
+    maxQuestions,
+    allQuestions.length,
+    baselineFlowIds,
+  );
+  for (const q of condQs) {
+    if (allQuestions.length >= maxQuestions) break;
+    allQuestions.push(q);
+  }
+  askedInThisBatch = condAsked;
+
+  // Phase 3: Clarification questions
+  const { questions: clarQs } = await buildClarificationQuestions(
+    stepPriorities,
+    previousQuestions,
+    askedInThisBatch,
+    maxQuestions,
+    allQuestions.length,
+  );
+  for (const q of clarQs) {
+    if (allQuestions.length >= maxQuestions) break;
+    allQuestions.push(q);
+  }
+
+  return allQuestions;
 }

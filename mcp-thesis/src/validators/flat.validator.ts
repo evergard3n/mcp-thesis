@@ -4,6 +4,7 @@ import z from "zod";
 import {
   GenStep,
   GenFlow,
+  GenLoop,
   GenUseCase,
 } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
@@ -351,54 +352,36 @@ function hasDefiniteEnding(flow: GenFlow): boolean {
   return endingKeywords.some((keyword) => description.includes(keyword));
 }
 
-// --- Main scoring function ---------------------------------------------------
+// --- Private scoring sub-functions ------------------------------------------
 
-/**
- * Scores a use case based on multiple quality dimensions including term coverage,
- * actor participation, process patterns, branching, loops, and fluff detection.
- *
- * Scoring dimensions:
- * - Name-level: Uniqueness and verb+noun pattern
- * - Summary/Pre/Post Coverage: How well summary and conditions are reflected in steps
- * - Actor Participation: Fraction of declared actors that appear in steps
- * - Process Pattern Coverage: Presence of input/validation/persistence/feedback verbs
- * - Flow-level: Trigger event, definite ending, valid step numbering
- * - Branching: Alternative/exception flows with proper anchoring and conditions
- * - Alt flow-level: Condition coverage and resume/end state
- * - Loops: Loop presence with proper conditions and span
- * - Fluff Penalty: Detects vague terms like "etc.", "...", "something"
- *
- * @param useCase - The use case to score
- * @param options - Scoring options including existing actors and use case names
- * @returns A comprehensive score object with overall score (0-100) and individual metrics
- */
-export function scoreUseCaseTerms(
+interface NameDimensionResult {
+  hasUniqueName: boolean;
+  hasVerbNoun: boolean;
+}
+
+function scoreNameDimension(
   useCase: GenUseCase,
-  {
-    existingActors = [],
-    existingUseCaseNames = [],
-  }: {
-    existingActors?: string[];
-    existingUseCaseNames?: string[];
-  }
-): UseCaseTermScore {
-  const flows = useCase.flows ?? [];
-  const loops = useCase.loops ?? [];
-
-  const mainFlow = flows.find((f) => f.kind === "MAIN");
-  const mainSteps: GenStep[] = mainFlow?.steps ?? [];
-  const allSteps: GenStep[] = flows.flatMap((f) => f.steps ?? []);
-  const allDescriptions = allSteps
-    .map((s) => s.description)
-    .filter((d) => d && d.trim().length > 0);
-
-  // 0. Name-level checks
+  existingUseCaseNames: string[]
+): NameDimensionResult {
   const hasUniqueName = !existingUseCaseNames.some((name) =>
     eqIgnoreCase(name, useCase.name)
   );
   const hasVerbNoun = hasVerbNounPattern(useCase.name);
+  return { hasUniqueName, hasVerbNoun };
+}
 
-  // 1. Summary / pre / post coverage (term existence)
+interface SummaryDimensionResult {
+  hasPreconditions: boolean;
+  hasPostconditions: boolean;
+  summaryCoverage: number;
+  preCoverage: number;
+  postCoverage: number;
+}
+
+function scoreSummaryDimension(
+  useCase: GenUseCase,
+  allDescriptions: string[]
+): SummaryDimensionResult {
   const hasPreconditions = (useCase.preconditions?.length ?? 0) > 0;
   const hasPostconditions = (useCase.postconditions?.length ?? 0) > 0;
   const summaryTerms = collectTerms([useCase.summary ?? ""]);
@@ -409,7 +392,25 @@ export function scoreUseCaseTerms(
   const preCoverage = computeCoverage(preTerms, allDescriptions);
   const postCoverage = computeCoverage(postTerms, allDescriptions);
 
-  // 2. Actor participation / main actor / system
+  return {
+    hasPreconditions,
+    hasPostconditions,
+    summaryCoverage,
+    preCoverage,
+    postCoverage,
+  };
+}
+
+interface ActorDimensionResult {
+  actorParticipation: number;
+  hasMainActorSteps: boolean;
+  hasSystemActor: boolean;
+}
+
+function scoreActorDimension(
+  useCase: GenUseCase,
+  allSteps: GenStep[]
+): ActorDimensionResult {
   const normalizedActors = (useCase.actors ?? []).map((a) => a.toLowerCase());
   const usedActors = new Set<string>();
   let hasMainActorSteps = false;
@@ -431,15 +432,21 @@ export function scoreUseCaseTerms(
   const actorParticipation =
     normalizedActors.length > 0 ? usedActors.size / normalizedActors.length : 0;
 
-  // 3. Process pattern coverage (input / validation / persistence / feedback) in MAIN
+  return { actorParticipation, hasMainActorSteps, hasSystemActor };
+}
+
+interface ProcessPatternDimensionResult {
+  processPatternCoverage: number;
+}
+
+function scoreProcessPatternDimension(
+  mainSteps: GenStep[]
+): ProcessPatternDimensionResult {
   const mainDescriptions = mainSteps.map((s) => s.description).filter(Boolean);
 
   const hasInputStep = anyContainsVerb(mainDescriptions, INPUT_VERBS);
   const hasValidationStep = anyContainsVerb(mainDescriptions, VALIDATION_VERBS);
-  const hasPersistenceStep = anyContainsVerb(
-    mainDescriptions,
-    PERSISTENCE_VERBS
-  );
+  const hasPersistenceStep = anyContainsVerb(mainDescriptions, PERSISTENCE_VERBS);
   const hasFeedbackStep = anyContainsVerb(mainDescriptions, FEEDBACK_VERBS);
 
   const processPatternCoverage =
@@ -449,7 +456,20 @@ export function scoreUseCaseTerms(
       Number(hasFeedbackStep)) /
     4;
 
-  // 3.5. Flow-level checks
+  return { processPatternCoverage };
+}
+
+interface FlowLevelDimensionResult {
+  hasTrigger: boolean;
+  hasEnding: boolean;
+  hasValidNumbering: boolean;
+}
+
+function scoreFlowLevelDimension(
+  flows: GenFlow[],
+  mainFlow: GenFlow | undefined,
+  mainSteps: GenStep[]
+): FlowLevelDimensionResult {
   // Check for trigger event (first step should indicate how use case starts)
   const hasTrigger =
     mainSteps.length > 0 && mainSteps[0].description.trim().length > 0;
@@ -462,7 +482,21 @@ export function scoreUseCaseTerms(
     hasValidStepNumbering(flow.steps ?? [])
   );
 
-  // 4. Branching coverage (ALTERNATIVE / EXCEPTION)
+  return { hasTrigger, hasEnding, hasValidNumbering };
+}
+
+interface BranchingDimensionResult {
+  hasAlternativeFlow: boolean;
+  hasExceptionFlow: boolean;
+  branchAnchoringCoverage: number;
+  branchConditionCoverage: number;
+}
+
+function scoreBranchingDimension(
+  flows: GenFlow[],
+  mainFlow: GenFlow | undefined,
+  mainSteps: GenStep[]
+): BranchingDimensionResult {
   const altFlows = flows.filter((f) => f.kind === "ALTERNATIVE");
   const excFlows = flows.filter((f) => f.kind === "EXCEPTION");
   const altExcFlows = [...altFlows, ...excFlows];
@@ -497,7 +531,24 @@ export function scoreUseCaseTerms(
     branchConditionCoverage = flowsWithCondition.length / altExcFlows.length;
   }
 
-  // 4.5. Alt flow-level checks
+  return {
+    hasAlternativeFlow,
+    hasExceptionFlow,
+    branchAnchoringCoverage,
+    branchConditionCoverage,
+  };
+}
+
+interface AltFlowDimensionResult {
+  altFlowConditionCoverage: number;
+  altFlowResumeCoverage: number;
+}
+
+function scoreAltFlowDimension(flows: GenFlow[]): AltFlowDimensionResult {
+  const altFlows = flows.filter((f) => f.kind === "ALTERNATIVE");
+  const excFlows = flows.filter((f) => f.kind === "EXCEPTION");
+  const altExcFlows = [...altFlows, ...excFlows];
+
   // Check condition coverage for alternative flows specifically
   let altFlowConditionCoverage = 0;
   if (altFlows.length > 0) {
@@ -521,7 +572,16 @@ export function scoreUseCaseTerms(
     altFlowResumeCoverage = validAltFlows.length / altExcFlows.length;
   }
 
-  // 5. Loop coverage (if any)
+  return { altFlowConditionCoverage, altFlowResumeCoverage };
+}
+
+interface LoopDimensionResult {
+  hasLoop: boolean;
+  loopConditionCoverage: number;
+  loopSpanCoverage: number;
+}
+
+function scoreLoopDimension(loops: GenLoop[]): LoopDimensionResult {
   const hasLoop = loops.length > 0;
   let loopConditionCoverage = 0;
   let loopSpanCoverage = 0;
@@ -538,7 +598,14 @@ export function scoreUseCaseTerms(
     loopSpanCoverage = multiStepLoops / loops.length;
   }
 
-  // 6. Fluff penalty (presence of obvious "etc", "..." etc.)
+  return { hasLoop, loopConditionCoverage, loopSpanCoverage };
+}
+
+interface FluffDimensionResult {
+  fluffPenalty: boolean;
+}
+
+function scoreFluffDimension(allDescriptions: string[]): FluffDimensionResult {
   let fluffPenalty = true;
   const lowerDescriptions = allDescriptions.map((d) => d.toLowerCase());
   for (const fluff of FLUFF_TERMS) {
@@ -548,8 +615,17 @@ export function scoreUseCaseTerms(
       break;
     }
   }
+  return { fluffPenalty };
+}
 
-  // 7. Structural integrity penalties
+interface StructuralPenaltiesResult {
+  structuralPenalty: number;
+}
+
+function scoreStructuralPenalties(
+  flows: GenFlow[],
+  loops: GenLoop[]
+): StructuralPenaltiesResult {
   let structuralPenalty = 0;
   const flowIds = new Set<string>();
 
@@ -619,6 +695,104 @@ export function scoreUseCaseTerms(
       }
     }
   }
+
+  return { structuralPenalty };
+}
+
+// --- Main scoring function ---------------------------------------------------
+
+/**
+ * Scores a use case based on multiple quality dimensions including term coverage,
+ * actor participation, process patterns, branching, loops, and fluff detection.
+ *
+ * Scoring dimensions:
+ * - Name-level: Uniqueness and verb+noun pattern
+ * - Summary/Pre/Post Coverage: How well summary and conditions are reflected in steps
+ * - Actor Participation: Fraction of declared actors that appear in steps
+ * - Process Pattern Coverage: Presence of input/validation/persistence/feedback verbs
+ * - Flow-level: Trigger event, definite ending, valid step numbering
+ * - Branching: Alternative/exception flows with proper anchoring and conditions
+ * - Alt flow-level: Condition coverage and resume/end state
+ * - Loops: Loop presence with proper conditions and span
+ * - Fluff Penalty: Detects vague terms like "etc.", "...", "something"
+ *
+ * @param useCase - The use case to score
+ * @param options - Scoring options including existing actors and use case names
+ * @returns A comprehensive score object with overall score (0-100) and individual metrics
+ */
+export function scoreUseCaseTerms(
+  useCase: GenUseCase,
+  {
+    existingActors = [],
+    existingUseCaseNames = [],
+  }: {
+    existingActors?: string[];
+    existingUseCaseNames?: string[];
+  }
+): UseCaseTermScore {
+  const flows = useCase.flows ?? [];
+  const loops = useCase.loops ?? [];
+
+  const mainFlow = flows.find((f) => f.kind === "MAIN");
+  const mainSteps: GenStep[] = mainFlow?.steps ?? [];
+  const allSteps: GenStep[] = flows.flatMap((f) => f.steps ?? []);
+  const allDescriptions = allSteps
+    .map((s) => s.description)
+    .filter((d) => d && d.trim().length > 0);
+
+  // Suppress unused variable warning for existingActors (kept for API compatibility)
+  void existingActors;
+
+  // 0. Name-level checks
+  const { hasUniqueName, hasVerbNoun } = scoreNameDimension(
+    useCase,
+    existingUseCaseNames
+  );
+
+  // 1. Summary / pre / post coverage
+  const {
+    hasPreconditions,
+    hasPostconditions,
+    summaryCoverage,
+    preCoverage,
+    postCoverage,
+  } = scoreSummaryDimension(useCase, allDescriptions);
+
+  // 2. Actor participation / main actor / system
+  const { actorParticipation, hasMainActorSteps, hasSystemActor } =
+    scoreActorDimension(useCase, allSteps);
+
+  // 3. Process pattern coverage (input / validation / persistence / feedback) in MAIN
+  const { processPatternCoverage } = scoreProcessPatternDimension(mainSteps);
+
+  // 3.5. Flow-level checks
+  const { hasTrigger, hasEnding, hasValidNumbering } = scoreFlowLevelDimension(
+    flows,
+    mainFlow,
+    mainSteps
+  );
+
+  // 4. Branching coverage (ALTERNATIVE / EXCEPTION)
+  const {
+    hasAlternativeFlow,
+    hasExceptionFlow,
+    branchAnchoringCoverage,
+    branchConditionCoverage,
+  } = scoreBranchingDimension(flows, mainFlow, mainSteps);
+
+  // 4.5. Alt flow-level checks
+  const { altFlowConditionCoverage, altFlowResumeCoverage } =
+    scoreAltFlowDimension(flows);
+
+  // 5. Loop coverage (if any)
+  const { hasLoop, loopConditionCoverage, loopSpanCoverage } =
+    scoreLoopDimension(loops);
+
+  // 6. Fluff penalty
+  const { fluffPenalty } = scoreFluffDimension(allDescriptions);
+
+  // 7. Structural integrity penalties
+  const { structuralPenalty } = scoreStructuralPenalties(flows, loops);
 
   // 8. Combine into overall score (0–100)
   // Weights are heuristic; adjust as you wish.
@@ -711,56 +885,41 @@ export function scoreUseCaseTerms(
   };
 }
 
-/**
- * Validates the core structural integrity of a use case.
- * Checks for critical errors that make the use case technically invalid or broken.
- *
- * Structural checks include:
- * - Schema compliance
- * - Required fields (summary, main flow, actors, main actor)
- * - Flow structure (duplicate IDs, orphaned flows, circular dependencies)
- * - Index validity (step indices, loop indices, fromStepIndex)
- * - Step numbering (duplicates, gaps)
- * - Name uniqueness (if existingUseCaseNames provided)
- *
- * @param useCaseInput - The use case to validate
- * @param options - Validation options
- * @returns Structural validation result with only critical errors
- */
-export function validateUseCaseStructure(
-  useCaseInput: z.infer<typeof genUseCaseSchema>,
-  options?: {
-    existingUseCaseNames?: string[];
-  }
-): UseCaseStructuralValidationResult {
-  const existingUseCaseNames = options?.existingUseCaseNames ?? [];
+// --- Private structural check-group functions --------------------------------
+
+interface PartialErrors {
+  errors: string[];
+}
+
+function checkRequiredFields(useCase: GenUseCase): PartialErrors {
   const errors: string[] = [];
 
-  // Parse and validate schema
-  let useCase: GenUseCase;
-  const result = genUseCaseSchema.safeParse(useCaseInput);
-
-  if (!result.success) {
-    const zodErrors = result.error.errors.map(
-      (err) =>
-        `Schema validation error at ${err.path.join(".")}: ${err.message}`
-    );
-    errors.push(...zodErrors);
-    return { valid: false, errors };
-  }
-
-  useCase = result.data as GenUseCase;
-
-  // --- Critical structural validation checks ---
-
-  // Check for empty or missing summary
   if (!useCase.summary || useCase.summary.trim().length === 0) {
     errors.push(
       "CRITICAL: The use case summary is missing or empty. Please provide a clear, concise summary that describes the goal of this use case."
     );
   }
 
-  // Check for main flow
+  if (!useCase.actors || useCase.actors.length === 0) {
+    errors.push(
+      "CRITICAL: No actors defined. Please specify at least one actor who interacts with the system."
+    );
+  }
+
+  if (!useCase.mainActor || useCase.mainActor.trim().length === 0) {
+    errors.push(
+      "CRITICAL: Main actor is not specified. Please designate which actor is the primary initiator of this use case."
+    );
+  }
+
+  return { errors };
+}
+
+function checkMainFlow(useCase: GenUseCase): {
+  errors: string[];
+  mainFlowPresent: boolean;
+} {
+  const errors: string[] = [];
   const flows = useCase.flows ?? [];
   const mainFlow = flows.find((f) => f.kind === "MAIN");
 
@@ -768,7 +927,7 @@ export function validateUseCaseStructure(
     errors.push(
       "CRITICAL: No MAIN flow found. Every use case must have a MAIN flow that describes the primary sequence of steps."
     );
-    return { valid: false, errors };
+    return { errors, mainFlowPresent: false };
   }
 
   const mainSteps = mainFlow.steps ?? [];
@@ -776,24 +935,18 @@ export function validateUseCaseStructure(
     errors.push(
       "CRITICAL: The MAIN flow has no steps. Please add at least 3-5 steps that describe the main sequence of actions."
     );
-    return { valid: false, errors };
+    return { errors, mainFlowPresent: false };
   }
 
-  // Check for actors
-  if (!useCase.actors || useCase.actors.length === 0) {
-    errors.push(
-      "CRITICAL: No actors defined. Please specify at least one actor who interacts with the system."
-    );
-  }
+  return { errors, mainFlowPresent: true };
+}
 
-  // Check for main actor
-  if (!useCase.mainActor || useCase.mainActor.trim().length === 0) {
-    errors.push(
-      "CRITICAL: Main actor is not specified. Please designate which actor is the primary initiator of this use case."
-    );
-  }
+function checkNameUniqueness(
+  useCase: GenUseCase,
+  existingUseCaseNames: string[]
+): PartialErrors {
+  const errors: string[] = [];
 
-  // Check for name uniqueness
   if (existingUseCaseNames.length > 0) {
     const isDuplicate = existingUseCaseNames.some((name) =>
       eqIgnoreCase(name, useCase.name)
@@ -805,7 +958,12 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check for flows with parentFlow having ID "MAIN"
+  return { errors };
+}
+
+function checkFlowParentRelations(flows: GenFlow[]): PartialErrors {
+  const errors: string[] = [];
+
   for (const flow of flows) {
     if (flow.parentFlow && flow.id === "MAIN") {
       errors.push(
@@ -814,7 +972,6 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check for non-MAIN flows that should have parentFlow
   for (const flow of flows) {
     if (flow.kind !== "MAIN" && !flow.parentFlow) {
       errors.push(
@@ -823,7 +980,14 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check for duplicate flow IDs
+  return { errors };
+}
+
+function checkDuplicateFlowIds(flows: GenFlow[]): {
+  errors: string[];
+  flowIds: Set<string>;
+} {
+  const errors: string[] = [];
   const flowIds = new Set<string>();
   const duplicateFlowIds: string[] = [];
 
@@ -843,8 +1007,14 @@ export function validateUseCaseStructure(
     );
   }
 
-  // Check for orphaned flows (parentFlow references non-existent flow)
-  const loops = useCase.loops ?? [];
+  return { errors, flowIds };
+}
+
+function checkOrphanedFlowsAndCircular(
+  flows: GenFlow[],
+  flowIds: Set<string>
+): PartialErrors {
+  const errors: string[] = [];
 
   for (const flow of flows) {
     if (flow.parentFlow && flow.parentFlow !== "MAIN") {
@@ -856,7 +1026,6 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check for circular flow dependencies
   for (const flow of flows) {
     if (flow.parentFlow && flow.parentFlow !== "MAIN") {
       const visited = new Set<string>([flow.id]);
@@ -877,7 +1046,16 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check for orphaned loops (flowRef references non-existent flow)
+  return { errors };
+}
+
+function checkLoopAndIndexValidity(
+  flows: GenFlow[],
+  loops: GenLoop[],
+  flowIds: Set<string>
+): PartialErrors {
+  const errors: string[] = [];
+
   for (const loop of loops) {
     if (loop.flowRef !== "MAIN" && !flowIds.has(loop.flowRef)) {
       errors.push(
@@ -886,7 +1064,6 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check if fromStepIndex points to valid step in parent flow
   for (const flow of flows) {
     if (flow.parentFlow && typeof flow.fromStepIndex === "number") {
       const parentFlow = flows.find((f) => f.id === flow.parentFlow);
@@ -907,7 +1084,6 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check if loop indices are valid for their referenced flow
   for (const loop of loops) {
     const referencedFlow = flows.find((f) => f.id === loop.flowRef);
     if (referencedFlow && referencedFlow.steps) {
@@ -937,7 +1113,12 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check for valid step numbering (no duplicates, no gaps)
+  return { errors };
+}
+
+function checkStepNumberingAndAltFlowSteps(flows: GenFlow[]): PartialErrors {
+  const errors: string[] = [];
+
   for (const flow of flows) {
     if (flow.steps && flow.steps.length > 0) {
       if (!hasValidStepNumbering(flow.steps)) {
@@ -949,7 +1130,6 @@ export function validateUseCaseStructure(
             `CRITICAL: Flow '${flow.id}' has duplicate step indices. Each step must have a unique index.`
           );
         } else {
-          // Must have gaps
           errors.push(
             `CRITICAL: Flow '${flow.id}' has gaps in step indices. Steps must be numbered consecutively (e.g., 0,1,2,3 or 1,2,3,4).`
           );
@@ -958,7 +1138,6 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check alternative/exception flows have at least one step
   for (const flow of flows) {
     if (flow.kind === "ALTERNATIVE" || flow.kind === "EXCEPTION") {
       if (!flow.steps || flow.steps.length === 0) {
@@ -969,7 +1148,12 @@ export function validateUseCaseStructure(
     }
   }
 
-  // Check that main actor is in the actors list
+  return { errors };
+}
+
+function checkMainActorInActorsList(useCase: GenUseCase): PartialErrors {
+  const errors: string[] = [];
+
   if (useCase.mainActor && useCase.actors) {
     const mainActorInList = useCase.actors.some((a) =>
       eqIgnoreCase(a, useCase.mainActor)
@@ -981,57 +1165,90 @@ export function validateUseCaseStructure(
     }
   }
 
+  return { errors };
+}
+
+// --- Main structural validation function -------------------------------------
+
+/**
+ * Validates the core structural integrity of a use case.
+ * Checks for critical errors that make the use case technically invalid or broken.
+ *
+ * Structural checks include:
+ * - Schema compliance
+ * - Required fields (summary, main flow, actors, main actor)
+ * - Flow structure (duplicate IDs, orphaned flows, circular dependencies)
+ * - Index validity (step indices, loop indices, fromStepIndex)
+ * - Step numbering (duplicates, gaps)
+ * - Name uniqueness (if existingUseCaseNames provided)
+ *
+ * @param useCaseInput - The use case to validate
+ * @param options - Validation options
+ * @returns Structural validation result with only critical errors
+ */
+export function validateUseCaseStructure(
+  useCaseInput: z.infer<typeof genUseCaseSchema>,
+  options?: {
+    existingUseCaseNames?: string[];
+  }
+): UseCaseStructuralValidationResult {
+  const existingUseCaseNames = options?.existingUseCaseNames ?? [];
+  const errors: string[] = [];
+
+  const result = genUseCaseSchema.safeParse(useCaseInput);
+
+  if (!result.success) {
+    const zodErrors = result.error.errors.map(
+      (err) =>
+        `Schema validation error at ${err.path.join(".")}: ${err.message}`
+    );
+    errors.push(...zodErrors);
+    return { valid: false, errors };
+  }
+
+  const useCase = result.data as GenUseCase;
+  const flows = useCase.flows ?? [];
+  const loops = useCase.loops ?? [];
+
+  errors.push(...checkRequiredFields(useCase).errors);
+
+  const mainFlowCheck = checkMainFlow(useCase);
+  errors.push(...mainFlowCheck.errors);
+  if (!mainFlowCheck.mainFlowPresent) {
+    return { valid: false, errors };
+  }
+
+  errors.push(...checkNameUniqueness(useCase, existingUseCaseNames).errors);
+  errors.push(...checkFlowParentRelations(flows).errors);
+
+  const { errors: dupErrors, flowIds } = checkDuplicateFlowIds(flows);
+  errors.push(...dupErrors);
+
+  errors.push(...checkOrphanedFlowsAndCircular(flows, flowIds).errors);
+  errors.push(...checkLoopAndIndexValidity(flows, loops, flowIds).errors);
+  errors.push(...checkStepNumberingAndAltFlowSteps(flows).errors);
+  errors.push(...checkMainActorInActorsList(useCase).errors);
+
   return {
     valid: errors.length === 0,
     errors,
   };
 }
 
-/**
- * Validates the semantic quality and completeness of a use case.
- * Provides warnings and suggestions for improving the use case meaning and quality.
- *
- * Quality checks include:
- * - Name patterns (verb+noun)
- * - Pre/post conditions presence and coverage
- * - Actor participation
- * - Process pattern coverage
- * - Trigger events and definite endings
- * - Alternative/exception flow quality
- * - Branch conditions and resume points
- * - Loop conditions
- * - Fluff detection
- *
- * @param useCase - The use case to validate (must be structurally valid)
- * @param options - Validation options
- * @returns Quality validation result with score, warnings, and suggestions
- */
-export async function validateUseCaseQuality(
+// --- Private quality feedback-group functions --------------------------------
+
+interface FeedbackGroup {
+  warnings: string[];
+  suggestions: string[];
+}
+
+function feedbackName(
   useCase: GenUseCase,
-  options?: {
-    projectStore: JsonProjectStore;
-  }
-): Promise<UseCaseQualityValidationResult> {
-  const existingActors =
-    (await options?.projectStore.getAllActors())?.map((a) => a.name) ?? [];
-  const existingUseCaseNames =
-    options?.projectStore.getAllUseCases().map((uc) => uc.name) ?? [];
+  score: UseCaseTermScore
+): FeedbackGroup {
   const warnings: string[] = [];
   const suggestions: string[] = [];
 
-  const flows = useCase.flows ?? [];
-  const mainFlow = flows.find((f) => f.kind === "MAIN");
-  const mainSteps: GenStep[] = mainFlow?.steps ?? [];
-
-  // --- Score the use case ---
-  const score = scoreUseCaseTerms(useCase, {
-    existingActors,
-    existingUseCaseNames,
-  });
-
-  // --- Analyze score and generate feedback ---
-
-  // 0. Name-level feedback
   if (!score.hasUniqueName) {
     suggestions.push(
       `UNIQUE NAME: Consider a more distinctive name to avoid confusion with existing use cases.`
@@ -1044,7 +1261,13 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 1. Summary and coverage issues
+  return { warnings, suggestions };
+}
+
+function feedbackSummaryAndConditions(score: UseCaseTermScore): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (score.summaryCoverage < 0.3) {
     warnings.push(
       `LOW SUMMARY COVERAGE (${(score.summaryCoverage * 100).toFixed(
@@ -1059,7 +1282,6 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 2. Preconditions and postconditions
   if (!score.hasPreconditions) {
     suggestions.push(
       "ADD PRECONDITIONS: Consider adding preconditions that must be true before this use case can execute (e.g., 'User must be logged in', 'Database must be accessible')."
@@ -1084,7 +1306,17 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 3. Actor participation
+  return { warnings, suggestions };
+}
+
+function feedbackActors(
+  useCase: GenUseCase,
+  score: UseCaseTermScore,
+  existingActors: string[]
+): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (score.actorParticipation < 0.5) {
     warnings.push(
       `LOW ACTOR PARTICIPATION (${(score.actorParticipation * 100).toFixed(
@@ -1107,7 +1339,6 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // Check for actor mismatches with existing actors
   if (existingActors && existingActors.length > 0) {
     const newActors =
       useCase.actors?.filter(
@@ -1123,7 +1354,13 @@ export async function validateUseCaseQuality(
     }
   }
 
-  // 3.5. Flow-level feedback
+  return { warnings, suggestions };
+}
+
+function feedbackFlowLevel(score: UseCaseTermScore): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (!score.hasTriggerEvent) {
     warnings.push(
       `TRIGGER EVENT: The first step should clearly describe how the use case is initiated (e.g., "User clicks login button", "System receives order request").`
@@ -1136,7 +1373,16 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 4. Process pattern coverage
+  return { warnings, suggestions };
+}
+
+function feedbackProcessPattern(
+  score: UseCaseTermScore,
+  mainSteps: GenStep[]
+): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (score.processPatternCoverage < 0.5) {
     const missing: string[] = [];
     const mainDescriptions = mainSteps
@@ -1167,7 +1413,16 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 5. Alternative and exception flows
+  return { warnings, suggestions };
+}
+
+function feedbackBranchingAndAltFlows(
+  score: UseCaseTermScore,
+  flows: GenFlow[]
+): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (!score.hasAlternativeFlow && !score.hasExceptionFlow) {
     suggestions.push(
       "ADD ALTERNATIVE/EXCEPTION FLOWS: Consider adding alternative flows (different valid paths) or exception flows (error handling) to make the use case more complete. Real-world scenarios rarely follow only the happy path."
@@ -1186,7 +1441,6 @@ export async function validateUseCaseQuality(
     }
   }
 
-  // 6. Branch anchoring and conditions
   if (
     score.branchAnchoringCoverage < 0.2 &&
     (score.hasAlternativeFlow || score.hasExceptionFlow)
@@ -1211,7 +1465,6 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 6.5. Alt flow-level feedback
   if (score.hasAlternativeFlow && score.altFlowConditionCoverage < 0.5) {
     warnings.push(
       `ALT FLOW CONDITIONS (${(score.altFlowConditionCoverage * 100).toFixed(
@@ -1231,7 +1484,6 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // Check for specific flows missing conditions
   for (const flow of flows) {
     if (flow.kind === "ALTERNATIVE" || flow.kind === "EXCEPTION") {
       if (!flow.condition || flow.condition.trim().length === 0) {
@@ -1240,7 +1492,6 @@ export async function validateUseCaseQuality(
         );
       }
 
-      // Check for resume point or end state
       if (flow.steps && flow.steps.length > 0 && !hasDefiniteEnding(flow)) {
         suggestions.push(
           `FLOW ENDING: Flow '${flow.id}' should clearly indicate how it ends (returns to main flow, ends the use case, etc.).`
@@ -1249,7 +1500,13 @@ export async function validateUseCaseQuality(
     }
   }
 
-  // 7. Loop coverage
+  return { warnings, suggestions };
+}
+
+function feedbackLoops(score: UseCaseTermScore): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (score.hasLoop) {
     if (score.loopConditionCoverage < 0.5) {
       warnings.push(
@@ -1268,14 +1525,19 @@ export async function validateUseCaseQuality(
     }
   }
 
-  // 8. Fluff detection
+  return { warnings, suggestions };
+}
+
+function feedbackFluffAndStructure(score: UseCaseTermScore): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (!score.fluffPenalty) {
     warnings.push(
       `VAGUE LANGUAGE DETECTED: The use case contains vague terms like "etc.", "...", or "something". Replace these with specific, concrete descriptions. Each step should be clear and actionable.`
     );
   }
 
-  // 9. Structural penalty feedback (if any from scoring)
   if (score.structuralPenalty > 0) {
     warnings.push(
       `STRUCTURAL INTEGRITY ISSUES (${score.structuralPenalty.toFixed(
@@ -1284,7 +1546,13 @@ export async function validateUseCaseQuality(
     );
   }
 
-  // 10. Overall score assessment
+  return { warnings, suggestions };
+}
+
+function feedbackOverallScore(score: UseCaseTermScore): FeedbackGroup {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
   if (score.overall < 40) {
     warnings.push(
       `LOW OVERALL QUALITY SCORE (${score.overall.toFixed(
@@ -1304,6 +1572,65 @@ export async function validateUseCaseQuality(
       )}/100): This is a solid use case. Consider the suggestions above for further refinement.`
     );
   }
+
+  return { warnings, suggestions };
+}
+
+// --- Main quality validation function ----------------------------------------
+
+/**
+ * Validates the semantic quality and completeness of a use case.
+ * Provides warnings and suggestions for improving the use case meaning and quality.
+ *
+ * Quality checks include:
+ * - Name patterns (verb+noun)
+ * - Pre/post conditions presence and coverage
+ * - Actor participation
+ * - Process pattern coverage
+ * - Trigger events and definite endings
+ * - Alternative/exception flow quality
+ * - Branch conditions and resume points
+ * - Loop conditions
+ * - Fluff detection
+ *
+ * @param useCase - The use case to validate (must be structurally valid)
+ * @param options - Validation options
+ * @returns Quality validation result with score, warnings, and suggestions
+ */
+export async function validateUseCaseQuality(
+  useCase: GenUseCase,
+  options?: {
+    projectStore: JsonProjectStore;
+  }
+): Promise<UseCaseQualityValidationResult> {
+  const existingActors =
+    (await options?.projectStore.getAllActors())?.map((a) => a.name) ?? [];
+  const existingUseCaseNames =
+    options?.projectStore.getAllUseCases().map((uc) => uc.name) ?? [];
+
+  const flows = useCase.flows ?? [];
+  const mainFlow = flows.find((f) => f.kind === "MAIN");
+  const mainSteps: GenStep[] = mainFlow?.steps ?? [];
+
+  const score = scoreUseCaseTerms(useCase, {
+    existingActors,
+    existingUseCaseNames,
+  });
+
+  const groups = [
+    feedbackName(useCase, score),
+    feedbackSummaryAndConditions(score),
+    feedbackActors(useCase, score, existingActors),
+    feedbackFlowLevel(score),
+    feedbackProcessPattern(score, mainSteps),
+    feedbackBranchingAndAltFlows(score, flows),
+    feedbackLoops(score),
+    feedbackFluffAndStructure(score),
+    feedbackOverallScore(score),
+  ];
+
+  const warnings: string[] = groups.flatMap((g) => g.warnings);
+  const suggestions: string[] = groups.flatMap((g) => g.suggestions);
 
   return {
     score,

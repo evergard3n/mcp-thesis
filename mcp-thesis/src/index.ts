@@ -86,6 +86,18 @@ const submitAnswersSchema = z.object({
   ),
 });
 
+function requireSession(
+  sessionId: string,
+  res: express.Response,
+): ReturnType<SessionManager["getSession"]> {
+  const session = sessions.getSession(sessionId);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return null;
+  }
+  return session;
+}
+
 function setSSEHeaders(res: express.Response): void {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -135,20 +147,14 @@ app.delete("/sessions/:sessionId", async (req, res) => {
 });
 
 app.get("/sessions/:sessionId/state", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   res.status(200).json(session.hitl.getState());
 });
 
 app.get("/sessions/:sessionId/hitl/stream", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
 
   setSSEHeaders(res);
   const unsubscribe = session.hitl.subscribe((event) => {
@@ -165,11 +171,8 @@ app.get("/sessions/:sessionId/hitl/stream", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/hitl/start", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
 
   const parsed = startHitlSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -192,11 +195,8 @@ app.post("/sessions/:sessionId/hitl/start", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/hitl/answers", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
 
   const parsed = submitAnswersSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -214,22 +214,16 @@ app.post("/sessions/:sessionId/hitl/answers", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/hitl/cancel", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
 
   session.hitl.cancel();
   res.status(200).json({ cancelled: true, state: session.hitl.getState() });
 });
 
 app.post("/sessions/:sessionId/projects/init", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = createProjectSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -251,11 +245,8 @@ app.post("/sessions/:sessionId/projects/init", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/projects/load-by-name", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = loadProjectSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -273,11 +264,8 @@ app.post("/sessions/:sessionId/projects/load-by-name", async (req, res) => {
 });
 
 app.get("/sessions/:sessionId/projects", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   try {
     const projects = await listAllProjects(session.projectStore);
     res.status(200).json({ projects });
@@ -289,11 +277,8 @@ app.get("/sessions/:sessionId/projects", async (req, res) => {
 });
 
 app.get("/sessions/:sessionId/projects/current", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   try {
     const info = await getProjectInfo(session.projectStore);
     res.status(200).json({ project: info });
@@ -305,11 +290,8 @@ app.get("/sessions/:sessionId/projects/current", async (req, res) => {
 });
 
 app.get("/sessions/:sessionId/projects/current/use-cases", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   try {
     const useCases = viewProjectUseCases(session.projectStore);
     res.status(200).json({ useCases });
@@ -321,11 +303,8 @@ app.get("/sessions/:sessionId/projects/current/use-cases", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/projects/switch", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = switchProjectSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -342,11 +321,8 @@ app.post("/sessions/:sessionId/projects/switch", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/projects/delete", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = deleteProjectSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -363,11 +339,8 @@ app.post("/sessions/:sessionId/projects/delete", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/testing/prepare-test-data", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = prepareTestDataSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -384,11 +357,8 @@ app.post("/sessions/:sessionId/testing/prepare-test-data", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/testing/embed-dataset", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = embedDatasetSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -405,11 +375,8 @@ app.post("/sessions/:sessionId/testing/embed-dataset", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/testing/run-hitl-comparison", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = runHitlComparisonSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -426,11 +393,8 @@ app.post("/sessions/:sessionId/testing/run-hitl-comparison", async (req, res) =>
 });
 
 app.post("/sessions/:sessionId/testing/evaluate-results", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = evaluateResultsSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -447,11 +411,8 @@ app.post("/sessions/:sessionId/testing/evaluate-results", async (req, res) => {
 });
 
 app.post("/sessions/:sessionId/testing/classify-domain", async (req, res) => {
-  const session = sessions.getSession(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  const session = requireSession(req.params.sessionId, res);
+  if (!session) return;
   const parsed = classifyDomainSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
