@@ -7,6 +7,7 @@
       "probeQuestion": "Does this process involve a human approver who reviews a submission and can approve, reject, or request changes?",
       "domainType": "human-system",
       "domainDescription": "Human-initiated approval workflows with human decision-makers",
+      "families": ["purchasing", "claims", "corporate", "insurance"],
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -98,6 +99,7 @@
       "probeQuestion": "Does this process involve an initiator submitting a request that is later fulfilled, delivered, or resolved by another actor or system?",
       "domainType": "human-system",
       "domainDescription": "Human-initiated requests fulfilled by humans or systems",
+      "families": ["claims", "purchasing", "logistics", "corporate", "insurance"],
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -223,6 +225,7 @@
       "probeQuestion": "Does this process involve a procurement or sourcing actor selecting among multiple vendors, suppliers, or contractors — where no match, multiple matches, or request splitting may occur?",
       "domainType": "human-system",
       "domainDescription": "Procurement/sourcing actor selects among multiple vendors or suppliers, with scenarios for no match, split orders, or merged requests",
+      "families": ["purchasing", "corporate", "claims"],
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -300,6 +303,7 @@
       "probeQuestion": "Does this process require an actor to fill in a form or structured data entry with required fields, where some fields may be unknown, missing, or deferred to a later step or another actor?",
       "domainType": "human-system",
       "domainDescription": "Human fills out structured forms or data entry with required fields, handling incomplete mandatory data scenarios",
+      "families": ["generic"],
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -361,6 +365,7 @@
       "probeQuestion": "Does this process involve an insurance claim, benefits case, or formal adjudication where eligibility/policy rules are validated and outcomes include decline, settlement, or negotiated payment?",
       "domainType": "human-system",
       "domainDescription": "Insurance/benefits claim review with formal eligibility validation and adjudication outcomes (decline, settlement, negotiated payment)",
+      "families": ["claims", "insurance"],
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -453,6 +458,7 @@
       "probeQuestion": "Does this process involve one system calling another system's API or service, where timeouts, unavailability, or bad responses may occur?",
       "domainType": "system-system",
       "domainDescription": "System-to-system communication via APIs with error handling",
+      "families": ["integration", "messaging"],
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -560,6 +566,7 @@
       "probeQuestion": "Does this process involve synchronizing data between two or more systems, where conflicts, failures, or stale data may occur?",
       "domainType": "system-system",
       "domainDescription": "Systems synchronizing data across databases or services",
+      "families": ["integration", "operations"],
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -667,6 +674,7 @@
       "probeQuestion": "Does this process involve a system publishing events or messages that another system consumes asynchronously, where events may be lost, duplicated, or arrive out of order?",
       "domainType": "system-system",
       "domainDescription": "Asynchronous event publishing and consumption between systems",
+      "families": ["messaging", "integration"],
       "activation": {
         "minRolesMatched": 2,
         "requireDifferentActors": true
@@ -774,6 +782,7 @@
       "probeQuestion": "Does this process involve a system executing batch or bulk operations over datasets, where partial failures, timeouts, or duplicate runs may occur?",
       "domainType": "system-system",
       "domainDescription": "Automated batch jobs processing large datasets across systems",
+      "families": ["operations", "integration"],
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -851,6 +860,7 @@
       "probeQuestion": "Does this process involve shared resources that multiple clients or systems may access concurrently, requiring locking, contention handling, or deadlock prevention?",
       "domainType": "system-system",
       "domainDescription": "System-to-system resource access control, lock management, and concurrency handling",
+      "families": ["locking", "integration", "operations"],
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false
@@ -1020,6 +1030,7 @@
       "probeQuestion": "Can users save their work mid-process and resume later, or recover if the session is interrupted, timed out, or unexpectedly terminated?",
       "domainType": "human-system",
       "domainDescription": "User can save, pause, resume, and restart interrupted work",
+      "families": ["web", "corporate", "purchasing"],
       "activation": {
         "minRolesMatched": 1,
         "requireDifferentActors": false

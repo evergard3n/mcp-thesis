@@ -1,33 +1,52 @@
-import {
-  GenUseCase,
-  GenFlow,
-  GenStep,
-} from "../interfaces/usecase.interface.new.js";
+import { GenUseCase } from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
 import { UseCaseTermScore } from "../validators/flat.validator.js";
-import { detectBlueprintGaps, detectActivatedBlueprints, type BlueprintActivation, type EmbeddedStep } from "./blueprint.detector.js";
+import {
+  detectBlueprintGaps,
+  detectActivatedBlueprints,
+  type BlueprintActivation,
+  type EmbeddedStep,
+} from "./blueprint.detector.js";
 import {
   classifyUseCaseDomainHybrid,
-  resolveDomainFilter,
+  resolveBlueprintDomainFilter,
+  type DomainType as ClassifierDomainType,
 } from "../services/domain-classifier.service.js";
 import {
   loadGapCentroids,
-  type GapCategory,
   type GapType,
 } from "../data/gap-centroids.loader.js";
+import {
+  type Gap,
+  type EmbeddedText,
+  type StepSource,
+  type ConditionSource,
+  type GapDetectionContext,
+  type DetectionPhase,
+  type GapDetectorConfig,
+  isStepSource,
+  isConditionSource,
+} from "./gap-detector.types.js";
+import { GAP_DETECTORS } from "./gap-detectors.registry.js";
 
+// ---------------------------------------------------------------------------
+// Re-exports — maintain backward-compatible public API for all callers.
+// ---------------------------------------------------------------------------
 export type { GapType } from "../data/gap-centroids.loader.js";
 export { clearGapCentroidsCache } from "../data/gap-centroids.loader.js";
+export type {
+  Gap,
+  EmbeddedText,
+  StepSource,
+  ConditionSource,
+  GapDetectionContext,
+  DetectionPhase,
+  GapDetectorConfig,
+} from "./gap-detector.types.js";
 
-export interface Gap {
-  type: GapType;
-  severity: "high" | "medium" | "low";
-  description: string;
-  relatedStep?: number;
-  relatedFlow?: string;
-  suggestedQuestion?: string;
-  blueprintConfidence?: number;
-}
+// ---------------------------------------------------------------------------
+// Public interfaces that remain owned by this module
+// ---------------------------------------------------------------------------
 
 export interface GapAnalysis {
   missingExceptionFlows: boolean;
@@ -40,6 +59,14 @@ export interface GapAnalysis {
   detectedDomains?: Set<"human-system" | "system-system">;
   dominantDomain?: "human-system" | "system-system" | "mixed";
   activatedBlueprints: BlueprintActivation[];
+  /** Hybrid classifier output (includes `ambiguous`); for evaluation / batch JSON. */
+  classifierDominantDomain?: ClassifierDomainType;
+  classifierOverallConfidence?: number;
+  classifierFlowDomains?: Array<{
+    flowId: string;
+    domainType: ClassifierDomainType;
+    confidence: number;
+  }>;
 }
 
 export interface InteractionMemory {
@@ -72,6 +99,10 @@ export interface ConsolidationGroup {
   answerGuidance: string;
 }
 
+// ---------------------------------------------------------------------------
+// Consolidation group templates (used by llm.validator.ts / question generator)
+// ---------------------------------------------------------------------------
+
 function formatConsolidatedStepLine(step: {
   index: number;
   actor: string;
@@ -95,42 +126,6 @@ function formatConsolidatedStepList(
   return steps.map((step) => formatConsolidatedStepLine(step)).join("\n");
 }
 
-function buildDataHandlingQuestion(
-  steps: Array<{
-    index: number;
-    actor: string;
-    description: string;
-    flowId: string;
-  }>,
-): string {
-  const stepList = formatConsolidatedStepList(steps);
-  return `The following steps involve data entry or validation:\n${stepList}\nHow does the system handle basic input errors (missing fields, wrong formats) versus business rule violations (duplicates, contradictory logic) at these steps? For each step, specify any differences in minimum required fields, error handling, or routing.`;
-}
-
-function buildInfrastructureQuestion(
-  steps: Array<{
-    index: number;
-    actor: string;
-    description: string;
-    flowId: string;
-  }>,
-): string {
-  const stepList = formatConsolidatedStepList(steps);
-  return `The following steps involve resource assignments or system interactions:\n${stepList}\nWhat happens if the assigned person is unavailable, the system times out, or a resource cannot be allocated at these steps? For each step, specify the fallback or escalation path.`;
-}
-
-function buildSaveResumeQuestion(
-  steps: Array<{
-    index: number;
-    actor: string;
-    description: string;
-    flowId: string;
-  }>,
-): string {
-  const stepList = formatConsolidatedStepList(steps);
-  return `The following steps involve multi-field or complex data submissions:\n${stepList}\nCan any of these steps be partially completed, saved as a draft, and resumed later? For each step, specify what state is preserved and what happens on resume.`;
-}
-
 export const CONSOLIDATION_GROUPS: ConsolidationGroup[] = [
   {
     groupId: "data_handling",
@@ -138,7 +133,10 @@ export const CONSOLIDATION_GROUPS: ConsolidationGroup[] = [
       "missing_data_quality_handling",
       "missing_validation_handling",
     ],
-    questionTemplate: buildDataHandlingQuestion,
+    questionTemplate: (steps) => {
+      const stepList = formatConsolidatedStepList(steps);
+      return `The following steps involve data entry or validation:\n${stepList}\nHow does the system handle basic input errors (missing fields, wrong formats) versus business rule violations (duplicates, contradictory logic) at these steps? For each step, specify any differences in minimum required fields, error handling, or routing.`;
+    },
     answerGuidance:
       "For each step listed, describe: (1) what minimum data is required, (2) what happens on basic input errors, (3) what happens on business rule violations, (4) any step-specific differences. Avoid vague answers like 'the same for all steps'—state the differences or explicitly confirm no differences after checking each step.",
   },
@@ -148,38 +146,28 @@ export const CONSOLIDATION_GROUPS: ConsolidationGroup[] = [
       "missing_resource_availability",
       "missing_system_failure_handling",
     ],
-    questionTemplate: buildInfrastructureQuestion,
+    questionTemplate: (steps) => {
+      const stepList = formatConsolidatedStepList(steps);
+      return `The following steps involve resource assignments or system interactions:\n${stepList}\nWhat happens if the assigned person is unavailable, the system times out, or a resource cannot be allocated at these steps? For each step, specify the fallback or escalation path.`;
+    },
     answerGuidance:
       "For each step listed, describe: (1) what happens when the person/system is unavailable, (2) whether there is automatic reassignment or escalation, (3) any timeout or retry behavior. Avoid generic answers; note step-specific differences or explicitly confirm none after checking each step.",
   },
   {
     groupId: "save_resume",
     memberGapTypes: ["missing_save_resume_handling"],
-    questionTemplate: buildSaveResumeQuestion,
+    questionTemplate: (steps) => {
+      const stepList = formatConsolidatedStepList(steps);
+      return `The following steps involve multi-field or complex data submissions:\n${stepList}\nCan any of these steps be partially completed, saved as a draft, and resumed later? For each step, specify what state is preserved and what happens on resume.`;
+    },
     answerGuidance:
       "For each step listed, describe: (1) whether the actor can save progress, (2) what data is preserved vs lost, (3) whether resuming requires re-validation. Avoid vague answers; specify differences or explicitly confirm none after checking each step.",
   },
 ];
 
-interface StepSource {
-  type: "step";
-  flowId: string;
-  stepIndex: number;
-  step: GenStep;
-  flow: GenFlow;
-}
-
-interface ConditionSource {
-  type: "condition";
-  flowId: string;
-  flow: GenFlow;
-}
-
-interface EmbeddedText {
-  text: string;
-  embedding: number[];
-  source: StepSource | ConditionSource;
-}
+// ---------------------------------------------------------------------------
+// Priority ordering for gap types
+// ---------------------------------------------------------------------------
 
 const GAP_TYPE_PRIORITY: GapType[] = [
   "missing_exception_flows",
@@ -202,304 +190,38 @@ const GAP_TYPE_PRIORITY: GapType[] = [
   "incomplete_actors",
 ];
 
-function getStepContext(gap: Gap, useCase: GenUseCase): string {
-  if (gap.relatedStep === undefined) {
-    return `[Global] ${gap.description}`;
-  }
+// ---------------------------------------------------------------------------
+// Blueprint → centroid suppression map
+// When a blueprint family is dropped by the expert, linked centroid gap types
+// are suppressed to avoid asking questions the expert already ruled out.
+// ---------------------------------------------------------------------------
 
-  const flow = useCase.flows.find((f) => f.id === (gap.relatedFlow || "MAIN"));
-  const step = flow?.steps.find((s) => s.index === gap.relatedStep);
+const BLUEPRINT_CENTROID_SUPPRESSION: Partial<Record<string, GapType[]>> = {
+  session_persistence: ["missing_save_resume_handling"],
+};
 
-  if (step) {
-    return `[Step ${step.index}] Actor: ${step.actor}, Action: ${step.description}`;
-  }
-  return `[Step ${gap.relatedStep}] ${gap.description}`;
-}
-
-/**
- * Filters out gaps already covered by previous Q&A interactions.
- * Uses dual-vector comparison (gap context + question asked) at 0.6 threshold.
- */
-export async function filterStaleGaps(
-  gaps: Gap[],
-  useCase: GenUseCase,
-  history: InteractionMemory[],
-  threshold: number = 0.6,
-): Promise<Gap[]> {
-  if (history.length === 0 || gaps.length === 0) return gaps;
-
-  // NEW: Layer 0 - Metadata-based pre-filter
-  const exploredTuples = new Set(
-    history
-      .filter((h) => h.metadata.stepIndex !== undefined && h.metadata.gapType)
-      .map((h) => `${h.metadata.stepIndex}|${h.metadata.gapType}`),
-  );
-
-  for (const record of history) {
-    if (!record.metadata.consolidatedGroupId || !record.metadata.stepIndexes)
-      continue;
-    const group = CONSOLIDATION_GROUPS.find(
-      (g) => g.groupId === record.metadata.consolidatedGroupId,
-    );
-    if (!group) continue;
-    for (const stepIndex of record.metadata.stepIndexes) {
-      for (const gapType of group.memberGapTypes) {
-        exploredTuples.add(`${stepIndex}|${gapType}`);
+function buildSuppressedGapTypes(
+  droppedBlueprintIds?: Set<string>,
+): Set<GapType> {
+  const suppressed = new Set<GapType>();
+  if (!droppedBlueprintIds) return suppressed;
+  for (const blueprintId of droppedBlueprintIds) {
+    const linked = BLUEPRINT_CENTROID_SUPPRESSION[blueprintId];
+    if (linked) {
+      for (const gapType of linked) {
+        suppressed.add(gapType);
+        console.log(
+          `[Blueprint-Centroid Suppression] Suppressing gap type "${gapType}" because blueprint "${blueprintId}" was dropped`,
+        );
       }
     }
   }
-
-  const metadataFiltered = gaps.filter((gap) => {
-    if (gap.relatedStep === undefined) return true; // Keep gaps without step info
-    const tuple = `${gap.relatedStep}|${gap.type}`;
-    return !exploredTuples.has(tuple);
-  });
-
-  if (metadataFiltered.length === 0) return [];
-
-  const gapQueries = metadataFiltered.map((gap) => {
-    const stepContext = getStepContext(gap, useCase);
-    return `${stepContext} | ${gap.description}`;
-  });
-
-  const gapVectors = await semanticService.embedBatch(gapQueries);
-  const freshGaps: Gap[] = [];
-
-  for (let i = 0; i < metadataFiltered.length; i++) {
-    const isCovered = await isGapCoveredByHistory(
-      gapVectors[i],
-      history,
-      threshold,
-    );
-    if (!isCovered) {
-      freshGaps.push(metadataFiltered[i]);
-    }
-  }
-
-  return freshGaps;
+  return suppressed;
 }
 
-async function isGapCoveredByHistory(
-  gapVector: number[],
-  history: InteractionMemory[],
-  threshold: number,
-): Promise<boolean> {
-  for (const record of history) {
-    const simToContext = await semanticService.cosineSimilarity(
-      gapVector,
-      record.vector,
-    );
-
-    let simToQuestion = 0;
-    if (record.questionVector) {
-      simToQuestion = await semanticService.cosineSimilarity(
-        gapVector,
-        record.questionVector,
-      );
-    }
-
-    if (Math.max(simToContext, simToQuestion) >= threshold) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function generateQuestionForCategory(
-  categoryName: string,
-  step: GenStep,
-): string {
-  const targetContext = step.target ? ` targeting ${step.target}` : "";
-
-  switch (categoryName) {
-    case "validation":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when this validation encounters partial data, format mismatches, or conflicting records? Describe the specific failure scenario and how it's handled.`;
-    case "search_lookup":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when this search returns no results, multiple ambiguous matches, or stale/outdated data? How does the actor proceed?`;
-    case "data_input":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when the submitted data is incomplete, contains contradictory information, or duplicates an existing entry? What are the minimum required fields?`;
-    case "resource_assignment":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when no suitable resource is available, the assigned resource becomes unavailable, or the assignment times out? Is there a default fallback?`;
-    case "system_interaction":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens when the system is unavailable, responds with a timeout, or returns a partial/corrupted response? Is data automatically saved?`;
-    case "completion":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. What happens if the actor attempts to finish without completing all required information? Can the process be saved for later, reopened, or reversed after this point?`;
-    case "save_resume":
-      return `Step ${step.index} involves ${step.actor} performing: "${step.description}"${targetContext}. Can this step be partially completed and saved as a draft for later? What state is preserved, and what happens when the actor resumes?`;
-    default:
-      return `What exceptions might occur at step ${step.index}?`;
-  }
-}
-
-function isStepSource(source: EmbeddedText["source"]): source is StepSource {
-  return source.type === "step";
-}
-
-function isConditionSource(
-  source: EmbeddedText["source"],
-): source is ConditionSource {
-  return source.type === "condition";
-}
-
-/**
- * Analyzes a use case to detect gaps using unified semantic embedding.
- */
-export async function analyzeGaps(
-  useCase: GenUseCase,
-  validationFeedback: UseCaseTermScore,
-  originalDescription: string,
-  conversationHistory?: InteractionMemory[],
-  confirmedBlueprintIds?: Set<string>,
-  droppedBlueprintIds?: Set<string>,
-): Promise<GapAnalysis> {
-  const gaps: Gap[] = [];
-  const incompleteActors: string[] = [];
-  const uncertainConditions: string[] = [];
-
-  // Phase 0: Classify domain to filter blueprints
-  console.log(`[Gap Analyzer] Classifying use case domain...`);
-  const domainAnalysis = await classifyUseCaseDomainHybrid(useCase);
-  const detectedDomain = domainAnalysis.dominantDomain;
-  console.log(
-    `[Gap Analyzer] Detected domain: ${detectedDomain} (used for blueprint filtering)`,
-  );
-
-  // Phase 1: Collect and embed all texts
-  const embeddedTexts = await collectAndEmbedTexts(useCase);
-  const stepEmbeddings = embeddedTexts
-    .filter((item) => isStepSource(item.source))
-    .map((item) => ({
-      step: (item.source as StepSource).step,
-      flow: (item.source as StepSource).flow,
-      embedding: item.embedding,
-    }));
-  const categories = await loadGapCentroids();
-
-  // Phase 1.5: Blueprint detection (prioritized) with domain filtering
-  // Only apply domain filter if detection is clear (not ambiguous).
-  // "ambiguous" falls back to "human-system" (most common domain) rather than
-  // undefined, which would disable all domain filtering and allow cross-domain
-  // blueprint pollution (e.g. session_persistence activating on system-system flows).
-  const domainFilter = resolveDomainFilter(domainAnalysis);
-
-  const blueprintResult = await detectBlueprintGaps(
-    useCase,
-    stepEmbeddings,
-    domainFilter,
-    confirmedBlueprintIds,
-    droppedBlueprintIds,
-  );
-  gaps.push(...blueprintResult.gaps);
-
-  // Detect activated blueprints for probe phase (reuses same stepEmbeddings)
-  const activatedBlueprints = await detectActivatedBlueprints(
-    stepEmbeddings,
-    domainFilter,
-  );
-
-  // Phase 2: Analyze steps against category centroids
-  const stepGaps = await analyzeStepsAgainstCategories(
-    embeddedTexts,
-    categories,
-    useCase,
-    blueprintResult.coveredStepKeys,
-    droppedBlueprintIds,
-  );
-  gaps.push(...stepGaps);
-
-  // Phase 3: Analyze condition quality
-  const conditionResults = await analyzeConditionQuality(
-    embeddedTexts,
-    categories,
-  );
-  gaps.push(...conditionResults.gaps);
-  uncertainConditions.push(...conditionResults.uncertainFlowIds);
-
-  // Phase 4: Structural checks
-  const missingExceptionFlows = !validationFeedback.hasExceptionFlow;
-  const missingAlternativeFlows = !validationFeedback.hasAlternativeFlow;
-
-  if (missingExceptionFlows) {
-    gaps.push({
-      type: "missing_exception_flows",
-      severity: "high",
-      description:
-        "No exception flows found. Real-world scenarios need error handling.",
-      suggestedQuestion:
-        "What could go wrong during this process? What error conditions should be handled?",
-    });
-  }
-
-  if (missingAlternativeFlows) {
-    gaps.push({
-      type: "missing_alternative_flows",
-      severity: "medium",
-      description:
-        "No alternative flows found. Consider different valid paths to the same goal.",
-      suggestedQuestion:
-        "Are there different ways to accomplish this goal? What optional paths exist?",
-    });
-  }
-
-  // Check for incomplete actors
-  const allSteps = useCase.flows.flatMap((f) => f.steps);
-  const usedActors = new Set(allSteps.map((s) => s.actor.toLowerCase()));
-
-  for (const actor of useCase.actors) {
-    if (!usedActors.has(actor.toLowerCase())) {
-      incompleteActors.push(actor);
-      gaps.push({
-        type: "incomplete_actors",
-        severity: "low",
-        description: `Actor '${actor}' is declared but never appears in any step.`,
-        suggestedQuestion: `What role does ${actor} play in this use case?`,
-      });
-    }
-  }
-
-  // Phase 5: Description-based detectors
-  gaps.push(...detectClaimAdjudicationOutcomes(useCase));
-  gaps.push(...detectTemporalExceptions(useCase, originalDescription));
-  gaps.push(...detectNestedExceptions(useCase, originalDescription));
-  gaps.push(...detectEnvironmentalInterruptions(useCase, originalDescription));
-  gaps.push(...detectTechnologyVariations(useCase, originalDescription));
-
-  // Phase 6: Calculate completeness and filter stale gaps
-  const completenessScore = calculateCompletenessScore(
-    validationFeedback,
-    gaps,
-    missingExceptionFlows,
-    missingAlternativeFlows,
-  );
-
-  const filteredGaps =
-    conversationHistory && conversationHistory.length > 0
-      ? await filterStaleGaps(gaps, useCase, conversationHistory)
-      : gaps;
-
-  const priorityGaps = computePriorityGaps(filteredGaps);
-
-  // Determine dominant domain
-  let dominantDomain: "human-system" | "system-system" | "mixed" | undefined;
-  if (blueprintResult.detectedDomains.size === 1) {
-    dominantDomain = Array.from(blueprintResult.detectedDomains)[0];
-  } else if (blueprintResult.detectedDomains.size > 1) {
-    dominantDomain = "mixed";
-  }
-
-  return {
-    missingExceptionFlows,
-    missingAlternativeFlows,
-    incompleteActors,
-    uncertainConditions,
-    gaps: filteredGaps,
-    priorityGaps,
-    completenessScore: Math.max(0, Math.min(1, completenessScore)),
-    detectedDomains: blueprintResult.detectedDomains,
-    dominantDomain,
-    activatedBlueprints,
-  };
-}
+// ---------------------------------------------------------------------------
+// Embedding helpers (used by orchestrator + probe phase)
+// ---------------------------------------------------------------------------
 
 export async function collectAndEmbedTexts(
   useCase: GenUseCase,
@@ -554,210 +276,115 @@ export async function collectStepEmbeddings(
     }));
 }
 
+// ---------------------------------------------------------------------------
+// Stale-gap filtering (conversation-history deduplication)
+// ---------------------------------------------------------------------------
+
+function getStepContext(gap: Gap, useCase: GenUseCase): string {
+  if (gap.relatedStep === undefined) {
+    return `[Global] ${gap.description}`;
+  }
+
+  const flow = useCase.flows.find((f) => f.id === (gap.relatedFlow || "MAIN"));
+  const step = flow?.steps.find((s) => s.index === gap.relatedStep);
+
+  if (step) {
+    return `[Step ${step.index}] Actor: ${step.actor}, Action: ${step.description}`;
+  }
+  return `[Step ${gap.relatedStep}] ${gap.description}`;
+}
+
 /**
- * Maps dropped blueprint IDs to centroid gap types that should be suppressed.
- * If a blueprint is dropped (the expert confirmed it doesn't apply), the linked
- * centroid-based gap types are also suppressed to avoid generating questions for
- * patterns the expert has already ruled out.
+ * Filters out gaps already covered by previous Q&A interactions.
+ * Uses dual-vector comparison (gap context + question asked) at 0.6 threshold.
  */
-const BLUEPRINT_CENTROID_SUPPRESSION: Partial<Record<string, GapType[]>> = {
-  session_persistence: ["missing_save_resume_handling"],
-};
-
-function buildSuppressedGapTypes(droppedBlueprintIds?: Set<string>): Set<GapType> {
-  const suppressedGapTypes = new Set<GapType>();
-  if (!droppedBlueprintIds) return suppressedGapTypes;
-  for (const blueprintId of droppedBlueprintIds) {
-    const linked = BLUEPRINT_CENTROID_SUPPRESSION[blueprintId];
-    if (linked) {
-      for (const gapType of linked) {
-        suppressedGapTypes.add(gapType);
-        console.log(`[Blueprint-Centroid Suppression] Suppressing gap type "${gapType}" because blueprint "${blueprintId}" was dropped`);
-      }
-    }
-  }
-  return suppressedGapTypes;
-}
-
-async function detectCentroidGaps(
-  stepItems: EmbeddedText[],
-  relevantCategories: GapCategory[],
+export async function filterStaleGaps(
+  gaps: Gap[],
   useCase: GenUseCase,
-  skipSteps?: Set<string>,
+  history: InteractionMemory[],
+  threshold: number = 0.6,
 ): Promise<Gap[]> {
-  const gaps: Gap[] = [];
-  for (const item of stepItems) {
-    const src = item.source as StepSource;
-    if (skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) continue;
-    if (src.flowId !== "MAIN") continue;
-    for (const category of relevantCategories) {
-      const similarity = await semanticService.cosineSimilarity(item.embedding, category.centroid!);
-      if (similarity >= category.threshold) {
-        const hasException = useCase.flows.some(
-          (f) =>
-            (f.kind === "EXCEPTION" || f.kind === "ALTERNATIVE") &&
-            f.parentFlow === src.flowId &&
-            (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined),
-        );
-        if (!hasException) {
-          gaps.push({
-            type: category.gapType,
-            severity: "high",
-            description: `Step ${src.stepIndex} in flow ${src.flowId} matches "${category.name}" pattern but has no exception handling.`,
-            relatedStep: src.stepIndex,
-            relatedFlow: src.flowId,
-            suggestedQuestion: generateQuestionForCategory(category.name, src.step),
-          });
-        }
-      }
-    }
-  }
-  return gaps;
-}
+  if (history.length === 0 || gaps.length === 0) return gaps;
 
-async function detectSaveResumeGap(
-  stepItems: EmbeddedText[],
-  saveResumeCategory: GapCategory | undefined,
-  useCase: GenUseCase,
-  skipSteps?: Set<string>,
-  existingGaps?: Gap[],
-): Promise<Gap[]> {
-  const gaps: Gap[] = [];
-  if (!saveResumeCategory) return gaps;
-  for (const item of stepItems) {
-    const src = item.source as StepSource;
-    if (skipSteps?.has(`${src.flowId}|${src.stepIndex}`)) continue;
-    if (src.flowId !== "MAIN") continue;
-    const descLower = src.step.description.toLowerCase();
-    const isSaveResumeCandidate =
-      src.step.description.length > 50 ||
-      /\b(form|report|details|fields|information|submission|entry|register|complete request|finalize|fill)\b/.test(descLower);
-    if (!isSaveResumeCandidate) continue;
-    const alreadyFlagged = (existingGaps ?? []).concat(gaps).some(
-      (gap) =>
-        gap.type === "missing_save_resume_handling" &&
-        gap.relatedFlow === src.flowId &&
-        gap.relatedStep === src.stepIndex,
-    );
-    if (alreadyFlagged) continue;
-    const hasSaveResumeFlow = useCase.flows.some(
-      (f) =>
-        (f.kind === "ALTERNATIVE" || f.kind === "EXCEPTION") &&
-        f.parentFlow === src.flowId &&
-        (f.fromStepIndex === src.stepIndex || f.fromStepIndex === undefined) &&
-        (f.condition?.toLowerCase().includes("draft") ||
-          f.condition?.toLowerCase().includes("save") ||
-          f.condition?.toLowerCase().includes("resume") ||
-          f.condition?.toLowerCase().includes("later")),
-    );
-    if (!hasSaveResumeFlow) {
-      gaps.push({
-        type: "missing_save_resume_handling",
-        severity: "medium",
-        description: `Step ${src.stepIndex} in flow ${src.flowId} appears to involve a multi-field submission but has no save/resume handling.`,
-        relatedStep: src.stepIndex,
-        relatedFlow: src.flowId,
-        suggestedQuestion: generateQuestionForCategory("save_resume", src.step),
-      });
-    }
-  }
-  return gaps;
-}
-
-async function analyzeStepsAgainstCategories(
-  embeddedTexts: EmbeddedText[],
-  categories: GapCategory[],
-  useCase: GenUseCase,
-  skipSteps?: Set<string>,
-  droppedBlueprintIds?: Set<string>,
-): Promise<Gap[]> {
-  const stepItems = embeddedTexts.filter((e) => isStepSource(e.source));
-  const suppressedGapTypes = buildSuppressedGapTypes(droppedBlueprintIds);
-  const relevantCategories = categories.filter(
-    (c) => c.requiresExceptionCheck && c.centroid && !suppressedGapTypes.has(c.gapType),
+  // Layer 0 — metadata-based pre-filter
+  const exploredTuples = new Set(
+    history
+      .filter((h) => h.metadata.stepIndex !== undefined && h.metadata.gapType)
+      .map((h) => `${h.metadata.stepIndex}|${h.metadata.gapType}`),
   );
-  const saveResumeCategory = suppressedGapTypes.has("missing_save_resume_handling")
-    ? undefined
-    : categories.find((c) => c.name === "save_resume");
 
-  const centroidGaps = await detectCentroidGaps(stepItems, relevantCategories, useCase, skipSteps);
-  const saveResumeGaps = await detectSaveResumeGap(stepItems, saveResumeCategory, useCase, skipSteps, centroidGaps);
-
-  return [...centroidGaps, ...saveResumeGaps];
-}
-
-async function analyzeConditionQuality(
-  embeddedTexts: EmbeddedText[],
-  categories: GapCategory[],
-): Promise<{ gaps: Gap[]; uncertainFlowIds: string[] }> {
-  const gaps: Gap[] = [];
-  const uncertainFlowIds: string[] = [];
-
-  const conditionItems = embeddedTexts.filter((e) =>
-    isConditionSource(e.source),
-  );
-  const vagueCentroid = categories.find(
-    (c) => c.name === "vague_condition",
-  )?.centroid;
-
-  for (const item of conditionItems) {
-    const src = item.source as ConditionSource;
-    const issues: string[] = [];
-    let qualityScore = 0.7;
-
-    // Check semantic vagueness
-    if (vagueCentroid) {
-      const vagueSim = await semanticService.cosineSimilarity(
-        item.embedding,
-        vagueCentroid,
-      );
-      if (vagueSim > 0.6) {
-        qualityScore -= 0.3;
-        issues.push("Condition is semantically vague");
+  for (const record of history) {
+    if (!record.metadata.consolidatedGroupId || !record.metadata.stepIndexes)
+      continue;
+    const group = CONSOLIDATION_GROUPS.find(
+      (g) => g.groupId === record.metadata.consolidatedGroupId,
+    );
+    if (!group) continue;
+    for (const stepIndex of record.metadata.stepIndexes) {
+      for (const gapType of group.memberGapTypes) {
+        exploredTuples.add(`${stepIndex}|${gapType}`);
       }
-    }
-
-    // Check relation to anchor step
-    if (src.flow.fromStepIndex !== undefined && src.flow.parentFlow) {
-      const anchorStep = embeddedTexts.find(
-        (e) =>
-          isStepSource(e.source) &&
-          e.source.flowId === src.flow.parentFlow &&
-          e.source.stepIndex === src.flow.fromStepIndex,
-      );
-
-      if (anchorStep) {
-        const anchorSim = await semanticService.cosineSimilarity(
-          item.embedding,
-          anchorStep.embedding,
-        );
-        if (anchorSim < 0.3) {
-          qualityScore -= 0.2;
-          issues.push("Condition unrelated to anchor step");
-        }
-      }
-    }
-
-    // Length check fallback
-    if (src.flow.condition && src.flow.condition.trim().length < 10) {
-      qualityScore -= 0.2;
-      issues.push("Condition too short");
-    }
-
-    if (qualityScore < 0.5) {
-      uncertainFlowIds.push(src.flowId);
-      gaps.push({
-        type: "uncertain_conditions",
-        severity: qualityScore < 0.3 ? "high" : "medium",
-        description: `Flow "${src.flowId}" has weak condition: ${issues.join(", ")}`,
-        relatedFlow: src.flowId,
-        suggestedQuestion: `What specific trigger causes flow "${src.flowId}" to occur?`,
-      });
     }
   }
 
-  return { gaps, uncertainFlowIds };
+  const metadataFiltered = gaps.filter((gap) => {
+    if (gap.relatedStep === undefined) return true;
+    return !exploredTuples.has(`${gap.relatedStep}|${gap.type}`);
+  });
+
+  if (metadataFiltered.length === 0) return [];
+
+  const gapQueries = metadataFiltered.map((gap) => {
+    const stepContext = getStepContext(gap, useCase);
+    return `${stepContext} | ${gap.description}`;
+  });
+
+  const gapVectors = await semanticService.embedBatch(gapQueries);
+  const freshGaps: Gap[] = [];
+
+  for (let i = 0; i < metadataFiltered.length; i++) {
+    const isCovered = await isGapCoveredByHistory(
+      gapVectors[i],
+      history,
+      threshold,
+    );
+    if (!isCovered) {
+      freshGaps.push(metadataFiltered[i]);
+    }
+  }
+
+  return freshGaps;
 }
+
+async function isGapCoveredByHistory(
+  gapVector: number[],
+  history: InteractionMemory[],
+  threshold: number,
+): Promise<boolean> {
+  for (const record of history) {
+    const simToContext = await semanticService.cosineSimilarity(
+      gapVector,
+      record.vector,
+    );
+
+    let simToQuestion = 0;
+    if (record.questionVector) {
+      simToQuestion = await semanticService.cosineSimilarity(
+        gapVector,
+        record.questionVector,
+      );
+    }
+
+    if (Math.max(simToContext, simToQuestion) >= threshold) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Scoring & priority helpers
+// ---------------------------------------------------------------------------
 
 function calculateCompletenessScore(
   validationFeedback: UseCaseTermScore,
@@ -810,26 +437,19 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
   );
 
   for (const type of blueprintTypes) {
-    const hasHighSeverity = gaps.some(
-      (g) => g.type === type && g.severity === "high",
-    );
-    if (hasHighSeverity) priorityGaps.push(type);
+    if (gaps.some((g) => g.type === type && g.severity === "high")) {
+      priorityGaps.push(type);
+    }
   }
-
   for (const type of blueprintTypes) {
     if (!priorityGaps.includes(type)) priorityGaps.push(type);
   }
 
-  // Add high-severity gaps first, then others
   for (const type of GAP_TYPE_PRIORITY) {
-    const hasHighSeverity = gaps.some(
-      (g) => g.type === type && g.severity === "high",
-    );
-    if (hasHighSeverity) {
+    if (gaps.some((g) => g.type === type && g.severity === "high")) {
       priorityGaps.push(type);
     }
   }
-
   for (const type of GAP_TYPE_PRIORITY) {
     if (!priorityGaps.includes(type) && gaps.some((g) => g.type === type)) {
       priorityGaps.push(type);
@@ -839,208 +459,149 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
   return priorityGaps;
 }
 
-// Description-based detectors for scenarios not captured by semantic analysis
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
 
-function detectClaimAdjudicationOutcomes(useCase: GenUseCase): Gap[] {
-  const mainFlow = useCase.flows.find((flow) => flow.id === "MAIN" || flow.kind === "MAIN");
-  if (!mainFlow) return [];
-
-  const mainSteps = mainFlow.steps.map((step) => ({
-    ...step,
-    descriptionLower: step.description.toLowerCase(),
-  }));
-
-  const hasPolicyValidation = mainSteps.some(
-    (step) =>
-      (step.descriptionLower.includes("policy") &&
-        (step.descriptionLower.includes("valid") ||
-          step.descriptionLower.includes("verify") ||
-          step.descriptionLower.includes("align") ||
-          step.descriptionLower.includes("guideline"))) ||
-      (step.descriptionLower.includes("eligib") && step.descriptionLower.includes("verify")),
-  );
-
-  const hasAssignment = mainSteps.some(
-    (step) =>
-      step.descriptionLower.includes("assign") &&
-      (step.descriptionLower.includes("agent") ||
-        step.descriptionLower.includes("review") ||
-        step.descriptionLower.includes("adjuster")),
-  );
-
-  const hasGuidelineReview = mainSteps.some(
-    (step) =>
-      step.descriptionLower.includes("guideline") ||
-      (step.descriptionLower.includes("policy") && step.descriptionLower.includes("within")),
-  );
-
-  const nonMainFlows = useCase.flows.filter((flow) => flow.id !== mainFlow.id);
-
-  const hasDeclineTerminationFlow = nonMainFlows.some((flow) => {
-    const text = `${flow.condition ?? ""} ${flow.steps
-      .map((step) => step.description)
-      .join(" ")}`.toLowerCase();
-    return (
-      (text.includes("decline") || text.includes("reject")) &&
-      (text.includes("terminate") || text.includes("close") || text.includes("end"))
-    );
-  });
-
-  const hasAssignmentUnavailableFlow = nonMainFlows.some((flow) => {
-    const text = `${flow.condition ?? ""} ${flow.steps
-      .map((step) => step.description)
-      .join(" ")}`.toLowerCase();
-    const waits =
-      text.includes("wait") || text.includes("hold") || text.includes("queue");
-    const assignment =
-      text.includes("assign") &&
-      (text.includes("agent") || text.includes("review") || text.includes("adjuster"));
-    return waits && assignment;
-  });
-
-  const hasNegotiationFlow = nonMainFlows.some((flow) => {
-    const text = `${flow.condition ?? ""} ${flow.steps
-      .map((step) => step.description)
-      .join(" ")}`.toLowerCase();
-    return (
-      text.includes("negotiat") ||
-      text.includes("partial payment") ||
-      text.includes("adjusted payment")
-    );
-  });
-
+/**
+ * Analyze gaps in a use case using the registered detector pipeline.
+ *
+ * @param phase  Controls which detectors run:
+ *   - "initial"    — only "always" detectors fire (keyword, actor check).
+ *                    Safe on a vague baseline before any probing.
+ *   - "post-probe" — all detectors fire (centroid, structural, pattern too).
+ *                    Pass this after blueprint probing has completed.
+ *
+ * Defaults to "initial" so existing callers that don't pass the argument
+ * remain noise-free on the first run.
+ */
+export async function analyzeGaps(
+  useCase: GenUseCase,
+  validationFeedback: UseCaseTermScore,
+  originalDescription: string,
+  conversationHistory?: InteractionMemory[],
+  confirmedBlueprintIds?: Set<string>,
+  droppedBlueprintIds?: Set<string>,
+  phase: DetectionPhase = "initial",
+): Promise<GapAnalysis> {
   const gaps: Gap[] = [];
 
-  if (hasPolicyValidation && !hasDeclineTerminationFlow) {
-    gaps.push({
-      type: "missing_eligibility_failure_handling",
-      severity: "high",
-      description:
-        "Main flow validates policy/eligibility but no explicit decline-and-terminate outcome is modeled for invalid cases.",
-      suggestedQuestion:
-        "If eligibility or policy validation fails, what exact steps occur (decline, notify claimant, record details), and does the process terminate or allow retry/appeal?",
-    });
+  // Phase 0: Classify domain to filter blueprints
+  console.log(`[Gap Analyzer] Classifying use case domain...`);
+  const domainAnalysis = await classifyUseCaseDomainHybrid(useCase);
+  const blueprintDomainFilter = resolveBlueprintDomainFilter(domainAnalysis);
+  console.log(
+    `[Gap Analyzer] Classifier domain: ${domainAnalysis.dominantDomain} | blueprint pool: ${blueprintDomainFilter ?? "all (ambiguous → union)"}`,
+  );
+
+  // Phase 1: Collect and embed all texts
+  const embeddedTexts = await collectAndEmbedTexts(useCase);
+  const stepEmbeddings = embeddedTexts
+    .filter((item) => isStepSource(item.source))
+    .map((item) => ({
+      step: (item.source as StepSource).step,
+      flow: (item.source as StepSource).flow,
+      embedding: item.embedding,
+    }));
+  const categories = await loadGapCentroids();
+
+  // Phase 1.5: Blueprint detection (soft-drop: dropped IDs do not remove blueprints from gap pass)
+  const blueprintResult = await detectBlueprintGaps(
+    useCase,
+    stepEmbeddings,
+    blueprintDomainFilter,
+    confirmedBlueprintIds,
+    droppedBlueprintIds,
+    { useCase, originalDescription },
+  );
+  gaps.push(...blueprintResult.gaps);
+
+  const activatedBlueprints = await detectActivatedBlueprints(
+    stepEmbeddings,
+    blueprintDomainFilter,
+    { useCase, originalDescription },
+  );
+
+  // Phase 2+: Run the registered detector pipeline (centroid suppression from probe drops disabled with soft-drop)
+  const suppressedGapTypes = buildSuppressedGapTypes(new Set());
+  const ctx: GapDetectionContext = {
+    useCase,
+    originalDescription,
+    embeddedTexts,
+    categories,
+    coveredStepKeys: blueprintResult.coveredStepKeys,
+    suppressedGapTypes,
+    validationFeedback,
+  };
+
+  const activeDetectors = GAP_DETECTORS.filter(
+    (d) => d.phase === "always" || d.phase === phase,
+  );
+
+  for (const detector of activeDetectors) {
+    gaps.push(...(await detector.detect(ctx)));
   }
 
-  if (hasAssignment && !hasAssignmentUnavailableFlow) {
-    gaps.push({
-      type: "missing_assignment_unavailability_handling",
-      severity: "high",
-      description:
-        "Main flow assigns an agent/reviewer but no branch describes what happens when no assignee is available.",
-      suggestedQuestion:
-        "What happens if no reviewer/agent is available at assignment time? Is the case queued or put on hold, who is notified, and when does processing resume?",
-    });
+  // Structural flags — computed from validationFeedback independently of
+  // whether detectors fired, so GapAnalysis always reflects the true state.
+  const missingExceptionFlows = !validationFeedback.hasExceptionFlow;
+  const missingAlternativeFlows = !validationFeedback.hasAlternativeFlow;
+
+  // Derive incompleteActors from gaps emitted by the structural detector
+  const incompleteActors = gaps
+    .filter((g) => g.type === "incomplete_actors")
+    .map((g) => {
+      const match = g.description.match(/Actor '(.+)' is declared/);
+      return match ? match[1] : "";
+    })
+    .filter(Boolean);
+
+  // Phase 6: Filter stale gaps, compute completeness and priority
+  const completenessScore = calculateCompletenessScore(
+    validationFeedback,
+    gaps,
+    missingExceptionFlows,
+    missingAlternativeFlows,
+  );
+
+  const filteredGaps =
+    conversationHistory && conversationHistory.length > 0
+      ? await filterStaleGaps(gaps, useCase, conversationHistory)
+      : gaps;
+
+  const priorityGaps = computePriorityGaps(filteredGaps);
+
+  // Derive uncertainConditions from gaps — replaces the former side channel
+  const uncertainConditions = filteredGaps
+    .filter((g) => g.type === "uncertain_conditions" && g.relatedFlow)
+    .map((g) => g.relatedFlow!);
+
+  let dominantDomain: "human-system" | "system-system" | "mixed" | undefined;
+  if (blueprintResult.detectedDomains.size === 1) {
+    dominantDomain = Array.from(blueprintResult.detectedDomains)[0];
+  } else if (blueprintResult.detectedDomains.size > 1) {
+    dominantDomain = "mixed";
   }
 
-  if (hasGuidelineReview && !hasNegotiationFlow) {
-    gaps.push({
-      type: "missing_policy_outcome_branching",
-      severity: "medium",
-      description:
-        "Main flow checks policy guidelines but does not model differentiated outcomes for severe vs minor violations.",
-      suggestedQuestion:
-        "When policy guidelines are violated, how are major violations handled versus minor violations? Does one path terminate while another allows negotiation or adjusted payment?",
-    });
-  }
+  const classifierFlowDomains = domainAnalysis.flowClassifications.map((f) => ({
+    flowId: f.flowId,
+    domainType: f.domainType,
+    confidence: f.confidence,
+  }));
 
-  return gaps;
+  return {
+    missingExceptionFlows,
+    missingAlternativeFlows,
+    incompleteActors,
+    uncertainConditions,
+    gaps: filteredGaps,
+    priorityGaps,
+    completenessScore: Math.max(0, Math.min(1, completenessScore)),
+    detectedDomains: blueprintResult.detectedDomains,
+    dominantDomain,
+    activatedBlueprints,
+    classifierDominantDomain: domainAnalysis.dominantDomain,
+    classifierOverallConfidence: domainAnalysis.overallConfidence,
+    classifierFlowDomains,
+  };
 }
-
-function detectKeywordBasedGap(
-  keywords: string[],
-  originalDescription: string,
-  useCase: GenUseCase,
-  gapType: GapType,
-  severity: Gap["severity"],
-  description: string,
-  suggestedQuestion: string,
-  isCovered: (useCase: GenUseCase) => boolean,
-): Gap[] {
-  const descLower = originalDescription.toLowerCase();
-  if (!keywords.some((kw) => descLower.includes(kw))) return [];
-  if (isCovered(useCase)) return [];
-  return [{ type: gapType, severity, description, suggestedQuestion }];
-}
-
-function detectTemporalExceptions(
-  useCase: GenUseCase,
-  originalDescription: string,
-): Gap[] {
-  return detectKeywordBasedGap(
-    ["at any time", "anytime", "at all times", "throughout", "during any", "while"],
-    originalDescription,
-    useCase,
-    "missing_temporal_exceptions",
-    "high",
-    "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
-    "Are there any conditions that can occur at any time during the process (e.g., system failures, interruptions)?",
-    (uc) => uc.flows.some(
-      (f) => f.kind === "EXCEPTION" && (f.fromStepIndex === undefined || f.fromStepIndex === null),
-    ),
-  );
-}
-
-function detectNestedExceptions(
-  useCase: GenUseCase,
-  originalDescription: string,
-): Gap[] {
-  const nestedKeywords = ["timeout", "does not respond", "fails to provide", "within time period", "no response", "does not supply"];
-  const descLower = originalDescription.toLowerCase();
-  if (!nestedKeywords.some((kw) => descLower.includes(kw))) return [];
-  const exceptionFlows = useCase.flows.filter((f) => f.kind === "EXCEPTION");
-  if (exceptionFlows.length === 0) return [];
-  const hasNestedExceptions = exceptionFlows.some((f) => {
-    const parent = useCase.flows.find((pf) => pf.id === f.parentFlow);
-    return parent && parent.kind === "EXCEPTION";
-  });
-  if (hasNestedExceptions) return [];
-  return [
-    {
-      type: "missing_nested_exceptions",
-      severity: "medium",
-      description: "Description mentions timeout or non-response scenarios but no nested exception flows found.",
-      suggestedQuestion: "What happens if a response or action is not received within the expected time? Are there timeouts or escalations?",
-    },
-  ];
-}
-
-function detectEnvironmentalInterruptions(
-  useCase: GenUseCase,
-  originalDescription: string,
-): Gap[] {
-  const environmentalKeywords = ["fire alarm", "emergency", "evacuation", "power outage", "natural disaster", "interruption", "external event"];
-  return detectKeywordBasedGap(
-    environmentalKeywords,
-    originalDescription,
-    useCase,
-    "missing_environmental_interruptions",
-    "medium",
-    "Description mentions environmental or external interruptions but no related exception flows found.",
-    "How does the process handle external interruptions like emergencies, power failures, or environmental events?",
-    (uc) => uc.flows.some(
-      (f) => f.kind === "EXCEPTION" && environmentalKeywords.some((kw) => f.condition?.toLowerCase().includes(kw)),
-    ),
-  );
-}
-
-function detectTechnologyVariations(
-  useCase: GenUseCase,
-  originalDescription: string,
-): Gap[] {
-  return detectKeywordBasedGap(
-    ["by check", "by cash", "electronic", "paper", "digital", "manual", "automated", "online", "offline"],
-    originalDescription,
-    useCase,
-    "missing_technology_variations",
-    "low",
-    "Description mentions different technology or implementation methods but no alternative flows found.",
-    "Are there different ways to implement certain steps (e.g., electronic vs. paper, online vs. offline)?",
-    (uc) => {
-      const mainFlow = uc.flows.find((f) => f.kind === "MAIN");
-      const alternativeFlows = uc.flows.filter((f) => f.kind === "ALTERNATIVE");
-      return !mainFlow || alternativeFlows.length > 0;
-    },
-  );
-}
-

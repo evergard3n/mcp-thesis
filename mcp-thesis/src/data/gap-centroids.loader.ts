@@ -48,6 +48,14 @@ export function clearGapCentroidsCache(): void {
   console.log("Gap centroids cache cleared");
 }
 
+/**
+ * Look up a loaded centroid category by its name key (matches keys in gap-centroids.json).
+ * Returns undefined if the cache has not been loaded yet or the name is not found.
+ */
+export function getCentroidByName(name: string): GapCategory | undefined {
+  return gapCentroidsCache?.find((c) => c.name === name);
+}
+
 export async function loadGapCentroids(): Promise<GapCategory[]> {
   if (gapCentroidsCache) return gapCentroidsCache;
 

@@ -1,172 +1,109 @@
 {
-  "timestamp": "2026-04-03T04:07:29.299Z",
+  "timestamp": "2026-04-04T07:03:27.698Z",
   "summary": {
     "totalTests": 12,
-    "totalGaps": 134,
-    "totalBlueprintGaps": 72,
-    "totalTime": 37093,
-    "avgGapsPerTest": 11.166666666666666,
-    "avgBlueprintGapsPerTest": 6,
-    "avgTimePerTest": 3091.0833333333335
+    "totalGaps": 64,
+    "totalBlueprintGaps": 60,
+    "totalTime": 31910,
+    "avgGapsPerTest": 5.333333333333333,
+    "avgBlueprintGapsPerTest": 5,
+    "avgTimePerTest": 2659.1666666666665
   },
   "blueprintFrequency": {
+    "approval_chain_reject": 1,
+    "approval_chain_conditional_approval": 1,
+    "approval_chain_delegate_approval": 1,
     "request_lifecycle_cancel_midprocess": 4,
     "request_lifecycle_modify_midprocess": 4,
     "request_lifecycle_partial_fulfillment": 4,
     "request_lifecycle_wrong_fulfillment": 4,
     "request_lifecycle_late_fulfillment": 4,
-    "adjudication_decisioning_eligibility_failure": 4,
-    "adjudication_decisioning_assignee_unavailable": 4,
-    "adjudication_decisioning_policy_severity_branch": 4,
     "multi_party_selection_split_request": 5,
     "multi_party_selection_merge_requests": 5,
     "multi_party_selection_no_match": 5,
-    "approval_chain_reject": 3,
-    "approval_chain_conditional_approval": 3,
-    "approval_chain_delegate_approval": 3,
-    "session_persistence_save_progress": 1,
-    "session_persistence_pause_work": 1,
-    "session_persistence_resume_work": 1,
-    "session_persistence_restart_interrupted": 1,
-    "session_persistence_session_timeout": 1,
+    "session_persistence_save_progress": 2,
+    "session_persistence_pause_work": 2,
+    "session_persistence_resume_work": 2,
+    "session_persistence_restart_interrupted": 2,
+    "session_persistence_session_timeout": 2,
+    "adjudication_decisioning_eligibility_failure": 1,
+    "adjudication_decisioning_assignee_unavailable": 1,
+    "adjudication_decisioning_policy_severity_branch": 1,
+    "information_completeness_missing_info": 1,
+    "information_completeness_fill_later": 1,
     "resource_locking_lock_contention": 1,
     "resource_locking_upgrade_lock": 1,
     "resource_locking_deadlock_prevention": 1,
     "resource_locking_lock_timeout": 1,
     "resource_locking_resource_exhaustion": 1,
     "resource_locking_lock_release_failure": 1,
-    "resource_locking_priority_access": 1,
-    "information_completeness_missing_info": 2,
-    "information_completeness_fill_later": 2
+    "resource_locking_priority_access": 1
   },
   "domainStats": {
-    "Insurance/Operations": {
-      "count": 2,
-      "totalGaps": 23,
-      "blueprintGaps": 8
-    },
-    "Company Level": {
-      "count": 1,
-      "totalGaps": 13,
-      "blueprintGaps": 11
-    },
     "Corporate/Purchasing": {
       "count": 1,
-      "totalGaps": 14,
+      "totalGaps": 11,
       "blueprintGaps": 11
     },
     "Sales/Order": {
       "count": 1,
-      "totalGaps": 6,
+      "totalGaps": 3,
+      "blueprintGaps": 3
+    },
+    "Company Level": {
+      "count": 1,
+      "totalGaps": 8,
+      "blueprintGaps": 8
+    },
+    "Insurance/Claims": {
+      "count": 2,
+      "totalGaps": 3,
       "blueprintGaps": 3
     },
     "Resource Management": {
       "count": 1,
-      "totalGaps": 15,
+      "totalGaps": 5,
       "blueprintGaps": 5
     },
-    "Resource Locking": {
-      "count": 1,
-      "totalGaps": 11,
-      "blueprintGaps": 7
-    },
-    "Insurance/Claims": {
+    "Insurance/Operations": {
       "count": 2,
-      "totalGaps": 24,
-      "blueprintGaps": 19
+      "totalGaps": 10,
+      "blueprintGaps": 8
+    },
+    "web software system": {
+      "count": 1,
+      "totalGaps": 9,
+      "blueprintGaps": 8
     },
     "Logistics": {
       "count": 1,
-      "totalGaps": 5,
+      "totalGaps": 1,
       "blueprintGaps": 0
     },
     "Claims": {
       "count": 1,
-      "totalGaps": 15,
-      "blueprintGaps": 5
+      "totalGaps": 7,
+      "blueprintGaps": 7
     },
-    "web software system": {
+    "Resource Locking": {
       "count": 1,
-      "totalGaps": 8,
-      "blueprintGaps": 3
+      "totalGaps": 7,
+      "blueprintGaps": 7
     }
   },
   "results": [
     {
-      "dataset": "dataset-1010.json",
-      "testCaseId": "1010",
-      "domain": "Insurance/Operations",
-      "baselineTime": 3427,
-      "gapTime": 2750,
-      "totalTime": 6177,
-      "actors": 3,
-      "flows": 1,
-      "totalGaps": 14,
-      "blueprintGaps": 8,
-      "otherGaps": 6,
-      "blueprints": [
-        "request_lifecycle_cancel_midprocess",
-        "request_lifecycle_modify_midprocess",
-        "request_lifecycle_partial_fulfillment",
-        "request_lifecycle_wrong_fulfillment",
-        "request_lifecycle_late_fulfillment",
-        "adjudication_decisioning_eligibility_failure",
-        "adjudication_decisioning_assignee_unavailable",
-        "adjudication_decisioning_policy_severity_branch"
-      ]
-    },
-    {
-      "dataset": "dataset-1014.json",
-      "testCaseId": "1014",
-      "domain": "Insurance/Operations",
-      "baselineTime": 3088,
-      "gapTime": 86,
-      "totalTime": 3174,
-      "actors": 3,
-      "flows": 1,
-      "totalGaps": 9,
-      "blueprintGaps": 0,
-      "otherGaps": 9,
-      "blueprints": []
-    },
-    {
-      "dataset": "dataset-BG.json",
-      "testCaseId": "BG",
-      "domain": "Company Level",
-      "baselineTime": 1761,
-      "gapTime": 21,
-      "totalTime": 1782,
-      "actors": 2,
-      "flows": 1,
-      "totalGaps": 13,
-      "blueprintGaps": 11,
-      "otherGaps": 2,
-      "blueprints": [
-        "request_lifecycle_cancel_midprocess",
-        "request_lifecycle_modify_midprocess",
-        "request_lifecycle_partial_fulfillment",
-        "request_lifecycle_wrong_fulfillment",
-        "request_lifecycle_late_fulfillment",
-        "multi_party_selection_split_request",
-        "multi_party_selection_merge_requests",
-        "multi_party_selection_no_match",
-        "adjudication_decisioning_eligibility_failure",
-        "adjudication_decisioning_assignee_unavailable",
-        "adjudication_decisioning_policy_severity_branch"
-      ]
-    },
-    {
       "dataset": "dataset-BOS.json",
       "testCaseId": "BOS",
       "domain": "Corporate/Purchasing",
-      "baselineTime": 2248,
-      "gapTime": 41,
-      "totalTime": 2289,
+      "baselineTime": 3104,
+      "gapTime": 870,
+      "totalTime": 3974,
       "actors": 5,
       "flows": 1,
-      "totalGaps": 14,
+      "totalGaps": 11,
       "blueprintGaps": 11,
-      "otherGaps": 3,
+      "otherGaps": 0,
       "blueprints": [
         "approval_chain_reject",
         "approval_chain_conditional_approval",
@@ -185,14 +122,55 @@
       "dataset": "dataset-CBG.json",
       "testCaseId": "CBG",
       "domain": "Sales/Order",
-      "baselineTime": 2352,
-      "gapTime": 38,
-      "totalTime": 2390,
+      "baselineTime": 1538,
+      "gapTime": 30,
+      "totalTime": 1568,
       "actors": 2,
       "flows": 1,
-      "totalGaps": 6,
+      "totalGaps": 3,
       "blueprintGaps": 3,
-      "otherGaps": 3,
+      "otherGaps": 0,
+      "blueprints": [
+        "multi_party_selection_split_request",
+        "multi_party_selection_merge_requests",
+        "multi_party_selection_no_match"
+      ]
+    },
+    {
+      "dataset": "dataset-BG.json",
+      "testCaseId": "BG",
+      "domain": "Company Level",
+      "baselineTime": 2778,
+      "gapTime": 30,
+      "totalTime": 2808,
+      "actors": 2,
+      "flows": 1,
+      "totalGaps": 8,
+      "blueprintGaps": 8,
+      "otherGaps": 0,
+      "blueprints": [
+        "request_lifecycle_cancel_midprocess",
+        "request_lifecycle_modify_midprocess",
+        "request_lifecycle_partial_fulfillment",
+        "request_lifecycle_wrong_fulfillment",
+        "request_lifecycle_late_fulfillment",
+        "multi_party_selection_split_request",
+        "multi_party_selection_merge_requests",
+        "multi_party_selection_no_match"
+      ]
+    },
+    {
+      "dataset": "dataset-GPFAC.json",
+      "testCaseId": "GPFAC",
+      "domain": "Insurance/Claims",
+      "baselineTime": 1738,
+      "gapTime": 23,
+      "totalTime": 1761,
+      "actors": 2,
+      "flows": 1,
+      "totalGaps": 3,
+      "blueprintGaps": 3,
+      "otherGaps": 0,
       "blueprints": [
         "multi_party_selection_split_request",
         "multi_party_selection_merge_requests",
@@ -203,14 +181,14 @@
       "dataset": "dataset-CC1.json",
       "testCaseId": "CC1",
       "domain": "Resource Management",
-      "baselineTime": 2304,
-      "gapTime": 36,
-      "totalTime": 2340,
-      "actors": 3,
+      "baselineTime": 2819,
+      "gapTime": 33,
+      "totalTime": 2852,
+      "actors": 2,
       "flows": 1,
-      "totalGaps": 15,
+      "totalGaps": 5,
       "blueprintGaps": 5,
-      "otherGaps": 10,
+      "otherGaps": 0,
       "blueprints": [
         "session_persistence_save_progress",
         "session_persistence_pause_work",
@@ -220,17 +198,127 @@
       ]
     },
     {
+      "dataset": "dataset-1014.json",
+      "testCaseId": "1014",
+      "domain": "Insurance/Operations",
+      "baselineTime": 2453,
+      "gapTime": 45,
+      "totalTime": 2498,
+      "actors": 3,
+      "flows": 1,
+      "totalGaps": 2,
+      "blueprintGaps": 0,
+      "otherGaps": 2,
+      "blueprints": []
+    },
+    {
+      "dataset": "dataset-ec-5-extrahard.json",
+      "testCaseId": "ec-5-extrahard",
+      "domain": "web software system",
+      "baselineTime": 2952,
+      "gapTime": 49,
+      "totalTime": 3001,
+      "actors": 2,
+      "flows": 1,
+      "totalGaps": 9,
+      "blueprintGaps": 8,
+      "otherGaps": 1,
+      "blueprints": [
+        "multi_party_selection_split_request",
+        "multi_party_selection_merge_requests",
+        "multi_party_selection_no_match",
+        "session_persistence_save_progress",
+        "session_persistence_pause_work",
+        "session_persistence_resume_work",
+        "session_persistence_restart_interrupted",
+        "session_persistence_session_timeout"
+      ]
+    },
+    {
+      "dataset": "dataset-MO1.json",
+      "testCaseId": "MO1",
+      "domain": "Logistics",
+      "baselineTime": 2570,
+      "gapTime": 48,
+      "totalTime": 2618,
+      "actors": 4,
+      "flows": 1,
+      "totalGaps": 1,
+      "blueprintGaps": 0,
+      "otherGaps": 1,
+      "blueprints": []
+    },
+    {
+      "dataset": "dataset-GPFCA.json",
+      "testCaseId": "GPFCA",
+      "domain": "Insurance/Claims",
+      "baselineTime": 1885,
+      "gapTime": 26,
+      "totalTime": 1911,
+      "actors": 2,
+      "flows": 1,
+      "totalGaps": 0,
+      "blueprintGaps": 0,
+      "otherGaps": 0,
+      "blueprints": []
+    },
+    {
+      "dataset": "dataset-1010.json",
+      "testCaseId": "1010",
+      "domain": "Insurance/Operations",
+      "baselineTime": 2506,
+      "gapTime": 47,
+      "totalTime": 2553,
+      "actors": 3,
+      "flows": 1,
+      "totalGaps": 8,
+      "blueprintGaps": 8,
+      "otherGaps": 0,
+      "blueprints": [
+        "request_lifecycle_cancel_midprocess",
+        "request_lifecycle_modify_midprocess",
+        "request_lifecycle_partial_fulfillment",
+        "request_lifecycle_wrong_fulfillment",
+        "request_lifecycle_late_fulfillment",
+        "adjudication_decisioning_eligibility_failure",
+        "adjudication_decisioning_assignee_unavailable",
+        "adjudication_decisioning_policy_severity_branch"
+      ]
+    },
+    {
+      "dataset": "dataset-RL.json",
+      "testCaseId": "RL",
+      "domain": "Claims",
+      "baselineTime": 2769,
+      "gapTime": 28,
+      "totalTime": 2797,
+      "actors": 2,
+      "flows": 1,
+      "totalGaps": 7,
+      "blueprintGaps": 7,
+      "otherGaps": 0,
+      "blueprints": [
+        "request_lifecycle_cancel_midprocess",
+        "request_lifecycle_modify_midprocess",
+        "request_lifecycle_partial_fulfillment",
+        "request_lifecycle_wrong_fulfillment",
+        "request_lifecycle_late_fulfillment",
+        "information_completeness_missing_info",
+        "information_completeness_fill_later"
+      ]
+    },
+    {
       "dataset": "dataset-CC4.json",
       "testCaseId": "CC4",
       "domain": "Resource Locking",
-      "baselineTime": 5623,
-      "gapTime": 141,
-      "totalTime": 5764,
+      "baselineTime": 3496,
+      "gapTime": 73,
+      "totalTime": 3569,
       "actors": 2,
       "flows": 3,
-      "totalGaps": 11,
+      "totalGaps": 7,
       "blueprintGaps": 7,
-      "otherGaps": 4,
+      "otherGaps": 0,
       "blueprints": [
         "resource_locking_lock_contention",
         "resource_locking_upgrade_lock",
@@ -239,107 +327,6 @@
         "resource_locking_resource_exhaustion",
         "resource_locking_lock_release_failure",
         "resource_locking_priority_access"
-      ]
-    },
-    {
-      "dataset": "dataset-GPFAC.json",
-      "testCaseId": "GPFAC",
-      "domain": "Insurance/Claims",
-      "baselineTime": 2485,
-      "gapTime": 165,
-      "totalTime": 2650,
-      "actors": 2,
-      "flows": 3,
-      "totalGaps": 8,
-      "blueprintGaps": 6,
-      "otherGaps": 2,
-      "blueprints": [
-        "approval_chain_reject",
-        "approval_chain_conditional_approval",
-        "approval_chain_delegate_approval",
-        "multi_party_selection_split_request",
-        "multi_party_selection_merge_requests",
-        "multi_party_selection_no_match"
-      ]
-    },
-    {
-      "dataset": "dataset-GPFCA.json",
-      "testCaseId": "GPFCA",
-      "domain": "Insurance/Claims",
-      "baselineTime": 2058,
-      "gapTime": 80,
-      "totalTime": 2138,
-      "actors": 2,
-      "flows": 1,
-      "totalGaps": 16,
-      "blueprintGaps": 13,
-      "otherGaps": 3,
-      "blueprints": [
-        "approval_chain_reject",
-        "approval_chain_conditional_approval",
-        "approval_chain_delegate_approval",
-        "request_lifecycle_cancel_midprocess",
-        "request_lifecycle_modify_midprocess",
-        "request_lifecycle_partial_fulfillment",
-        "request_lifecycle_wrong_fulfillment",
-        "request_lifecycle_late_fulfillment",
-        "information_completeness_missing_info",
-        "information_completeness_fill_later",
-        "adjudication_decisioning_eligibility_failure",
-        "adjudication_decisioning_assignee_unavailable",
-        "adjudication_decisioning_policy_severity_branch"
-      ]
-    },
-    {
-      "dataset": "dataset-MO1.json",
-      "testCaseId": "MO1",
-      "domain": "Logistics",
-      "baselineTime": 2340,
-      "gapTime": 214,
-      "totalTime": 2554,
-      "actors": 4,
-      "flows": 1,
-      "totalGaps": 5,
-      "blueprintGaps": 0,
-      "otherGaps": 5,
-      "blueprints": []
-    },
-    {
-      "dataset": "dataset-RL.json",
-      "testCaseId": "RL",
-      "domain": "Claims",
-      "baselineTime": 2207,
-      "gapTime": 91,
-      "totalTime": 2298,
-      "actors": 2,
-      "flows": 1,
-      "totalGaps": 15,
-      "blueprintGaps": 5,
-      "otherGaps": 10,
-      "blueprints": [
-        "information_completeness_missing_info",
-        "information_completeness_fill_later",
-        "adjudication_decisioning_eligibility_failure",
-        "adjudication_decisioning_assignee_unavailable",
-        "adjudication_decisioning_policy_severity_branch"
-      ]
-    },
-    {
-      "dataset": "dataset-ec-5-extrahard.json",
-      "testCaseId": "ec-5-extrahard",
-      "domain": "web software system",
-      "baselineTime": 3338,
-      "gapTime": 199,
-      "totalTime": 3537,
-      "actors": 2,
-      "flows": 1,
-      "totalGaps": 8,
-      "blueprintGaps": 3,
-      "otherGaps": 5,
-      "blueprints": [
-        "multi_party_selection_split_request",
-        "multi_party_selection_merge_requests",
-        "multi_party_selection_no_match"
       ]
     }
   ]

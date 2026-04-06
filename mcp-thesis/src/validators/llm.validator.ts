@@ -317,13 +317,15 @@ Below is a detailed description of a use case:
 ${detailedDescription}
 </description>
 
-The following process patterns (blueprints) have been tentatively detected in this use case.
-Each blueprint has a Domain field indicating the type of system it applies to.
-Only confirm a blueprint if:
-1. The description explicitly or strongly implies the pattern, AND
-2. The blueprint's Domain is consistent with the nature of this use case.
+The following process patterns (blueprints) were **automatically suggested** from the draft use case (embedding match). They may include false positives.
 
-For example, a blueprint with Domain "human-system" requiring digital session management should NOT be confirmed for physical/manual processes.
+Each blueprint has a Domain field: "human-system" (people + systems) or "system-system" (automated).
+
+Confirm a blueprint when:
+1. The detailed description **reasonably supports** that process pattern (explicit detail OR clear implication from actors and steps — e.g. insurance claims often imply adjudication, assignment, policy checks, request changes, and approvals), AND
+2. The blueprint's Domain is not clearly wrong for this use case (e.g. do not confirm heavy web-session persistence for a purely physical paper workflow).
+
+**Bias toward recall:** If the description mentions related roles or steps (approvals, vendors, claim handling, APIs, locks, sessions, multi-party matching, etc.), prefer **confirming** the matching blueprint IDs rather than omitting them. Only exclude a blueprint when it is clearly irrelevant.
 
 ${blueprintList}
 
@@ -668,12 +670,16 @@ export async function expertAnswerOpenEndedQuestions(
 
 /**
  * Checks if a question is a duplicate of previously asked questions.
- * Uses normalized text matching and semantic similarity.
+ *
+ * L1 — exact text match only (removed substring overlap: too many false positives
+ *       when similar gap types fire on different steps or with rephrased context).
+ * L2 — semantic similarity; threshold raised to 0.92 so only near-paraphrase
+ *       questions are suppressed, allowing related-but-distinct follow-ups through.
  */
 async function isQuestionDuplicate(
   newQuestion: string,
   previousQuestions: string[],
-  threshold: number = 0.85,
+  threshold: number = 0.92,
 ): Promise<boolean> {
   if (previousQuestions.length === 0) return false;
 
@@ -681,7 +687,7 @@ async function isQuestionDuplicate(
   const newStepMatch = normalizedNew.match(/step\s+(\d+)/i);
   const newStepIndex = newStepMatch ? Number(newStepMatch[1]) : null;
 
-  // Layer 1: Exact/near-exact text match
+  // Layer 1: Exact text match only
   for (const prev of previousQuestions) {
     const normalizedPrev = prev.toLowerCase().replace(/\s+/g, " ").trim();
     const prevStepMatch = normalizedPrev.match(/step\s+(\d+)/i);
@@ -693,23 +699,9 @@ async function isQuestionDuplicate(
       console.log(`[DEDUP L1] Exact match — skipping: "${newQuestion.slice(0, 80)}..." ~ "${prev.slice(0, 80)}..."`);
       return true;
     }
-
-    // High substring overlap check (>85% of shorter string)
-    const shorter =
-      normalizedNew.length < normalizedPrev.length
-        ? normalizedNew
-        : normalizedPrev;
-    const longer =
-      normalizedNew.length < normalizedPrev.length
-        ? normalizedPrev
-        : normalizedNew;
-    if (longer.includes(shorter) && shorter.length / longer.length > 0.85) {
-      console.log(`[DEDUP L1] Substring overlap — skipping: "${newQuestion.slice(0, 80)}..." ~ "${prev.slice(0, 80)}..."`);
-      return true;
-    }
   }
 
-  // Layer 2: Semantic similarity check
+  // Layer 2: Semantic similarity check (only against same-step previous questions)
   const eligiblePrevious = previousQuestions.filter((prev) => {
     const normalizedPrev = prev.toLowerCase().replace(/\s+/g, " ").trim();
     const prevStepMatch = normalizedPrev.match(/step\s+(\d+)/i);
@@ -896,6 +888,19 @@ export async function probeBlueprintsWithExpert(
 ): Promise<string[]> {
   if (activations.length === 0) return [];
 
+  const activationSummary = activations
+    .map(
+      (a) =>
+        `${a.blueprintId}(${(a.confidence * 100).toFixed(0)}%/${a.domainType ?? "?"})`,
+    )
+    .join(", ");
+  console.log(
+    `[Probe] domain=${domain} | activations=${activations.length}: ${activationSummary}`,
+  );
+  console.log(
+    `[Probe] detailedDescription length=${detailedDescription.length} chars`,
+  );
+
   const prompt = buildProbeBlueprintsWithExpertPrompt(
     activations,
     detailedDescription,
@@ -908,7 +913,13 @@ export async function probeBlueprintsWithExpert(
     const result = await geminiFunctions.generateStructured({ prompt, schema });
     // Filter to only valid IDs from the activations list
     const validIds = new Set(activations.map((a) => a.blueprintId));
-    return result.filter((id) => validIds.has(id));
+    const confirmed = result.filter((id) => validIds.has(id));
+    const dropped = activations
+      .filter((a) => !confirmed.includes(a.blueprintId))
+      .map((a) => a.blueprintId);
+    console.log(`[Probe] confirmed (${confirmed.length}): [${confirmed.join(", ")}]`);
+    console.log(`[Probe] not confirmed (${dropped.length}): [${dropped.join(", ")}]`);
+    return confirmed;
   } catch (err) {
     console.error("[probeBlueprintsWithExpert] LLM call failed:", err);
     return [];
@@ -1251,8 +1262,56 @@ async function buildClarificationQuestions(
 }
 
 /**
- * Generates adaptive questions based on priority rankings
- * Combines step priorities, flow uncertainties, and gap analysis
+ * Phase 4: Global gap questions — gaps with no relatedStep (structural, keyword-based).
+ * These never appear in stepPriorities and would otherwise be silently dropped.
+ */
+async function buildGlobalGapQuestions(
+  globalGaps: Array<{ type: string; severity: string; description: string; suggestedQuestion?: string }>,
+  previousQuestions: string[],
+  askedInThisBatch: string[],
+  maxQuestions: number,
+  currentCount: number,
+): Promise<{ questions: OpenEndedQuestion[]; asked: string[] }> {
+  const questions: OpenEndedQuestion[] = [];
+  const asked: string[] = [...askedInThisBatch];
+
+  // Sort: high severity first, then medium
+  const sorted = [...globalGaps].sort((a, b) => {
+    const rank = { high: 0, medium: 1, low: 2 } as Record<string, number>;
+    return (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2);
+  });
+
+  for (const gap of sorted) {
+    if (currentCount + questions.length >= maxQuestions) break;
+    if (!gap.suggestedQuestion) continue;
+
+    const questionText = gap.suggestedQuestion;
+    const allPrevious = [...previousQuestions, ...asked];
+
+    if (await isQuestionDuplicate(questionText, allPrevious)) {
+      console.log(`[DEDUP SKIPPED] Global gap "${gap.type}": "${questionText.slice(0, 100)}..."`);
+      continue;
+    }
+
+    questions.push({
+      id: `global-gap-${gap.type}`,
+      question: questionText,
+      context: {
+        patternType: gap.type,
+        whyAsking: gap.description,
+        flowId: "MAIN",
+      },
+      answerGuidance: getAnswerGuidanceForGapType(gap.type),
+    });
+    asked.push(questionText);
+  }
+
+  return { questions, asked };
+}
+
+/**
+ * Generates adaptive questions based on priority rankings.
+ * Combines step priorities, flow uncertainties, and global gap analysis.
  */
 export async function generateAdaptiveQuestions(
   stepPriorities: StepPriorityShape[],
@@ -1269,6 +1328,7 @@ export async function generateAdaptiveQuestions(
   blueprintOnly: boolean = false,
   confirmedBlueprintCount: number = 1,
   baselineFlowIds?: Set<string>,
+  globalGaps: Array<{ type: string; severity: string; description: string; suggestedQuestion?: string }> = [],
 ): Promise<OpenEndedQuestion[]> {
   const allQuestions: OpenEndedQuestion[] = [];
   let askedInThisBatch: string[] = [];
@@ -1286,7 +1346,7 @@ export async function generateAdaptiveQuestions(
     askedInThisBatch = [...seedAsked];
   }
 
-  // Phase 1: Gap-based exception questions
+  // Phase 1: Gap-based exception questions (step-level)
   const BLUEPRINT_CAP = blueprintOnly ? Math.max(confirmedBlueprintCount * 2, 2) : Infinity;
   const { questions: gapQs, asked: gapAsked } = await buildGapExceptionQuestions(
     stepPriorities,
@@ -1322,7 +1382,7 @@ export async function generateAdaptiveQuestions(
   askedInThisBatch = condAsked;
 
   // Phase 3: Clarification questions
-  const { questions: clarQs } = await buildClarificationQuestions(
+  const { questions: clarQs, asked: clarAsked } = await buildClarificationQuestions(
     stepPriorities,
     previousQuestions,
     askedInThisBatch,
@@ -1332,6 +1392,22 @@ export async function generateAdaptiveQuestions(
   for (const q of clarQs) {
     if (allQuestions.length >= maxQuestions) break;
     allQuestions.push(q);
+  }
+  askedInThisBatch = clarAsked;
+
+  // Phase 4: Global gap questions (no relatedStep — structural, keyword, actor gaps)
+  if (globalGaps.length > 0) {
+    const { questions: globalQs } = await buildGlobalGapQuestions(
+      globalGaps,
+      previousQuestions,
+      askedInThisBatch,
+      maxQuestions,
+      allQuestions.length,
+    );
+    for (const q of globalQs) {
+      if (allQuestions.length >= maxQuestions) break;
+      allQuestions.push(q);
+    }
   }
 
   return allQuestions;

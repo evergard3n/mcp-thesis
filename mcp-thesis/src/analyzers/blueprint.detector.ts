@@ -6,7 +6,11 @@ import {
   GenStep,
 } from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
-import { Gap } from "./gap.analyzer.js";
+import {
+  predictBlueprintFamilies,
+  blueprintMatchesPredictedFamilies,
+} from "../services/blueprint-family.service.js";
+import { Gap } from "./gap-detector.types.js";
 
 export interface BlueprintGapResult {
   gaps: Gap[];
@@ -47,10 +51,18 @@ interface BlueprintDefinition {
   name: string;
   domainType: DomainType;
   domainDescription?: string;
+  /** Process-family tags for second-stage filtering (multi-label). */
+  families?: string[];
   probeQuestion?: string;
   activation: BlueprintActivationRules;
   roles: BlueprintRoleDefinition[];
   expectedScenarios: BlueprintScenarioDefinition[];
+}
+
+/** Optional context to narrow blueprints by predicted families. */
+export interface BlueprintActivationOptions {
+  useCase?: GenUseCase;
+  originalDescription?: string;
 }
 
 interface BlueprintDataFile {
@@ -202,7 +214,11 @@ async function buildCandidatesForRole(
     }
   }
 
-  return candidates.sort((a, b) => b.similarity - a.similarity);
+  return candidates.sort((a, b) => {
+    const d = b.similarity - a.similarity;
+    if (Math.abs(d) > 1e-9) return d > 0 ? 1 : -1;
+    return a.stepIndex - b.stepIndex;
+  });
 }
 
 function assignRolesOrdered(
@@ -294,10 +310,27 @@ async function isScenarioCovered(
 export async function detectActivatedBlueprints(
   embeddedSteps: EmbeddedStep[],
   filterByDomain?: DomainType,
+  options?: BlueprintActivationOptions,
 ): Promise<BlueprintActivation[]> {
   let blueprints = await loadBlueprints();
   if (filterByDomain) {
     blueprints = blueprints.filter((bp) => bp.domainType === filterByDomain);
+  }
+
+  if (options?.useCase && options.originalDescription !== undefined) {
+    const { labels, strength } = predictBlueprintFamilies(
+      options.useCase,
+      options.originalDescription,
+    );
+    if (labels.size > 0 && strength >= 0.35) {
+      const before = blueprints.length;
+      blueprints = blueprints.filter((bp) =>
+        blueprintMatchesPredictedFamilies(bp.families, labels),
+      );
+      console.log(
+        `[Blueprint families] predicted=[${[...labels].join(", ")}] strength=${strength.toFixed(2)} → ${blueprints.length}/${before} blueprints`,
+      );
+    }
   }
 
   const mainSteps = collectEmbeddedMainSteps(embeddedSteps);
@@ -336,7 +369,8 @@ export async function detectActivatedBlueprints(
  * @param embeddedSteps Embedded steps with precomputed embeddings
  * @param filterByDomain Optional domain filter to only activate matching blueprints (prevents cross-domain overlap)
  * @param confirmedBlueprintIds If provided and non-empty, only process blueprints in this set
- * @param droppedBlueprintIds If provided, skip blueprints in this set permanently
+ * @param droppedBlueprintIds Ignored for blueprint selection (soft-drop policy: only
+ *   `confirmedBlueprintIds` gates which blueprints emit gaps; probe non-confirmation is not permanent exclusion).
  * @returns Blueprint gap analysis result
  */
 export async function detectBlueprintGaps(
@@ -344,7 +378,8 @@ export async function detectBlueprintGaps(
   embeddedSteps: EmbeddedStep[],
   filterByDomain?: DomainType,
   confirmedBlueprintIds?: Set<string>,
-  droppedBlueprintIds?: Set<string>,
+  _droppedBlueprintIds?: Set<string>,
+  options?: BlueprintActivationOptions,
 ): Promise<BlueprintGapResult> {
   let blueprints = await loadBlueprints();
 
@@ -357,9 +392,20 @@ export async function detectBlueprintGaps(
     );
   }
 
-  // Two-phase gate: drop permanently dropped blueprints
-  if (droppedBlueprintIds && droppedBlueprintIds.size > 0) {
-    blueprints = blueprints.filter((bp) => !droppedBlueprintIds.has(bp.id));
+  if (options?.useCase && options.originalDescription !== undefined) {
+    const { labels, strength } = predictBlueprintFamilies(
+      options.useCase,
+      options.originalDescription,
+    );
+    if (labels.size > 0 && strength >= 0.35) {
+      const before = blueprints.length;
+      blueprints = blueprints.filter((bp) =>
+        blueprintMatchesPredictedFamilies(bp.families, labels),
+      );
+      console.log(
+        `[Blueprint families] gap pass: ${blueprints.length}/${before} blueprints after family filter`,
+      );
+    }
   }
 
   // If confirmed set is provided but empty, probe hasn't happened yet — emit nothing

@@ -306,6 +306,15 @@ async function classifyActorSemantic(
       method: "semantic",
     };
   } else {
+    // Policy tie-break: weak or tied scores — lean human for typical workflow baselines (thesis interpretability).
+    if (humanScore >= systemScore && maxScore >= 0.38) {
+      return {
+        actor,
+        type: "human",
+        confidence: Math.min(0.85, Math.max(0.45, humanScore)),
+        method: "semantic",
+      };
+    }
     return {
       actor,
       type: "ambiguous",
@@ -821,4 +830,18 @@ export function resolveDomainFilter(
   return analysis.dominantDomain === "system-system"
     ? "system-system"
     : "human-system";
+}
+
+/**
+ * Domain filter passed to blueprint activation / gap detection.
+ * When the classifier says `ambiguous`, use **all** blueprints (human-system ∪ system-system)
+ * so candidates are not collapsed to human-system only; probe and family filter narrow later.
+ */
+export function resolveBlueprintDomainFilter(
+  analysis: UseCaseDomainAnalysis,
+): "human-system" | "system-system" | undefined {
+  if (analysis.dominantDomain === "ambiguous") {
+    return undefined;
+  }
+  return resolveDomainFilter(analysis);
 }

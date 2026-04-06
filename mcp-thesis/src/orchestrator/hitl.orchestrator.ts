@@ -9,7 +9,7 @@ import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import {
   classifyUseCaseDomainHybrid,
-  resolveDomainFilter,
+  resolveBlueprintDomainFilter,
 } from "../services/domain-classifier.service.js";
 import {
   generateFlatUseCase,
@@ -212,8 +212,12 @@ export class HITLOrchestrator {
       if (!this.state.blueprintsProbed) {
         const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
         const domainAnalysis = await classifyUseCaseDomainHybrid(currentUseCase);
-        const domainFilter = resolveDomainFilter(domainAnalysis);
-        const activations = await detectActivatedBlueprints(stepEmbeddings, domainFilter);
+        const activationFilter = resolveBlueprintDomainFilter(domainAnalysis);
+        const activations = await detectActivatedBlueprints(
+          stepEmbeddings,
+          activationFilter,
+          { useCase: currentUseCase, originalDescription: this.state.vague },
+        );
         const confirmed = await probeBlueprintsWithExpert(
           activations,
           this.state.detailed ?? this.state.vague,
@@ -247,7 +251,8 @@ export class HITLOrchestrator {
         currentVague,
         this.state.conversationHistory,
         new Set(this.state.confirmedBlueprintIds),
-        new Set(this.state.droppedBlueprintIds),
+        new Set(),
+        "post-probe",
       );
       const uncertaintyAnalysis = rankAllUncertainties(
         currentUseCase,
@@ -273,6 +278,7 @@ export class HITLOrchestrator {
       const remainingBudget = this.state.maxQuestions - this.state.totalQuestionsAsked;
       const isFirstIteration = this.state.iterationCount === 0;
       const hasBlueprintsToExplore = this.state.confirmedBlueprintIds.length > 0;
+      const globalGaps = gapAnalysis.gaps.filter((g) => g.relatedStep === undefined);
       const questions = await generateAdaptiveQuestions(
         uncertaintyAnalysis.stepPriorities,
         uncertaintyAnalysis.flowUncertainties,
@@ -281,6 +287,7 @@ export class HITLOrchestrator {
         isFirstIteration && hasBlueprintsToExplore,
         this.state.confirmedBlueprintIds.length,
         baselineFlowIds,
+        globalGaps,
       );
 
       if (questions.length === 0) {

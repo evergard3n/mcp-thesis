@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Question budget diagnostic test.
@@ -6,8 +6,8 @@
  * and reports per-iteration question count, stop reason, and budget details.
  *
  * Usage:
- *   node test-scripts/test-question-budget.js [DATASET_ID]
- *   e.g. node test-scripts/test-question-budget.js ec-5-extrahard
+ *   bun test-scripts/test-question-budget.js [DATASET_ID]
+ *   e.g. bun test-scripts/test-question-budget.js ec-5-extrahard
  */
 
 import { readFile } from "fs/promises";
@@ -43,8 +43,12 @@ async function run() {
     expertAnswerOpenEndedQuestions,
     probeBlueprintsWithExpert,
   } = await import("../build/validators/llm.validator.js");
+  const { buildInteractionMemories } = await import("../build/helpers/memory.builder.js");
   const { validateUseCaseWithFeedback } = await import("../build/validators/flat.validator.js");
-  const { classifyUseCaseDomain } = await import("../build/services/domain-classifier.service.js");
+  const {
+    classifyUseCaseDomainHybrid,
+    resolveBlueprintDomainFilter,
+  } = await import("../build/services/domain-classifier.service.js");
   const { GeminiOpenRouterFunctions } = await import("../build/services/gemini-openrouter.service.js");
 
   const gemini = new GeminiOpenRouterFunctions(
@@ -77,15 +81,18 @@ async function run() {
     // Blueprint probing (once)
     if (!blueprintsProbed) {
       const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
-      const domainAnalysis = await classifyUseCaseDomain(currentUseCase);
-      const domainFilter =
-        domainAnalysis.dominantDomain === "system-system"
-          ? "system-system"
-          : "human-system";
+      const domainAnalysis = await classifyUseCaseDomainHybrid(currentUseCase);
+      const activationFilter = resolveBlueprintDomainFilter(domainAnalysis);
 
-      console.log(`   Domain: ${domainAnalysis.dominantDomain} (confidence: ${(domainAnalysis.overallConfidence * 100).toFixed(0)}%), domainFilter=${domainFilter}`);
+      console.log(
+        `   Domain: ${domainAnalysis.dominantDomain} (confidence: ${(domainAnalysis.overallConfidence * 100).toFixed(0)}%), blueprintPool=${activationFilter ?? "all (ambiguous → union)"}`,
+      );
 
-      const activations = await detectActivatedBlueprints(stepEmbeddings, domainFilter);
+      const activations = await detectActivatedBlueprints(
+        stepEmbeddings,
+        activationFilter,
+        { useCase: currentUseCase, originalDescription: tc.inputs.vague },
+      );
       console.log(`   Activated blueprints (${activations.length}): ${activations.map(a => `${a.blueprintId}(${(a.confidence * 100).toFixed(0)}%)`).join(", ")}`);
 
       const confirmed = await probeBlueprintsWithExpert(
@@ -112,11 +119,15 @@ async function run() {
       tc.inputs.vague,
       conversationHistory,
       confirmedBlueprintIds,
-      droppedBlueprintIds,
+      new Set(),
+      blueprintsProbed ? "post-probe" : "initial",
     );
     const uncertaintyAnalysis = rankAllUncertainties(currentUseCase, validation.score, gapAnalysis);
 
-    console.log(`   Gaps found: ${gapAnalysis.gaps.length}, overallConfidence: ${(uncertaintyAnalysis.overallConfidence * 100).toFixed(0)}%, highPriority: ${uncertaintyAnalysis.highPriorityCount}`);
+    // Separate global gaps (no relatedStep) for Phase 4 question generation
+    const globalGaps = gapAnalysis.gaps.filter((g) => g.relatedStep === undefined);
+
+    console.log(`   Gaps found: ${gapAnalysis.gaps.length} (${globalGaps.length} global), overallConfidence: ${(uncertaintyAnalysis.overallConfidence * 100).toFixed(0)}%, highPriority: ${uncertaintyAnalysis.highPriorityCount}`);
 
     // Early stop check
     if (uncertaintyAnalysis.overallConfidence > 0.85 && uncertaintyAnalysis.highPriorityCount === 0) {
@@ -137,6 +148,7 @@ async function run() {
       isFirstIteration && hasBlueprintsToExplore,
       confirmedBlueprintIds.size,
       baselineFlowIds,
+      globalGaps,
     );
 
     console.log(`   Questions generated: ${questions.length} (requested: ${Math.min(6, remainingBudget)}, remaining budget: ${remainingBudget})`);
@@ -168,6 +180,10 @@ async function run() {
       const wordCount = a.answer.trim().split(/\s+/).length;
       console.log(`     ${i + 1}. [${a.confidence}] "${a.answer.substring(0, 80)}${a.answer.length > 80 ? "..." : ""}" (${wordCount} words)`);
     });
+
+    // Update conversation history so filterStaleGaps can suppress addressed gaps
+    const newMemories = await buildInteractionMemories(questions, answers, iteration);
+    conversationHistory.push(...newMemories);
 
     // Refine
     currentUseCase = await refineWithHybridAnswers(

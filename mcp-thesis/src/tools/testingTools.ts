@@ -9,10 +9,16 @@ import {
 } from "../analyzers/gap.analyzer.js";
 import { detectActivatedBlueprints } from "../analyzers/blueprint.detector.js";
 import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
-import { evaluateUseCase, flowToText } from "../evaluators/three-tier.evaluator.js";
+import {
+  evaluateUseCase,
+  flowToText,
+} from "../evaluators/three-tier.evaluator.js";
 import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import { classifyUseCaseDomain } from "../services/domain-classifier.service.js";
+import {
+  classifyUseCaseDomain,
+  resolveBlueprintDomainFilter,
+} from "../services/domain-classifier.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import semanticService from "../services/semantic.service.js";
 import {
@@ -171,7 +177,9 @@ export async function embedDataset(input: {
   forceReembed?: boolean;
 }) {
   const { datasetPath, testCaseIds, forceReembed } = input;
-  const dataset = JSON.parse(await readFile(datasetPath, "utf-8")) as DatasetFile;
+  const dataset = JSON.parse(
+    await readFile(datasetPath, "utf-8"),
+  ) as DatasetFile;
 
   const testCases = testCaseIds
     ? dataset.testCases.filter((tc) => testCaseIds.includes(tc.id))
@@ -324,15 +332,12 @@ export async function runHITLComparison(
       if (!blueprintsProbed) {
         const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
         const domainAnalysis = await classifyUseCaseDomain(currentUseCase);
-        const domainFilter =
-          domainAnalysis.dominantDomain === "human-system" ||
-          domainAnalysis.dominantDomain === "system-system"
-            ? domainAnalysis.dominantDomain
-            : undefined;
+        const activationFilter = resolveBlueprintDomainFilter(domainAnalysis);
 
         const activations = await detectActivatedBlueprints(
           stepEmbeddings,
-          domainFilter,
+          activationFilter,
+          { useCase: currentUseCase, originalDescription: tc.inputs.vague },
         );
 
         const confirmed = await probeBlueprintsWithExpert(
@@ -344,8 +349,12 @@ export async function runHITLComparison(
 
         confirmed.forEach((id) => confirmedBlueprintIds.add(id));
         activations
-          .filter((activation) => !confirmedBlueprintIds.has(activation.blueprintId))
-          .forEach((activation) => droppedBlueprintIds.add(activation.blueprintId));
+          .filter(
+            (activation) => !confirmedBlueprintIds.has(activation.blueprintId),
+          )
+          .forEach((activation) =>
+            droppedBlueprintIds.add(activation.blueprintId),
+          );
 
         blueprintsProbed = true;
       }
@@ -357,7 +366,8 @@ export async function runHITLComparison(
         tc.inputs.vague,
         conversationHistory,
         confirmedBlueprintIds,
-        droppedBlueprintIds,
+        new Set(),
+        "post-probe",
       );
       const uncertaintyAnalysis = rankAllUncertainties(
         currentUseCase,
@@ -384,6 +394,7 @@ export async function runHITLComparison(
       }
 
       const isFirstIteration = iteration === 1;
+      const globalGaps = gapAnalysis.gaps.filter((g) => g.relatedStep === undefined);
       const adaptiveQuestions = await generateAdaptiveQuestions(
         uncertaintyAnalysis.stepPriorities,
         uncertaintyAnalysis.flowUncertainties,
@@ -392,6 +403,7 @@ export async function runHITLComparison(
         isFirstIteration,
         confirmedBlueprintIds.size,
         baselineFlowIds,
+        globalGaps,
       );
 
       if (adaptiveQuestions.length === 0) {
@@ -469,7 +481,9 @@ export async function evaluateResults(
   const evaluations = [];
 
   for (const result of results) {
-    const testCase = dataset.testCases.find((tc: any) => tc.id === result.testCaseId);
+    const testCase = dataset.testCases.find(
+      (tc: any) => tc.id === result.testCaseId,
+    );
     if (!testCase) continue;
 
     const conditionEvals: any = {};
@@ -534,7 +548,10 @@ export async function evaluateResults(
 
   const filename = resultsPath.split("/").pop() || "";
   const outputPath = `test-data/results/evaluated/${filename}`;
-  await writeFile(outputPath, JSON.stringify({ evaluations, summary }, null, 2));
+  await writeFile(
+    outputPath,
+    JSON.stringify({ evaluations, summary }, null, 2),
+  );
 
   return {
     evaluations,
