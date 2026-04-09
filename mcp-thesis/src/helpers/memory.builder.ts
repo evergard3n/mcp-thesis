@@ -38,6 +38,7 @@ export async function buildInteractionMemories(
       question: q.question,
       answer: a.answer,
       iteration: iterationNumber,
+      answerConfidence: a.confidence as "low" | "medium" | "high" | undefined,
       metadata: {
         stepIndex: q.id.match(/step-(\d+)/)
           ? parseInt(q.id.match(/step-(\d+)/)![1], 10)

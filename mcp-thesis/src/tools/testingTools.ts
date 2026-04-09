@@ -1,15 +1,6 @@
 import { readFile, writeFile } from "fs/promises";
 import { z } from "zod";
 import {
-  analyzeGaps,
-  clearGapCentroidsCache,
-  collectStepEmbeddings,
-  InteractionMemory,
-  GapType,
-} from "../analyzers/gap.analyzer.js";
-import { detectActivatedBlueprints } from "../analyzers/blueprint.detector.js";
-import { rankAllUncertainties } from "../analyzers/uncertainty.ranker.js";
-import {
   evaluateUseCase,
   flowToText,
 } from "../evaluators/three-tier.evaluator.js";
@@ -17,21 +8,16 @@ import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import {
   classifyUseCaseDomain,
-  resolveBlueprintDomainFilter,
 } from "../services/domain-classifier.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import semanticService from "../services/semantic.service.js";
 import {
   generateFlatUseCase,
-  refineWithHybridAnswers,
 } from "../services/usecase.service.js";
-import { validateUseCaseWithFeedback } from "../validators/flat.validator.js";
 import {
   expertAnswerOpenEndedQuestions,
-  generateAdaptiveQuestions,
-  OpenEndedAnswer,
-  probeBlueprintsWithExpert,
 } from "../validators/llm.validator.js";
+import { runHITLLoop, type AnswerProvider } from "../orchestrator/hitl.core.js";
 
 interface EmbeddedFlow extends GenFlow {
   embedding?: number[];
@@ -214,64 +200,6 @@ export async function embedDataset(input: {
   };
 }
 
-function toInteractionMemories(
-  questions: Array<{
-    id: string;
-    question: string;
-    context: {
-      step?: string;
-      patternType?: string;
-      whyAsking: string;
-      flowId?: string;
-    };
-  }>,
-  answers: OpenEndedAnswer[],
-  iteration: number,
-): Promise<InteractionMemory[]> {
-  const contextsToEmbed: string[] = [];
-  const questionsToEmbed: string[] = [];
-  const records: Omit<InteractionMemory, "vector" | "questionVector">[] = [];
-
-  for (const q of questions) {
-    const a = answers.find((answer) => answer.questionId === q.id);
-    if (!a) continue;
-
-    const stepContext = q.context.step || "Global";
-    const description = q.context.whyAsking;
-    const contextString = `${stepContext} | ${description}`;
-
-    contextsToEmbed.push(contextString);
-    questionsToEmbed.push(q.question);
-
-    records.push({
-      stepContext,
-      question: q.question,
-      answer: a.answer,
-      iteration,
-      metadata: {
-        stepIndex: q.id.match(/step-(\d+)/)
-          ? parseInt(q.id.match(/step-(\d+)/)![1], 10)
-          : undefined,
-        gapType: q.context.patternType as GapType,
-        flowId: q.context.flowId || "MAIN",
-      },
-    });
-  }
-
-  return (async () => {
-    if (records.length === 0) return [];
-
-    const contextVectors = await semanticService.embedBatch(contextsToEmbed);
-    const questionVectors = await semanticService.embedBatch(questionsToEmbed);
-
-    return records.map((record, index) => ({
-      ...record,
-      vector: contextVectors[index],
-      questionVector: questionVectors[index],
-    }));
-  })();
-}
-
 export async function runHITLComparison(
   geminiFunctions: GeminiOpenRouterFunctions,
   input: {
@@ -280,7 +208,6 @@ export async function runHITLComparison(
   },
 ) {
   const { datasetPath, testCaseIds } = input;
-  clearGapCentroidsCache();
   const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
   const testCases = testCaseIds
     ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
@@ -289,13 +216,27 @@ export async function runHITLComparison(
   const results = [];
 
   for (const tc of testCases) {
-    const baseline = await generateFlatUseCase({
-      description: tc.inputs.vague,
-      geminiFunctions,
-    });
+    const answerProvider: AnswerProvider = async (questions) =>
+      expertAnswerOpenEndedQuestions(
+        questions,
+        tc.inputs.detailed,
+        tc.domain,
+        geminiFunctions,
+      );
+
+    const loopResult = await runHITLLoop(
+      {
+        vague: tc.inputs.vague,
+        detailed: tc.inputs.detailed,
+        domain: tc.domain,
+        geminiFunctions,
+      },
+      { maxIterations: 5, maxQuestions: 20, perIterationCap: 6 },
+      answerProvider,
+    );
 
     const baselineDomainAnalysis = await classifyUseCaseDomain(
-      baseline,
+      loopResult.baseline,
       geminiFunctions,
     );
 
@@ -309,155 +250,25 @@ export async function runHITLComparison(
       geminiFunctions,
     );
 
-    let currentUseCase = JSON.parse(JSON.stringify(baseline));
-    const baselineFlowIds = new Set<string>(
-      baseline.flows.map((flow: GenFlow) => flow.id),
-    );
-    const MAX_QUESTIONS = 20;
-    const MAX_ITERATIONS = 5;
-    let iteration = 0;
-    let totalQuestionsAsked = 0;
-    const conversationHistory: InteractionMemory[] = [];
-    const allIterations: any[] = [];
-    const allQuestions: string[] = [];
-    let debugInfo: any = {};
-
-    const confirmedBlueprintIds = new Set<string>();
-    const droppedBlueprintIds = new Set<string>();
-    let blueprintsProbed = false;
-
-    while (iteration < MAX_ITERATIONS && totalQuestionsAsked < MAX_QUESTIONS) {
-      iteration++;
-
-      if (!blueprintsProbed) {
-        const stepEmbeddings = await collectStepEmbeddings(currentUseCase);
-        const domainAnalysis = await classifyUseCaseDomain(currentUseCase);
-        const activationFilter = resolveBlueprintDomainFilter(domainAnalysis);
-
-        const activations = await detectActivatedBlueprints(
-          stepEmbeddings,
-          activationFilter,
-          { useCase: currentUseCase, originalDescription: tc.inputs.vague },
-        );
-
-        const confirmed = await probeBlueprintsWithExpert(
-          activations,
-          tc.inputs.detailed,
-          tc.domain,
-          geminiFunctions,
-        );
-
-        confirmed.forEach((id) => confirmedBlueprintIds.add(id));
-        activations
-          .filter(
-            (activation) => !confirmedBlueprintIds.has(activation.blueprintId),
-          )
-          .forEach((activation) =>
-            droppedBlueprintIds.add(activation.blueprintId),
-          );
-
-        blueprintsProbed = true;
-      }
-
-      const validation = await validateUseCaseWithFeedback(currentUseCase);
-      const gapAnalysis = await analyzeGaps(
-        currentUseCase,
-        validation.score!,
-        tc.inputs.vague,
-        conversationHistory,
-        confirmedBlueprintIds,
-        new Set(),
-        "post-probe",
-      );
-      const uncertaintyAnalysis = rankAllUncertainties(
-        currentUseCase,
-        validation.score!,
-        gapAnalysis,
-      );
-
-      if (iteration === 1) {
-        debugInfo = {
-          gapsFound: gapAnalysis.gaps.length,
-          gapTypes: gapAnalysis.gaps.map((g) => g.type),
-          confidence: uncertaintyAnalysis.overallConfidence,
-          highPriorityCount: uncertaintyAnalysis.highPriorityCount,
-          confirmedBlueprints: Array.from(confirmedBlueprintIds),
-          droppedBlueprints: Array.from(droppedBlueprintIds),
-        };
-      }
-
-      if (
-        uncertaintyAnalysis.overallConfidence > 0.85 &&
-        uncertaintyAnalysis.highPriorityCount === 0
-      ) {
-        break;
-      }
-
-      const isFirstIteration = iteration === 1;
-      const globalGaps = gapAnalysis.gaps.filter((g) => g.relatedStep === undefined);
-      const adaptiveQuestions = await generateAdaptiveQuestions(
-        uncertaintyAnalysis.stepPriorities,
-        uncertaintyAnalysis.flowUncertainties,
-        Math.min(6, MAX_QUESTIONS - totalQuestionsAsked),
-        allQuestions,
-        isFirstIteration,
-        confirmedBlueprintIds.size,
-        baselineFlowIds,
-        globalGaps,
-      );
-
-      if (adaptiveQuestions.length === 0) {
-        break;
-      }
-
-      const answers = await expertAnswerOpenEndedQuestions(
-        adaptiveQuestions,
-        tc.inputs.detailed,
-        tc.domain,
-        geminiFunctions,
-      );
-
-      const memories = await toInteractionMemories(
-        adaptiveQuestions,
-        answers,
-        iteration,
-      );
-      conversationHistory.push(...memories);
-
-      currentUseCase = await refineWithHybridAnswers(
-        tc.inputs.vague,
-        currentUseCase,
-        [],
-        [],
-        answers,
-        geminiFunctions,
-      );
-
-      allIterations.push({
-        iteration,
-        questionsAsked: adaptiveQuestions.length,
-        overallConfidence: uncertaintyAnalysis.overallConfidence,
-        highPriorityCount: uncertaintyAnalysis.highPriorityCount,
-        questions: adaptiveQuestions.map((q) => q.question),
-        answers: answers.map((a) => a.answer),
-      });
-
-      totalQuestionsAsked += adaptiveQuestions.length;
-      allQuestions.push(...adaptiveQuestions.map((q) => q.question));
-    }
-
     results.push({
       testCaseId: tc.id,
-      conditionA_Baseline: baseline,
+      conditionA_Baseline: loopResult.baseline,
       conditionA_BaselineDomain: baselineDomainAnalysis,
       conditionA_DetailedBaseline: detailedBaseline,
       conditionA_DetailedDomain: detailedDomainAnalysis,
-      conditionB_EnhancedHITL: currentUseCase,
+      conditionB_EnhancedHITL: loopResult.useCase,
       iterativeRefinement: {
-        totalIterations: iteration,
-        totalQuestionsAsked,
-        iterations: allIterations,
-        debugInfo,
+        totalIterations: loopResult.iterations.length,
+        totalQuestionsAsked: loopResult.totalQuestionsAsked,
+        iterations: loopResult.iterations.map((iter) => ({
+          iteration: iter.iteration,
+          questionsAsked: iter.questionsAsked,
+          overallConfidence: iter.overallConfidence,
+          highPriorityCount: iter.highPriorityCount,
+          questions: iter.questions.map((q) => q.question),
+          answers: iter.answers.map((a) => a.answer),
+        })),
+        debugInfo: {},
       },
       groundTruth: tc.groundTruth,
     });

@@ -463,6 +463,7 @@ function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
 
     const type = flow.kind === "ALTERNATIVE" ? "ALT" : "EXT";
     const stepIndex = determineStepIndex(flow, newParentId);
+    flow.fromStepIndex = stepIndex;
     const countKey = generateCountKey(newParentId, type, stepIndex);
     
     const count = assignedCounts.get(countKey) || 0;

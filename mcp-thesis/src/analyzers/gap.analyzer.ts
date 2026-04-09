@@ -76,6 +76,7 @@ export interface InteractionMemory {
   vector: number[];
   questionVector?: number[];
   iteration: number;
+  answerConfidence?: "low" | "medium" | "high";
   metadata: {
     stepIndex?: number;
     stepIndexes?: number[];
@@ -294,15 +295,11 @@ function getStepContext(gap: Gap, useCase: GenUseCase): string {
   return `[Step ${gap.relatedStep}] ${gap.description}`;
 }
 
-/**
- * Filters out gaps already covered by previous Q&A interactions.
- * Uses dual-vector comparison (gap context + question asked) at 0.6 threshold.
- */
 export async function filterStaleGaps(
   gaps: Gap[],
   useCase: GenUseCase,
   history: InteractionMemory[],
-  threshold: number = 0.6,
+  threshold: number = 0.80,
 ): Promise<Gap[]> {
   if (history.length === 0 || gaps.length === 0) return gaps;
 
@@ -312,20 +309,6 @@ export async function filterStaleGaps(
       .filter((h) => h.metadata.stepIndex !== undefined && h.metadata.gapType)
       .map((h) => `${h.metadata.stepIndex}|${h.metadata.gapType}`),
   );
-
-  for (const record of history) {
-    if (!record.metadata.consolidatedGroupId || !record.metadata.stepIndexes)
-      continue;
-    const group = CONSOLIDATION_GROUPS.find(
-      (g) => g.groupId === record.metadata.consolidatedGroupId,
-    );
-    if (!group) continue;
-    for (const stepIndex of record.metadata.stepIndexes) {
-      for (const gapType of group.memberGapTypes) {
-        exploredTuples.add(`${stepIndex}|${gapType}`);
-      }
-    }
-  }
 
   const metadataFiltered = gaps.filter((gap) => {
     if (gap.relatedStep === undefined) return true;
@@ -362,20 +345,14 @@ async function isGapCoveredByHistory(
   threshold: number,
 ): Promise<boolean> {
   for (const record of history) {
-    const simToContext = await semanticService.cosineSimilarity(
+    if (record.answerConfidence === "low") continue;
+
+    const sim = await semanticService.cosineSimilarity(
       gapVector,
       record.vector,
     );
 
-    let simToQuestion = 0;
-    if (record.questionVector) {
-      simToQuestion = await semanticService.cosineSimilarity(
-        gapVector,
-        record.questionVector,
-      );
-    }
-
-    if (Math.max(simToContext, simToQuestion) >= threshold) {
+    if (sim >= threshold) {
       return true;
     }
   }

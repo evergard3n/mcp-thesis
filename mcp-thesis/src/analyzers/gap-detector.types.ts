@@ -116,7 +116,6 @@ export function centroidGap(options: {
 
       for (const item of stepItems) {
         const src = item.source as StepSource;
-        if (src.flowId !== "MAIN") continue;
         if (ctx.coveredStepKeys.has(`${src.flowId}|${src.stepIndex}`)) continue;
         if (options.preFilter && !options.preFilter(src.step)) continue;
 
@@ -126,12 +125,14 @@ export function centroidGap(options: {
         );
         if (similarity < category.threshold) continue;
 
+        // Only skip if there is a flow explicitly anchored to THIS step.
+        // Flows with fromStepIndex === undefined are temporal/global and must
+        // NOT suppress gap detection for individual steps.
         const hasException = ctx.useCase.flows.some(
           (f) =>
             (f.kind === "EXCEPTION" || f.kind === "ALTERNATIVE") &&
             f.parentFlow === src.flowId &&
-            (f.fromStepIndex === src.stepIndex ||
-              f.fromStepIndex === undefined),
+            f.fromStepIndex === src.stepIndex,
         );
         if (hasException) continue;
 

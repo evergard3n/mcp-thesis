@@ -217,18 +217,10 @@ export function analyzeStepUncertainty(
   const hasHigh = relatedGaps.some((g) => g.severity === "high");
   const hasMedium = relatedGaps.some((g) => g.severity === "medium");
   const hasAny = relatedGaps.length > 0;
-  const hasNonMainGap = relatedGaps.some(
-    (g) => g.relatedFlow && g.relatedFlow !== "MAIN",
-  );
-  const cappedSeverity = hasNonMainGap ? "low" : "none";
 
   if (hasHigh) gapSeverity = "high";
   else if (hasMedium) gapSeverity = "medium";
   else if (hasAny) gapSeverity = "low";
-
-  if (hasNonMainGap && gapSeverity !== "none") {
-    gapSeverity = cappedSeverity;
-  }
 
   // Calculate uncertainty score (inverse of confidence)
   // Lower clarity/completeness/coverage = higher uncertainty
