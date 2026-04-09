@@ -1,0 +1,114 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:55:26.084Z",
+  "testCases": [
+    {
+      "id": "UC20",
+      "domain": "SuperFrog",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A student updates their profile details in the system. The system displays the current information, the student makes necessary changes, and then the system saves and confirms the updates.",
+        "detailed": "Primary Actor:\nSuperFrog Student\nSecondary Actors:\nSpirit Director\nTrigger:\nThe SuperFrog Student indicates to edit her profile information.\nDescription:\nThe SuperFrog Student wants to edit her profile information, so that her profile information is up to date.\nPreconditions:\nPRE-1. The SuperFrog Student is logged into the System.\nPostconditions:\nPOST-1. Changes made to this SuperFrog Student’s profile information are stored in the System.\nMain Success Scenario:\nThe SuperFrog Student indicates to edit her profile information.\nThe System retrieves, displays details of her current profile information, and asks the SuperFrog Student to make changes to her profile information where allowed according to the “Details” defined in the Associated Information and the “Security/access concerns” defined in the Business Rules of this use case.\nThe SuperFrog Student makes changes to her profile information until she confirms that she has finished changing.\nThe System validates the SuperFrog Student’s changes and alerts warning messages according to the “Details” defined in the Associated Information of this use case.\nThe SuperFrog Student acknowledges the warnings and chooses to continue.\nThe System displays the updated profile information and alerts the SuperFrog Student to confirm the change.\nThe SuperFrog Student either confirms the change (continues the normal flow) or chooses to continue to change the details (returns to step 3).\nThe System saves the changes, carries out the effect of change according to the “Details” defined in the Associated Information of this use case, and informs the SuperFrog Student that her profile information has been updated.\nThe System notifies relevant actors about the change of this SuperFrog Student’s profile information according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n4a. Input validation rule violation:\n4a1. The System alerts the SuperFrog Student that an input validation rule is violated and displays the nature and location of the error.\n4a2. The SuperFrog Student corrects the mistake and returns to step 4 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Edit Profile Information",
+        "summary": "The SuperFrog Student wants to edit her profile information, so that her profile information is up to date.",
+        "mainActor": "SuperFrog Student",
+        "actors": [
+          "SuperFrog Student",
+          "System",
+          "Spirit Director"
+        ],
+        "preconditions": [
+          "The SuperFrog Student is logged into the System."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Indicates to edit her profile information."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Retrieves and displays details of her current profile information, and asks the SuperFrog Student to make changes where allowed."
+              },
+              {
+                "index": 3,
+                "actor": "SuperFrog Student",
+                "description": "Makes changes to her profile information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates the SuperFrog Student's changes and alerts warning messages."
+              },
+              {
+                "index": 5,
+                "actor": "SuperFrog Student",
+                "description": "Acknowledges the warnings and chooses to continue."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Displays the updated profile information and alerts the SuperFrog Student to confirm the change."
+              },
+              {
+                "index": 7,
+                "actor": "SuperFrog Student",
+                "description": "Confirms the change."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Saves the changes, carries out the effect of change, and informs the SuperFrog Student that her profile information has been updated."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Notifies relevant actors about the change of this SuperFrog Student's profile information."
+              }
+            ]
+          },
+          {
+            "id": "EXT_10a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the SuperFrog Student that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "SuperFrog Student",
+                "description": "Corrects the mistake and returns to step 4 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Chooses to continue to change the details, returning to step 3."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

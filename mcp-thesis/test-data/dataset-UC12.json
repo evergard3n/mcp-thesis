@@ -1,0 +1,119 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:52:18.587Z",
+  "testCases": [
+    {
+      "id": "UC12",
+      "domain": "SuperFrog Scheduler",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Automatic cancellation based on a temporal pattern (24 hours prior)"
+      },
+      "inputs": {
+        "vague": "The Spirit Director cancels an appearance request, provides a reason, and the system processes the cancellation, including any refunds and notifying relevant parties.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nCustomer, Payment System, SuperFrog Student\nTrigger:\nThe Spirit Director indicates to cancel an “Approved” or “Assigned” SuperFrog appearance request.\nOr\nPayment of an “Approved” or “Assigned” request is not received 24 hours prior to the event date and time.\nDescription:\nThe Spirit Director wants to cancel an “Approved” or “Assigned” request, so that she can accommodate a TCU Athletic Department function, weather, or an emergency situation. (See BR-9)\n\nIn another scenario, an “Approved” or “Assigned” request shall be canceled automatically if payment is not received 24 hours prior to the event date and time. (See BR-7)\nPreconditions:\nPRE-1. There exists at least one “Approved” or “Assigned” request in the System.\nPRE-2. The Spirit Director is logged into the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The request is updated in the System with a status of “Canceled by the Spirit Director” or “Canceled due to no payment”.\nMain Success Scenario:\nThe Spirit Director indicates to cancel an “Approved” or “Assigned” SuperFrog appearance request.\nThe Spirit Director views the details of this “Approved” or “Assigned” appearance request through UC-7: View an appearance request and chooses to cancel the request.\nThe System asks the Spirit Director to enter a reason and then confirm.\nThe Spirit Director enters the reason and confirms the cancellation.\nThe System marks the request as “Canceled by the Spirit Director”.\nThe System has the Payment System process refund.\nThe System cancels the SuperFrog Student sign-up related to this request if it has been signed up already.\nThe System notifies relevant actors about the cancellation according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n1a. Payment is not received 24 hours prior to the event date and time:\n1a1. The System automatically updates the request’s status to “Canceled due to no payment”. The cancellation reason is “Canceled due to no payment”.\n1a2. Returns to step 7 of the normal flow.\n6a. Customer has not made a payment yet:\n6a1. Returns to step 7 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Cancel SuperFrog Appearance Request",
+        "summary": "This use case describes how the Spirit Director cancels an 'Approved' or 'Assigned' SuperFrog appearance request, or how the System automatically cancels it if payment is not received on time.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System",
+          "Customer",
+          "Payment System",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "There exists at least one “Approved” or “Assigned” request in the System.",
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to cancel an 'Approved' or 'Assigned' SuperFrog appearance request."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of the request (through Use Case 'View an appearance request')."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Chooses to cancel the request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Asks the Spirit Director to enter a reason and confirm."
+              },
+              {
+                "index": 5,
+                "actor": "Spirit Director",
+                "description": "Enters the reason and confirms the cancellation."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Marks the request as 'Canceled by the Spirit Director'."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "target": "Payment System",
+                "description": "Has the Payment System process refund."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Cancels the SuperFrog Student sign-up related to this request if it has been signed up already."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Notifies relevant actors about the cancellation."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Proceeds without processing a refund."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Automatically updates the request’s status to “Canceled due to no payment”."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Sets the cancellation reason to “Canceled due to no payment”."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

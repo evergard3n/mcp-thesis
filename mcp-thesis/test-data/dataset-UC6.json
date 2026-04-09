@@ -1,0 +1,112 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:49:42.196Z",
+  "testCases": [
+    {
+      "id": "UC6",
+      "domain": "UNKNOWN",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 4,
+        "notes": "Includes an option to return to an earlier step in the normal flow."
+      },
+      "inputs": {
+        "vague": "The user wants to find specific appearance requests by providing search criteria. The system will then show them a list of appearances that match what they asked for. This helps them decide what to do next with those requests.",
+        "detailed": "Primary Actor:\nUser (Spirit Director or SuperFrog Student)\nSecondary Actors:\n\n\nTrigger:\nThe User indicates to find appearance requests.\nDescription:\nThe User wants to find appearance requests which match specific criteria, so that she can decide what to do next.\nPreconditions:\nPRE-1. The User is logged into the System.\nPostconditions:\nPOST-1. A list of matching appearance requests is returned and displayed to the User. It is possible that the list is empty.\nMain Success Scenario:\nThe User indicates to find appearance requests.\nThe System asks the User to enter search values according to the “Search criteria” defined in the Associated Information of this use case.\nThe User enters one or more search values and confirms that she has finished entering.\nThe System finds all appearance requests that match the provided search criteria values.\nThe System displays the matching appearance requests according to the “Search results display strategy” and the “Sort criteria” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n4a. No matching requests are found:\n4a1. The System alerts the User that no matching appearance requests are found.\n4a2. The User either chooses to UC-5: Request a SuperFrog appearance for TCU events or chooses to terminate the use case or chooses to return to step 2 of the normal flow.\n5a. The User chooses to select a different set of properties to display the matching appearance requests:\n5a1. The System displays the current “Search results display strategy”.\n5a2. The User enters a customized “Search results display strategy”, confirms that she has finished entering, and returns to step 5 of the normal flow.\n5b. The User chooses to re-sort the search results:\n5b1. The User re-sorts the search result according to the “Sort criteria” defined in the Associated Information of this use case and returns to step 5 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Find Appearance Requests",
+        "summary": "The User wants to find appearance requests which match specific criteria, so that she can decide what to do next.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "preconditions": [
+          "The User is logged into the System."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "Indicates to find appearance requests."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Asks the User to enter search values according to the “Search criteria”."
+              },
+              {
+                "index": 3,
+                "actor": "User",
+                "description": "Enters one or more search values and confirms that she has finished entering."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Finds all appearance requests that match the provided search criteria values."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Displays the matching appearance requests according to the “Search results display strategy” and the “Sort criteria”."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the User that no matching appearance requests are found."
+              },
+              {
+                "index": 2,
+                "actor": "User",
+                "description": "Either chooses to UC-5: Request a SuperFrog appearance for TCU events or chooses to terminate the use case or chooses to return to step 2 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Displays the current “Search results display strategy”."
+              },
+              {
+                "index": 2,
+                "actor": "User",
+                "description": "Enters a customized “Search results display strategy”, confirms that she has finished entering, and returns to step 5 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5b",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "Re-sorts the search result according to the “Sort criteria” and returns to step 5 of the normal flow."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:52:38.803Z",
+  "testCases": [
+    {
+      "id": "UC13",
+      "domain": "Accounts/User Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 5,
+        "notes": "Handles input validation and duplicate detection."
+      },
+      "inputs": {
+        "vague": "The Spirit Director enters the new SuperFrog Student's details, the system validates them, and then creates the new account, confirming its successful creation.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nSuperFrog Student\nTrigger:\nThe Spirit Director indicates to create a new account for a new SuperFrog Student.\nDescription:\nWhen a new SuperFrog Student joins the Spirit Team, the Spirit Director wants to create a new account for this SuperFrog Student, so that the new SuperFrog Student can have access to the System and also be properly managed.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The new account is stored in the System.\nMain Success Scenario:\nThe Spirit Director indicates to create a new account for a new SuperFrog Student.\nThe System asks the Spirit Director to enter details of this new account according to the “Details” defined in the Associated Information of this use case.\nThe Spirit Director enters the details of this new account and confirms that she has finished.\nThe System validates the Spirit Director’s inputs according to the “Details” defined in the Associated Information of this use case.\nThe System validates that the creation of the new account will not duplicate any existing account according to the “Duplication detection rules” defined in the Associated Information of this use case.\nThe System displays the details of the new account and asks the Spirit Director to confirm the creation.\nThe Spirit Director either confirms the creation (continues the normal flow) or chooses to modify the details (returns to step 3).\nThe System creates this account with a temporary password for first login and informs the Spirit Director that this account has been created.\nThe System notifies relevant actors about the creation of an account according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n4a. Input validation rule violation:\n4a1. The System alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error.\n4a2. The Spirit Director corrects the mistake and returns to step 4 of the normal flow.\n5a. The System finds possible duplicates from the existing accounts:\n5a1. The System alerts the Spirit Director that the account she is trying to create already exists in the System.\n5a2. The System displays possible duplicates to the Spirit Director.\n5a3. The Spirit Director either chooses to correct the mistake and return to step 4 of the normal flow or chooses to terminate the use case.\n\n"
+      },
+      "groundTruth": {
+        "name": "Create New SuperFrog Student Account",
+        "summary": "The Spirit Director creates a new account for a new SuperFrog Student to grant system access and manage them within the system.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "SuperFrog Student",
+          "System"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Indicates to create a new account for a new SuperFrog Student."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Asks the Spirit Director to enter details for the new account."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Enters the details of the new account and confirms completion."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates the Spirit Director’s inputs."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Validates that the creation of the new account will not duplicate any existing account."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Displays the details of the new account and asks the Spirit Director to confirm the creation."
+              },
+              {
+                "index": 7,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Confirms the creation."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Creates the account with a temporary password and informs the Spirit Director that the account has been created."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Notifies relevant actors about the account creation."
+              }
+            ]
+          },
+          {
+            "id": "EXT_10a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Corrects the mistake and returns to step 4 of the main flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_11a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Alerts the Spirit Director that the account she is trying to create already exists in the System."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Displays possible duplicates to the Spirit Director."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Chooses to correct the mistake and returns to step 4 of the main flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Chooses to terminate the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_13a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Chooses to modify the details and returns to step 3 of the main flow."
+              }
+            ]
+          }
+        ],
+        "loops": [
+          {
+            "flowRef": "MAIN",
+            "startIndex": 6,
+            "endIndex": 7,
+            "condition": "The Spirit Director chooses to modify details"
+          }
+        ]
+      }
+    }
+  ]
+}

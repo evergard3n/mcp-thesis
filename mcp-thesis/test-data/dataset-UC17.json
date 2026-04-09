@@ -1,0 +1,260 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:54:13.545Z",
+  "testCases": [
+    {
+      "id": "UC17",
+      "domain": "Spirit Team Management",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 9,
+        "notes": "Handles creation, editing, and deletion of both one-time and recurring events. Includes validation against pending appearance requests and specific handling for recurring event modifications/deletions."
+      },
+      "inputs": {
+        "vague": "The Spirit Director accesses the Spirit Team calendar to create, edit, or delete events. After making their selection and providing the necessary information, the system updates the calendar. The Spirit Director is then informed that the calendar has been successfully updated.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\n\n\nTrigger:\nThe Spirit Director indicates to manage the Spirit Team calendar.\nDescription:\nThe Spirit Director wants to create events on the Spirit Team calendar to block out time for dead (study) days, finals week, or major holidays, so that the Customers cannot request SuperFrog appearances during those times. (See BR-5)\n\nThe Spirit Director also wants to edit and delete events from the calendar, so that the calendar reflects the most accurate information.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The calendar is updated.\nMain Success Scenario:\nThe Spirit Director indicates to manage the Spirit Team calendar.\nThe System displays the calendar and asks the Spirit Director to select the operations.\nCreate a new event (step 4-8)\nEdit an existing event (step 9-13)\nDelete an existing event (step 14-17)\nThe Spirit Director selects one out of the three operations.\n\nBased on the Spirit Director’s selection in step 3, the flow goes through either step 4-8, or step 9-13, or step 14-17.\nThe Spirit Director selects to create either a one-time event (e.g., finals week) or a recurring event. For each event, the Spirit Director provides:\nEvent title (e.g., finals week)\nStart date and time and end date and time\nRecurrence start date and end date if applicable\nThe System validates the creation.\nThe System displays the details of the new event and asks the Spirit Director to confirm the creation.\nThe Spirit Director either confirms the creation (continues the normal flow) or chooses to modify the details (return to step 4).\nThe System saves the creation and informs the Spirit Director that the calendar has been updated.\nThe Spirit Director selects to edit an existing event. For each event, the Spirit Director can modify:\nEvent title\nStart date and time and end date and time\nRecurrence start date and end date if applicable\nThe System validates the change.\nThe System displays the details of the updated event and asks the Spirit Director to confirm the change.\nThe Spirit Director either confirms the change (continues the normal flow) or chooses to modify the details (return to step 9).\nThe System saves the change and informs the Spirit Director that the calendar has been updated.\nThe Spirit Director selects to delete an existing event.\nThe System asks the Spirit Director to confirm the deletion.\nThe Spirit Director confirms the deletion.\nThe System deletes the event and informs the Spirit Director that the calendar has been updated.\n\nThe Spirit Director either indicates that she is done (goes to step 19) or continues to manage the calendar (returns to step 2). \nUse case ends.\nExtensions:\n5a. There are pending appearance requests within the specified start and end date and time:\n5a1. The System alerts the Spirit Director that she must first reject those “Pending” requests before creating a new event.\n5a2. Use case terminates.\n9a. The event being edited is a recurring one:\n9a1. The Spirit Director indicates the change applies to either just one event or every event in this series.\n9a2. Returns to step 10 of the normal flow.\n10a. There are pending appearance requests within the modified start and end date and time:\n10a1. The System informs the Spirit Director that she must first reject those “Pending” requests before making such changes.\n10a2. Use case terminates.\n14a. The event being deleted is a recurring one:\n14a1. The Spirit Director indicates the deletion applies to either just one event or every event in this series.\n14a2. Returns to step 15 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Manage Spirit Team Calendar",
+        "summary": "The Spirit Director manages the Spirit Team calendar by creating, editing, and deleting events to block out specific times.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to manage the Spirit Team calendar."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays the calendar and prompts the Spirit Director to select an operation (Create, Edit, or Delete event)."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Selects one of the three operations: Create a new event, Edit an existing event, or Delete an existing event."
+              },
+              {
+                "index": 4,
+                "actor": "Spirit Director",
+                "description": "Selects to create either a one-time event or a recurring event, and provides event details including title, start date/time, end date/time, and recurrence dates if applicable."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Validates the event creation."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Displays the details of the new event and asks for confirmation."
+              },
+              {
+                "index": 7,
+                "actor": "Spirit Director",
+                "description": "Confirms the event creation."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Saves the event creation and informs the Spirit Director that the calendar has been updated."
+              },
+              {
+                "index": 9,
+                "actor": "Spirit Director",
+                "description": "Selects to edit an existing event and modifies event details including title, start date/time, end date/time, and recurrence dates if applicable."
+              },
+              {
+                "index": 10,
+                "actor": "System",
+                "description": "Validates the change."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Displays the details of the updated event and asks for confirmation."
+              },
+              {
+                "index": 12,
+                "actor": "Spirit Director",
+                "description": "Confirms the change."
+              },
+              {
+                "index": 13,
+                "actor": "System",
+                "description": "Saves the change and informs the Spirit Director that the calendar has been updated."
+              },
+              {
+                "index": 14,
+                "actor": "Spirit Director",
+                "description": "Selects to delete an existing event."
+              },
+              {
+                "index": 15,
+                "actor": "System",
+                "description": "Asks the Spirit Director to confirm the deletion."
+              },
+              {
+                "index": 16,
+                "actor": "Spirit Director",
+                "description": "Confirms the deletion."
+              },
+              {
+                "index": 17,
+                "actor": "System",
+                "description": "Deletes the event and informs the Spirit Director that the calendar has been updated."
+              },
+              {
+                "index": 18,
+                "actor": "Spirit Director",
+                "description": "Indicates that management is complete."
+              }
+            ]
+          },
+          {
+            "id": "ALT_20a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to modify the event details."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to allow the Spirit Director to provide event details (step 4)."
+              }
+            ]
+          },
+          {
+            "id": "ALT_21a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to modify the event details instead of confirming."
+              }
+            ]
+          },
+          {
+            "id": "ALT_22a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to modify the event details instead of confirming."
+              }
+            ]
+          },
+          {
+            "id": "ALT_19a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to continue managing the calendar."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to prompt the Spirit Director to select an operation (step 2)."
+              }
+            ]
+          },
+          {
+            "id": "EXT_23a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "condition": "There are pending appearance requests within the specified start and end date and time for event creation",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that pending appearance requests exist within the specified time, which must be rejected first."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_24a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "condition": "The event being edited is a recurring one",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates that the change applies to either just one event or every event in the recurring series."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to allow the Spirit Director to specify modification details (step 10)."
+              }
+            ]
+          },
+          {
+            "id": "EXT_25a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "condition": "There are pending appearance requests within the modified start and end date and time for event editing",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Informs the Spirit Director that pending appearance requests exist within the modified time, which must be rejected first."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_26a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "condition": "The event being deleted is a recurring one",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates that the deletion applies to either just one event or every event in the recurring series."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to allow the Spirit Director to confirm deletion (step 15)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

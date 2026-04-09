@@ -1,0 +1,133 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:51:20.825Z",
+  "testCases": [
+    {
+      "id": "UC10",
+      "domain": "Spirit Director/Student Assignment",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 4,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The Spirit Director changes an assigned SuperFrog Student for a request, and the system updates the schedules and confirms the change.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nSuperFrog Student\nTrigger:\nThe Spirit Director indicates to change the assigned SuperFrog Student of an “Assigned” request.\nDescription:\nThe Spirit Director wants to assign a different SuperFrog Student to an “Assigned” request so that every SuperFrog Student gets a chance to contribute to the TCU Spirit Team.\nPreconditions:\nPRE-1. There exists at least one “Assigned” request in the System.\nPRE-2. The Spirit Director is logged into the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The request is updated in the System with a status of “Assigned”.\nPOST-2. The request is removed from the originally assigned SuperFrog Student’s personal schedule.\nPOST-3. The request is added to the newly assigned SuperFrog Student’s personal schedule.\nMain Success Scenario:\nThe Spirit Director indicates to change the assigned SuperFrog Student of an “Assigned” request.\nThe Spirit Director views the details of this appearance request through UC-7: View an appearance request.\nThe System asks the Spirit Director to assign this appearance to a SuperFrog Student by prompting a list of available SuperFrog Students.\nThe Spirit Director assigns this appearance to a different SuperFrog Student in the list and confirms that she has finished assigning.\nThe System removes this request from the originally assigned SuperFrog Student’s personal schedule.\nThe System adds this request to the newly assigned SuperFrog Student’s personal schedule.\nThe System informs the Spirit Director that the change has been made.\nThe System notifies relevant actors about the assignment according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n3a. There are no other SuperFrog Students available for this request:\n3a1. The System alerts the Spirit Director that there are no other available SuperFrog Students that can be assigned to this request.\n3a2. Use case terminates.\n\n"
+      },
+      "groundTruth": {
+        "name": "Change Assigned SuperFrog Student",
+        "summary": "The Spirit Director wants to assign a different SuperFrog Student to an “Assigned” request so that every SuperFrog Student gets a chance to contribute to the TCU Spirit Team.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "SuperFrog Student",
+          "System"
+        ],
+        "preconditions": [
+          "There exists at least one “Assigned” request in the System.",
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to change the assigned SuperFrog Student of an “Assigned” request."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of this appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Prompts a list of available SuperFrog Students to assign the appearance."
+              },
+              {
+                "index": 4,
+                "actor": "Spirit Director",
+                "description": "Assigns this appearance to a different SuperFrog Student in the list and confirms assignment completion."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Removes this request from the originally assigned SuperFrog Student’s personal schedule."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Adds this request to the newly assigned SuperFrog Student’s personal schedule."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Informs the Spirit Director that the change has been made."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Notifies relevant actors about the assignment."
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that there are no other available SuperFrog Students that can be assigned to this request."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_10a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that there are no other available SuperFrog Students that can be assigned to this request."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_11a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that there are no other available SuperFrog Students that can be assigned to this request."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

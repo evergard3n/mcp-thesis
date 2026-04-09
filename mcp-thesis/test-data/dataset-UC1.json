@@ -1,0 +1,141 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T02:57:29.795Z",
+  "testCases": [
+    {
+      "id": "UC1",
+      "domain": "Event Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 4,
+        "notes": "Input validation and duplicate detection are handled through explicit extension scenarios."
+      },
+      "inputs": {
+        "vague": "A customer can request a SuperFrog appearance by selecting an available date and time, providing event details, and confirming the request. The system then saves the request and notifies relevant parties.",
+        "detailed": "Primary Actor:\nCustomer\nSecondary Actors:\nSpirit Director\nTrigger:\nThe Customer indicates to request a SuperFrog appearance for an event.\nDescription:\nThe Customer wants to request a SuperFrog appearance for an event, so that a SuperFrog can show up and entertain the guests during the event.\nPreconditions:\n\n\nPostconditions:\nPOST-1. The new request is stored in the System with a status of “Pending”.\nMain Success Scenario:\nThe Customer indicates to request a SuperFrog appearance for an event.\nThe System displays available date and time. (see BR-1)\nThe Customer views and selects an available date and time.\nThe System asks the Customer to enter details of this new request according to the “Details” defined in the Associated Information of this use case.\nThe Customer enters details of this new request and confirms that she has finished.\nThe System validates the Customer’s inputs according to the “Details” defined in the Associated Information of this use case.\nThe System validates that the creation of the new request will not duplicate any existing request according to the “Duplication detection rules” defined in the Associated Information of this use case.\nThe System displays the details of the new request, terms & conditions of a TCU Spirit Appearance, total cost (SuperFrog cost and mileage cost, see BR-7 and BR-8), and asks the Customer to confirm the creation.\nThe Customer either agrees to the terms & conditions of a TCU Spirit Appearance and confirms the creation (continues the normal flow) or chooses to modify the details (returns to step 5).\nThe System saves the new request, marks it as “Pending”, and informs the Customer that this request has been created.\nThe System notifies relevant actors about the creation of the request according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n6a. Input validation rule violation:\n6a1. The System alerts the Customer that an input validation rule is violated and displays the nature and location of the error.\n6a2. The Customer corrects the mistake and returns to step 6 of the normal flow.\n7a. The System finds possible duplicates from the existing requests:\n7a1. The System alerts the Customer that the request she is trying to create already exists in the System.\n7a2. <Specify how to handle it here>.\n7a3. The Customer either chooses to correct the mistake and return to step 6 of the normal flow or chooses to terminate the use case.\n\n"
+      },
+      "groundTruth": {
+        "name": "Request SuperFrog Appearance",
+        "summary": "The Customer requests a SuperFrog appearance for an event, providing details and confirming the request.",
+        "mainActor": "Customer",
+        "actors": [
+          "Customer",
+          "System",
+          "Spirit Director"
+        ],
+        "postconditions": [
+          "The new request is stored in the System with a status of “Pending”."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Indicates to request a SuperFrog appearance for an event."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays available date and time."
+              },
+              {
+                "index": 3,
+                "actor": "Customer",
+                "description": "Views and selects an available date and time."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Asks the Customer to enter details of this new request."
+              },
+              {
+                "index": 5,
+                "actor": "Customer",
+                "description": "Enters details of the new request and confirms she has finished."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Validates the Customer’s inputs."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Validates that the creation of the new request will not duplicate any existing request."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Displays the details of the new request, terms & conditions of a TCU Spirit Appearance, total cost, and asks the Customer to confirm the creation."
+              },
+              {
+                "index": 9,
+                "actor": "Customer",
+                "description": "Agrees to the terms & conditions and confirms the creation."
+              },
+              {
+                "index": 10,
+                "actor": "System",
+                "description": "Saves the new request, marks it as “Pending”, and informs the Customer that this request has been created."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Notifies relevant actors about the creation of the request."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Customer that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Customer",
+                "description": "Corrects the mistake and returns to step 6 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Customer that the request she is trying to create already exists in the System."
+              },
+              {
+                "index": 2,
+                "actor": "Customer",
+                "description": "Chooses to correct the mistake and returns to step 6 of the normal flow, or chooses to terminate the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_14a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Chooses to modify the details and returns to step 5."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

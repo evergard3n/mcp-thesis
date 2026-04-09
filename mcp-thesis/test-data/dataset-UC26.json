@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T04:01:48.866Z",
+  "testCases": [
+    {
+      "id": "UC26",
+      "domain": "Student Appearances",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Validation for event end time."
+      },
+      "inputs": {
+        "vague": "The Spirit Director selects an appearance request that needs to be marked incomplete, and then the system updates its status to \"Incomplete\" and notifies everyone involved.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nCustomer, SuperFrog Student\nTrigger:\nThe Spirit Director indicates to mark an appearance request as “Incomplete”.\nDescription:\nThe Spirit Director wants to mark an appearance request as “Incomplete”, so that she can record the fact that a SuperFrog Student failed to complete an assigned appearance.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. There exists at least one “Assigned” or “Completed” appearance request.\nPostconditions:\nPOST-1. The request is updated in the System with a status of “Incomplete”.\nMain Success Scenario:\nThe Spirit Director indicates to mark either an “Assigned” or “Completed” appearance request as “Incomplete”.\nThe Spirit Director views the details of this appearance request through UC-7: View an appearance request.\nThe Spirit Director chooses to mark this appearance as “Incomplete”.\nThe System validates that the end time of the event is earlier than the current System time.\nThe System updates the status of the request to “Incomplete”.\nThe System notifies relevant actors about the completion according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n4a. The event has not finished yet:\n4a1. The System alerts the Spirit Director that it is too early to confirm the appearance is incomplete and then terminates the use case.\n\n"
+      },
+      "groundTruth": {
+        "name": "Mark an appearance request as “Incomplete”",
+        "summary": "The Spirit Director wants to mark an appearance request as “Incomplete” to record that a SuperFrog Student failed to complete an assigned appearance.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "Customer",
+          "SuperFrog Student",
+          "System"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "There exists at least one “Assigned” or “Completed” appearance request."
+        ],
+        "postconditions": [
+          "The request is updated in the System with a status of “Incomplete”."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to mark either an “Assigned” or “Completed” appearance request as “Incomplete”."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Views the details of this appearance request through UC-7: View an appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "target": "System",
+                "description": "Chooses to mark this appearance as “Incomplete”."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates that the end time of the event is earlier than the current System time."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Updates the status of the request to “Incomplete”."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Notifies relevant actors about the completion according to the “Notification” defined in the Associated Information of this use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_4a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "condition": "The event has not finished yet.",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "target": "Spirit Director",
+                "description": "Alerts the Spirit Director that it is too early to confirm the appearance is incomplete."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

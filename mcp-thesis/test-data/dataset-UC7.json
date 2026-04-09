@@ -1,0 +1,64 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:50:09.327Z",
+  "testCases": [
+    {
+      "id": "UC7",
+      "domain": "Student Engagement",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The user wants to see the specifics of an appearance request. They will find the request they need from a list, and then the system will show them all the relevant details.",
+        "detailed": "Primary Actor:\nUser (Spirit Director or SuperFrog Student)\nSecondary Actors:\n\n\nTrigger:\nThe User indicates to view the details of an appearance request.\nDescription:\nThe User wants to view the details of an appearance request, so that she can get a better idea of this appearance request.\nPreconditions:\nPRE-1. The User is logged into the System.\nPostconditions:\nPOST-1. The details of the specified appearance request are displayed to the User.\nMain Success Scenario:\nThe User indicates to view the details of an appearance request.\nThe User finds a list of appearance requests through UC-06: Find appearance requests.\nThe User views the list and chooses to view the details of one specific appearance request.\nThe System retrieves and displays details of this appearance request according to the “Details” defined in the Associated Information and the “Security/access concerns” defined in the Business Rules of this use case.\nThe User views the details of this appearance request.\nUse case ends.\n\n"
+      },
+      "groundTruth": {
+        "name": "View Appearance Request Details",
+        "summary": "The User wants to view the details of an appearance request to get a better understanding of it.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "preconditions": [
+          "The User is logged into the System."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "Indicates to view the details of an appearance request."
+              },
+              {
+                "index": 2,
+                "actor": "User",
+                "description": "Finds a list of appearance requests through UC-06: Find appearance requests."
+              },
+              {
+                "index": 3,
+                "actor": "User",
+                "description": "Views the list and chooses to view the details of one specific appearance request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Retrieves and displays details of this appearance request according to the specified criteria."
+              },
+              {
+                "index": 5,
+                "actor": "User",
+                "description": "Views the details of this appearance request."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
