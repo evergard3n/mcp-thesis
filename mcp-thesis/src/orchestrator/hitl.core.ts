@@ -81,6 +81,9 @@ export type AnswerProvider = (
 
 export interface HITLCallbacks {
   onPhaseChange?: (phase: string, message: string, iteration: number) => void;
+  onBaseline?: (baseline: GenUseCase) => void;
+  onProbeComplete?: (probe: HITLProbeResult) => void;
+  onIterationComplete?: (result: IterationOutput, iteration: number) => void;
   onQuestions?: (questions: OpenEndedQuestion[], iteration: number) => void;
   shouldCancel?: () => boolean;
 }
@@ -218,6 +221,7 @@ export async function runIteration(
     input.confirmedBlueprintIds.length,
     input.baselineFlowIds,
     globalGaps,
+    input.useCase,
   );
 
   if (questions.length === 0) {
@@ -270,11 +274,15 @@ export async function runHITLLoop(
   answerProvider: AnswerProvider,
   callbacks?: HITLCallbacks,
 ): Promise<HITLLoopResult> {
+  callbacks?.onPhaseChange?.("GENERATING_BASELINE", "Generating baseline use case", 0);
+
   const baseline = await generateBaseline(
     loopInput.vague,
     loopInput.geminiFunctions,
   );
   const baselineFlowIds = new Set(baseline.flows.map((f) => f.id));
+
+  callbacks?.onBaseline?.(baseline);
 
   callbacks?.onPhaseChange?.("PROBING_BLUEPRINTS", "Probing blueprints", 0);
 
@@ -289,6 +297,11 @@ export async function runHITLLoop(
   const dropped = activations
     .filter((a) => !confirmedSet.has(a.blueprintId))
     .map((a) => a.blueprintId);
+
+  callbacks?.onProbeComplete?.({
+    confirmedBlueprintIds: confirmed,
+    droppedBlueprintIds: dropped,
+  });
 
   let currentUseCase = baseline;
   const conversationHistory: InteractionMemory[] = [];
@@ -330,11 +343,14 @@ export async function runHITLLoop(
     lastGapAnalysis = result.gapAnalysis;
     lastUncertaintyAnalysis = result.uncertaintyAnalysis;
 
-    if (result.stop === "confidence") break;
-
-    if (result.stop === "no_questions") break;
+    if (result.stop === "confidence" || result.stop === "no_questions") {
+      callbacks?.onIterationComplete?.(result, iterationIndex + 1);
+      break;
+    }
 
     callbacks?.onQuestions?.(result.questions, iterationIndex + 1);
+
+    callbacks?.onPhaseChange?.("REFINING", "Refining use case with answers", iterationIndex + 1);
 
     currentUseCase = result.updatedUseCase;
     conversationHistory.push(...result.memories);
@@ -349,6 +365,8 @@ export async function runHITLLoop(
       questions: result.questions,
       answers: result.answers,
     });
+
+    callbacks?.onIterationComplete?.(result, iterationIndex + 1);
   }
 
   return {

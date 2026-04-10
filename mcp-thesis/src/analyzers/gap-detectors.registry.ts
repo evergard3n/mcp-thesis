@@ -224,12 +224,47 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
         }
 
         if (qualityScore < 0.5) {
+          // Build a context-rich question: include the flow kind, the parent step
+          // that this branch forks from, and the branch's own first step so the
+          // expert understands exactly which point in the narrative we are asking about.
+          const flow = src.flow;
+          const flowKindLabel =
+            flow.kind === "ALTERNATIVE" ? "alternative flow" : "exception flow";
+
+          // Find the parent step this branch diverges from
+          let anchorContext = "";
+          if (flow.parentFlow && flow.fromStepIndex !== undefined) {
+            const parentFlow = ctx.useCase.flows.find(
+              (f) => f.id === flow.parentFlow,
+            );
+            const anchorStep = parentFlow?.steps.find(
+              (s) => s.index === flow.fromStepIndex,
+            );
+            if (anchorStep) {
+              anchorContext = ` It branches off from ${flow.parentFlow} step ${flow.fromStepIndex} where ${anchorStep.actor} performs: "${anchorStep.description}".`;
+            } else if (flow.fromStepIndex !== undefined) {
+              anchorContext = ` It branches off from ${flow.parentFlow ?? "the main flow"} step ${flow.fromStepIndex}.`;
+            }
+          }
+
+          // Describe the first step of this branch so the expert has immediate content
+          let firstStepContext = "";
+          const firstStep = flow.steps.find((s) => s.index === 1) ?? flow.steps[0];
+          if (firstStep) {
+            firstStepContext = ` The first step of this branch is: "${firstStep.actor} ${firstStep.description}".`;
+          }
+
+          const suggestedQuestion =
+            `In the "${src.flowId}" ${flowKindLabel}:${anchorContext}${firstStepContext} ` +
+            `What is the exact condition or event that triggers this branch? ` +
+            `Describe the specific state, actor action, or system signal that causes execution to leave the normal flow and enter "${src.flowId}".`;
+
           gaps.push({
             type: "uncertain_conditions",
             severity: qualityScore < 0.3 ? "high" : "medium",
             description: `Flow "${src.flowId}" has weak condition: ${issues.join(", ")}`,
             relatedFlow: src.flowId,
-            suggestedQuestion: `What specific trigger causes flow "${src.flowId}" to occur?`,
+            suggestedQuestion,
           });
         }
       }

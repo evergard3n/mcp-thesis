@@ -754,6 +754,8 @@ function getAnswerGuidanceForGapType(gapType: string): string {
       return "Describe: (1) what happens when no assignee is available, (2) whether the case is queued/on hold, (3) who is notified, (4) how and when assignment resumes.";
     case "missing_policy_outcome_branching":
       return "Describe: (1) how severe vs minor policy violations are distinguished, (2) which path declines/terminates, (3) which path allows negotiation or adjusted payout, (4) who decides each outcome.";
+    case "uncertain_conditions":
+      return "Describe: (1) the exact state, actor action, or system signal that causes execution to leave the normal flow and enter this branch, (2) which step in the normal flow this branch forks from and why, (3) what the actor or system does as the first step of the branch, (4) whether the branch re-joins the normal flow or terminates.";
     default:
       return "Describe the scenario: what triggers it, what steps are taken, and how it resolves or integrates with the main flow.";
   }
@@ -1180,6 +1182,7 @@ async function buildMissingConditionQuestions(
   maxQuestions: number,
   currentCount: number,
   baselineFlowIds?: Set<string>,
+  useCase?: GenUseCase,
 ): Promise<{ questions: OpenEndedQuestion[]; asked: string[] }> {
   const questions: OpenEndedQuestion[] = [];
   const asked: string[] = [...askedInThisBatch];
@@ -1191,7 +1194,41 @@ async function buildMissingConditionQuestions(
   for (const flowUnc of missingConditions) {
     if (currentCount + questions.length >= maxQuestions) break;
 
-    const questionText = `What triggers ${flowUnc.flowId}? Describe the condition that causes this flow to execute.`;
+    let questionText: string;
+    let whyAsking: string;
+
+    if (useCase) {
+      const flow = useCase.flows.find((f) => f.id === flowUnc.flowId);
+      const flowKindLabel =
+        flowUnc.flowKind === "ALTERNATIVE" ? "alternative flow" : "exception flow";
+
+      let anchorContext = "";
+      if (flow?.parentFlow && flow.fromStepIndex !== undefined) {
+        const parentFlow = useCase.flows.find((f) => f.id === flow.parentFlow);
+        const anchorStep = parentFlow?.steps.find((s) => s.index === flow.fromStepIndex);
+        if (anchorStep) {
+          anchorContext = ` It branches off from ${flow.parentFlow} step ${flow.fromStepIndex} where ${anchorStep.actor} performs: "${anchorStep.description}".`;
+        } else if (flow.fromStepIndex !== undefined) {
+          anchorContext = ` It branches off from ${flow.parentFlow ?? "the normal flow"} step ${flow.fromStepIndex}.`;
+        }
+      }
+
+      let firstStepContext = "";
+      const firstStep = flow?.steps.find((s) => s.index === 1) ?? flow?.steps[0];
+      if (firstStep) {
+        firstStepContext = ` The first step of this branch is: "${firstStep.actor} ${firstStep.description}".`;
+      }
+
+      questionText =
+        `The "${flowUnc.flowId}" ${flowKindLabel} has no documented trigger condition.${anchorContext}${firstStepContext} ` +
+        `What is the exact condition or event that causes execution to enter "${flowUnc.flowId}"? ` +
+        `Describe the specific state, actor action, or system signal that initiates this branch.`;
+      whyAsking = `Flow "${flowUnc.flowId}" is missing a condition entirely. Without a trigger, this branch cannot be reliably implemented or tested.`;
+    } else {
+      questionText = `What triggers ${flowUnc.flowId}? Describe the condition that causes this flow to execute.`;
+      whyAsking = `Flow ${flowUnc.flowId} is missing a condition entirely.`;
+    }
+
     const allPrevious = [...previousQuestions, ...asked];
 
     if (await isQuestionDuplicate(questionText, allPrevious)) continue;
@@ -1201,11 +1238,10 @@ async function buildMissingConditionQuestions(
       question: questionText,
       context: {
         patternType: "uncertain_conditions",
-        whyAsking: `Flow ${flowUnc.flowId} is missing a condition entirely.`,
+        whyAsking,
         flowId: flowUnc.flowId,
       },
-      answerGuidance:
-        "Describe the condition that causes this flow to execute, including what triggers it and when it occurs.",
+      answerGuidance: getAnswerGuidanceForGapType("uncertain_conditions"),
     });
     asked.push(questionText);
   }
@@ -1329,6 +1365,7 @@ export async function generateAdaptiveQuestions(
   confirmedBlueprintCount: number = 1,
   baselineFlowIds?: Set<string>,
   globalGaps: Array<{ type: string; severity: string; description: string; suggestedQuestion?: string }> = [],
+  useCase?: GenUseCase,
 ): Promise<OpenEndedQuestion[]> {
   const allQuestions: OpenEndedQuestion[] = [];
   let askedInThisBatch: string[] = [];
@@ -1374,6 +1411,7 @@ export async function generateAdaptiveQuestions(
     maxQuestions,
     allQuestions.length,
     baselineFlowIds,
+    useCase,
   );
   for (const q of condQs) {
     if (allQuestions.length >= maxQuestions) break;

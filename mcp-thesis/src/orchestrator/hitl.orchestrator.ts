@@ -1,10 +1,7 @@
-import { clearGapCentroidsCache } from "../analyzers/gap.analyzer.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
-import { generateFlatUseCase } from "../services/usecase.service.js";
 import {
   expertAnswerOpenEndedQuestions,
   normalizeHumanAnswers,
-  type OpenEndedAnswer,
 } from "../validators/llm.validator.js";
 import {
   AnswerInput,
@@ -13,7 +10,13 @@ import {
   HITLState,
   HITLStatus,
 } from "./hitl.state.js";
-import { probeBlueprints, runIteration } from "./hitl.core.js";
+import {
+  runHITLLoop,
+  type AnswerProvider,
+  type HITLLoopResult,
+  type IterationOutput,
+  type HITLProbeResult,
+} from "./hitl.core.js";
 
 type EventEmitter = (event: HITLEvent) => void;
 
@@ -163,144 +166,106 @@ export class HITLOrchestrator {
       throw new Error("Missing vague input");
     }
 
-    clearGapCentroidsCache();
+    const detailed = this.state.detailed ?? vague;
+    const domain = this.state.domain ?? "General";
 
-    this.transition("GENERATING_BASELINE", "Generating baseline use case");
-    const baseline = await generateFlatUseCase({
-      description: vague,
-      geminiFunctions: this.geminiFunctions,
-    });
-    const baselineFlowIds = new Set<string>(baseline.flows.map((flow) => flow.id));
-
-    this.state = {
-      ...this.state,
-      currentUseCase: baseline,
-      baselineUseCase: baseline,
-      updatedAt: new Date().toISOString(),
-    };
-
-    while (!this.cancelled) {
-      if (
-        this.state.iterationCount >= this.state.maxIterations ||
-        this.state.totalQuestionsAsked >= this.state.maxQuestions
-      ) {
-        break;
-      }
-
-      const currentUseCase = this.state.currentUseCase;
-      const currentVague = this.state.vague;
-      if (!currentUseCase || !currentVague) {
-        throw new Error("State corruption: missing use case or vague input");
-      }
-
-      if (!this.state.blueprintsProbed) {
-        const { activations, confirmed } = await probeBlueprints(
-          currentUseCase,
-          this.state.detailed ?? currentVague,
-          this.state.domain ?? "General",
-          this.geminiFunctions,
-        );
-
-        const confirmedSet = new Set(confirmed);
-        const dropped = activations
-          .filter((activation) => !confirmedSet.has(activation.blueprintId))
-          .map((activation) => activation.blueprintId);
-
-        this.state = {
-          ...this.state,
-          confirmedBlueprintIds: confirmed,
-          droppedBlueprintIds: dropped,
-          blueprintsProbed: true,
-          updatedAt: new Date().toISOString(),
-        };
-      }
-
-      this.transition("ANALYZING_GAPS", "Validating and analyzing gaps");
-
-      const answerProvider = async (
-        questions: Parameters<typeof expertAnswerOpenEndedQuestions>[0],
-        _iteration: number,
-      ): Promise<OpenEndedAnswer[]> => {
-        this.state = {
-          ...this.state,
-          lastQuestions: questions,
-          updatedAt: new Date().toISOString(),
-        };
-
-        this.emit({
-          type: "questions",
-          iteration: this.state.iterationCount + 1,
-          questions,
-          state: this.state,
-        });
-
-        if (this.state.mode === "automated") {
-          const detailedContext = this.state.detailed ?? currentVague;
-          return expertAnswerOpenEndedQuestions(
-            questions,
-            detailedContext,
-            this.state.domain ?? "General",
-            this.geminiFunctions,
-          );
-        }
-
-        this.transition("WAITING_FOR_ANSWERS", "Waiting for human answers");
-        const providedAnswers = await this.waitForAnswers();
-        if (this.cancelled) return [];
-        return normalizeHumanAnswers(providedAnswers);
+    const answerProvider: AnswerProvider = async (questions, _iteration) => {
+      this.state = {
+        ...this.state,
+        lastQuestions: questions,
+        updatedAt: new Date().toISOString(),
       };
 
-      const result = await runIteration({
-        useCase: currentUseCase,
-        vague: currentVague,
-        conversationHistory: this.state.conversationHistory,
-        allQuestions: this.state.allQuestions,
-        confirmedBlueprintIds: this.state.confirmedBlueprintIds,
-        baselineFlowIds,
-        iterationIndex: this.state.iterationCount,
-        totalQuestionsAsked: this.state.totalQuestionsAsked,
-        maxQuestions: this.state.maxQuestions,
-        perIterationCap: 6,
-        geminiFunctions: this.geminiFunctions,
-        answerProvider,
+      this.emit({
+        type: "questions",
+        iteration: this.state.iterationCount + 1,
+        questions,
+        state: this.state,
       });
 
-      this.state = {
-        ...this.state,
-        lastGapAnalysis: result.gapAnalysis,
-        lastUncertaintyAnalysis: result.uncertaintyAnalysis,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (result.stop === "confidence" || result.stop === "no_questions") {
-        break;
+      if (this.state.mode === "automated") {
+        return expertAnswerOpenEndedQuestions(
+          questions,
+          detailed,
+          domain,
+          this.geminiFunctions,
+        );
       }
 
-      this.transition("REFINING", "Refining use case with answers");
+      this.transition("WAITING_FOR_ANSWERS", "Waiting for human answers");
+      const providedAnswers = await this.waitForAnswers();
+      if (this.cancelled) return [];
+      return normalizeHumanAnswers(providedAnswers);
+    };
 
-      this.state = {
-        ...this.state,
-        currentUseCase: result.updatedUseCase,
-        conversationHistory: [
-          ...this.state.conversationHistory,
-          ...result.memories,
-        ],
-        allQuestions: [
-          ...this.state.allQuestions,
-          ...result.questions.map((q) => q.question),
-        ],
-        iterationCount: this.state.iterationCount + 1,
-        totalQuestionsAsked:
-          this.state.totalQuestionsAsked + result.answers.length,
-        lastGapAnalysis: null,
-        lastUncertaintyAnalysis: null,
-        lastQuestions: null,
-        updatedAt: new Date().toISOString(),
-      };
-    }
+    const loopResult: HITLLoopResult = await runHITLLoop(
+      { vague, detailed, domain, geminiFunctions: this.geminiFunctions },
+      {
+        maxIterations: this.state.maxIterations,
+        maxQuestions: this.state.maxQuestions,
+        perIterationCap: 6,
+      },
+      answerProvider,
+      {
+        onPhaseChange: (phase, message) => {
+          this.transition(phase as HITLStatus, message);
+        },
+        onBaseline: (baseline) => {
+          this.state = {
+            ...this.state,
+            currentUseCase: baseline,
+            baselineUseCase: baseline,
+            updatedAt: new Date().toISOString(),
+          };
+        },
+        onProbeComplete: (probe: HITLProbeResult) => {
+          this.state = {
+            ...this.state,
+            confirmedBlueprintIds: probe.confirmedBlueprintIds,
+            droppedBlueprintIds: probe.droppedBlueprintIds,
+            blueprintsProbed: true,
+            updatedAt: new Date().toISOString(),
+          };
+        },
+        onIterationComplete: (result: IterationOutput, iteration: number) => {
+          if (result.stop) {
+            this.state = {
+              ...this.state,
+              lastGapAnalysis: result.gapAnalysis,
+              lastUncertaintyAnalysis: result.uncertaintyAnalysis,
+              updatedAt: new Date().toISOString(),
+            };
+          } else {
+            this.state = {
+              ...this.state,
+              currentUseCase: result.updatedUseCase,
+              conversationHistory: [
+                ...this.state.conversationHistory,
+                ...result.memories,
+              ],
+              allQuestions: [
+                ...this.state.allQuestions,
+                ...result.questions.map((q) => q.question),
+              ],
+              iterationCount: iteration,
+              totalQuestionsAsked:
+                this.state.totalQuestionsAsked + result.answers.length,
+              lastGapAnalysis: null,
+              lastUncertaintyAnalysis: null,
+              lastQuestions: null,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+        },
+        shouldCancel: () => this.cancelled,
+      },
+    );
 
     this.state = {
       ...this.state,
+      currentUseCase: loopResult.useCase,
+      lastGapAnalysis: loopResult.lastGapAnalysis,
+      lastUncertaintyAnalysis: loopResult.lastUncertaintyAnalysis,
       status: this.cancelled ? "IDLE" : "DONE",
       completedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
