@@ -21,6 +21,11 @@ export type GapType =
   | "missing_eligibility_failure_handling"
   | "missing_assignment_unavailability_handling"
   | "missing_policy_outcome_branching"
+  | "missing_cancellation_handling"
+  | "missing_alternative_path"
+  | "missing_authorization_denial"
+  | "missing_timeout_retry"
+  | "missing_notification_failure"
   | `blueprint_${string}`;
 
 export interface GapCategory {

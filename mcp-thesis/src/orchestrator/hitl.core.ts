@@ -22,6 +22,8 @@ import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service
 import {
   generateFlatUseCase,
   refineWithHybridAnswers,
+  extractFlowsFromOpenEndedAnswers,
+  normalizeFlowIds,
 } from "../services/usecase.service.js";
 import { validateUseCaseWithFeedback } from "../validators/flat.validator.js";
 import {
@@ -30,11 +32,102 @@ import {
   type OpenEndedAnswer,
   type OpenEndedQuestion,
 } from "../validators/llm.validator.js";
-import { type GenUseCase } from "../interfaces/usecase.interface.new.js";
+import { type GenUseCase, type GenFlow } from "../interfaces/usecase.interface.new.js";
+import semanticService from "../services/semantic.service.js";
 
 // ---------------------------------------------------------------------------
-// Shared types
+// Answer classification + flow dedup helpers
 // ---------------------------------------------------------------------------
+
+const BROAD_SCOPE_STEP_THRESHOLD = 4;
+
+function classifyAnswerScope(
+  answer: OpenEndedAnswer,
+  questions: OpenEndedQuestion[],
+): "broad" | "step-specific" {
+  const question = questions.find((q) => q.id === answer.questionId);
+  if (!question) return "broad";
+
+  if (answer.questionId.startsWith("global-gap-")) return "broad";
+
+  const consolidatedMatch = answer.questionId.match(
+    /consolidated-[a-z_]+-steps-([0-9-]+)/,
+  );
+  if (consolidatedMatch) {
+    const stepCount = consolidatedMatch[1].split("-").filter((s) => s !== "").length;
+    if (stepCount > BROAD_SCOPE_STEP_THRESHOLD) return "broad";
+    return "step-specific";
+  }
+
+  if (question.context.steps && question.context.steps.length > BROAD_SCOPE_STEP_THRESHOLD) {
+    return "broad";
+  }
+
+  if (question.context.step) return "step-specific";
+
+  return "broad";
+}
+
+function flowToText(flow: GenFlow): string {
+  const parts: string[] = [flow.kind];
+  if (flow.condition) parts.push(flow.condition);
+  parts.push(...flow.steps.map((s) => `${s.actor}: ${s.description}`));
+  return parts.join(" | ");
+}
+
+async function deduplicateFlows(
+  existingFlows: GenFlow[],
+  newFlows: GenFlow[],
+  threshold = 0.82,
+): Promise<GenFlow[]> {
+  if (newFlows.length === 0) return [];
+  if (existingFlows.length === 0 && newFlows.length === 1) return newFlows;
+
+  const existingTexts = existingFlows.map(flowToText);
+  const newTexts = newFlows.map(flowToText);
+  const allTexts = [...existingTexts, ...newTexts];
+  const embeddings = await semanticService.embedBatch(allTexts);
+
+  const existingEmbeddings = embeddings.slice(0, existingTexts.length);
+  const newEmbeddings = embeddings.slice(existingTexts.length);
+
+  const unique: GenFlow[] = [];
+  const uniqueEmbeddings: number[][] = [];
+
+  for (let i = 0; i < newFlows.length; i++) {
+    let isDuplicate = false;
+
+    for (let j = 0; j < existingEmbeddings.length; j++) {
+      const sim = await semanticService.cosineSimilarity(
+        newEmbeddings[i],
+        existingEmbeddings[j],
+      );
+      if (sim >= threshold) {
+        isDuplicate = true;
+        break;
+      }
+    }
+
+    if (!isDuplicate) {
+      for (let k = 0; k < uniqueEmbeddings.length; k++) {
+        const sim = await semanticService.cosineSimilarity(
+          newEmbeddings[i],
+          uniqueEmbeddings[k],
+        );
+        if (sim >= threshold) {
+          isDuplicate = true;
+          break;
+        }
+      }
+    }
+
+    if (!isDuplicate) {
+      unique.push(newFlows[i]);
+      uniqueEmbeddings.push(newEmbeddings[i]);
+    }
+  }
+  return unique;
+}
 
 export interface HITLLoopConfig {
   maxIterations: number;
@@ -54,6 +147,10 @@ export interface HITLIterationResult {
   questionsAsked: number;
   overallConfidence: number;
   highPriorityCount: number;
+  flowCountBefore: number;
+  flowCountAfter: number;
+  newFlowsAdded: number;
+  hadFlowProducingQuestions: boolean;
   questions: OpenEndedQuestion[];
   answers: OpenEndedAnswer[];
 }
@@ -159,6 +256,7 @@ export interface IterationInput {
   perIterationCap: number;
   geminiFunctions: GeminiOpenRouterFunctions;
   answerProvider: AnswerProvider;
+  previousIterations: HITLIterationResult[];
 }
 
 export interface IterationOutput {
@@ -190,10 +288,27 @@ export async function runIteration(
     gapAnalysis,
   );
 
-  if (
+  const flowCount = input.useCase.flows.length;
+  const recentIterations = input.previousIterations.slice(-2);
+  // Only count as a stall if the iteration asked flow-producing questions
+  // (gap-based, blueprint, consolidated) but still produced 0 new flows.
+  // Iterations that only asked actor-role or clarification questions are
+  // not meaningful stalls — they never had flow-discovery potential.
+  const consecutiveStalls = recentIterations.filter(
+    (it) => it.newFlowsAdded <= 0 && it.hadFlowProducingQuestions,
+  ).length;
+  const isStalled = recentIterations.length >= 2 && consecutiveStalls >= 2;
+
+  const shouldStopByConfidence =
     uncertaintyAnalysis.overallConfidence > 0.85 &&
-    uncertaintyAnalysis.highPriorityCount === 0
-  ) {
+    uncertaintyAnalysis.highPriorityCount === 0;
+
+  const shouldStopByStall =
+    isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
+
+  const hasMinimumFlows = flowCount >= 3;
+
+  if ((shouldStopByConfidence && hasMinimumFlows) || shouldStopByStall) {
     return {
       updatedUseCase: input.useCase,
       questions: [],
@@ -244,14 +359,46 @@ export async function runIteration(
     input.iterationIndex + 1,
   );
 
-  const updatedUseCase = await refineWithHybridAnswers(
-    input.vague,
-    input.useCase,
-    [],
-    [],
-    answers,
-    input.geminiFunctions,
-  );
+  const broadAnswers: OpenEndedAnswer[] = [];
+  const stepSpecificAnswers: OpenEndedAnswer[] = [];
+  for (const answer of answers) {
+    if (classifyAnswerScope(answer, questions) === "broad") {
+      broadAnswers.push(answer);
+    } else {
+      stepSpecificAnswers.push(answer);
+    }
+  }
+
+  let updatedUseCase = input.useCase;
+
+  if (broadAnswers.length > 0) {
+    updatedUseCase = await refineWithHybridAnswers(
+      input.vague,
+      updatedUseCase,
+      [],
+      [],
+      broadAnswers,
+      input.geminiFunctions,
+    );
+  }
+
+  if (stepSpecificAnswers.length > 0) {
+    const extractedFlows = await extractFlowsFromOpenEndedAnswers(
+      stepSpecificAnswers,
+      updatedUseCase,
+      input.geminiFunctions,
+    );
+    const uniqueFlows = await deduplicateFlows(
+      updatedUseCase.flows,
+      extractedFlows,
+    );
+    if (uniqueFlows.length > 0) {
+      updatedUseCase = normalizeFlowIds({
+        ...updatedUseCase,
+        flows: [...updatedUseCase.flows, ...uniqueFlows],
+      });
+    }
+  }
 
   return {
     updatedUseCase,
@@ -310,6 +457,7 @@ export async function runHITLLoop(
   let totalQuestionsAsked = 0;
   let lastGapAnalysis: GapAnalysis | null = null;
   let lastUncertaintyAnalysis: UncertaintyAnalysis | null = null;
+  let dynamicPerIterationCap = config.perIterationCap;
 
   for (
     let iterationIndex = 0;
@@ -325,6 +473,8 @@ export async function runHITLLoop(
       iterationIndex + 1,
     );
 
+    const flowCountBefore = currentUseCase.flows.length;
+
     const result = await runIteration({
       useCase: currentUseCase,
       vague: loopInput.vague,
@@ -335,9 +485,10 @@ export async function runHITLLoop(
       iterationIndex,
       totalQuestionsAsked,
       maxQuestions: config.maxQuestions,
-      perIterationCap: config.perIterationCap,
+      perIterationCap: dynamicPerIterationCap,
       geminiFunctions: loopInput.geminiFunctions,
       answerProvider,
+      previousIterations: iterations,
     });
 
     lastGapAnalysis = result.gapAnalysis;
@@ -353,6 +504,14 @@ export async function runHITLLoop(
     callbacks?.onPhaseChange?.("REFINING", "Refining use case with answers", iterationIndex + 1);
 
     currentUseCase = result.updatedUseCase;
+    const flowCountAfter = currentUseCase.flows.length;
+    const newFlowsAdded = flowCountAfter - flowCountBefore;
+
+    const NON_FLOW_PRODUCING_PATTERNS = new Set(["incomplete_actors", "clarification"]);
+    const hadFlowProducingQuestions = result.questions.some(
+      (q) => !NON_FLOW_PRODUCING_PATTERNS.has(q.context.patternType ?? ""),
+    );
+
     conversationHistory.push(...result.memories);
     allQuestions.push(...result.questions.map((q) => q.question));
     totalQuestionsAsked += result.answers.length;
@@ -362,9 +521,19 @@ export async function runHITLLoop(
       questionsAsked: result.questions.length,
       overallConfidence: result.uncertaintyAnalysis.overallConfidence,
       highPriorityCount: result.uncertaintyAnalysis.highPriorityCount,
+      flowCountBefore,
+      flowCountAfter,
+      newFlowsAdded,
+      hadFlowProducingQuestions,
       questions: result.questions,
       answers: result.answers,
     });
+
+    if (newFlowsAdded > 0) {
+      dynamicPerIterationCap = Math.min(config.perIterationCap + 2, 10);
+    } else {
+      dynamicPerIterationCap = Math.max(config.perIterationCap - 2, 3);
+    }
 
     callbacks?.onIterationComplete?.(result, iterationIndex + 1);
   }

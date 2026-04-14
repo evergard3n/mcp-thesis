@@ -108,6 +108,55 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       ),
   }),
 
+  centroidGap({
+    gapType: "missing_cancellation_handling",
+    categoryName: "user_cancellation",
+    phase: "post-probe",
+    severity: "high",
+    question: (step) =>
+      `${stepContext(step)}. What happens if the actor decides to cancel or abort at this point? Is data saved, discarded, or rolled back? Who is notified?`,
+  }),
+
+  centroidGap({
+    gapType: "missing_alternative_path",
+    categoryName: "alternative_path",
+    phase: "post-probe",
+    severity: "medium",
+    question: (step) =>
+      `${stepContext(step)}. Is there an alternative way to accomplish this step (e.g., a different method, channel, or workflow)? Under what condition would the actor choose the alternative?`,
+  }),
+
+  centroidGap({
+    gapType: "missing_authorization_denial",
+    categoryName: "authorization_denial",
+    phase: "post-probe",
+    severity: "high",
+    question: (step) =>
+      `${stepContext(step)}. What happens if the required authorization or approval is denied at this point? Is there an escalation path, appeal, or does the process terminate?`,
+  }),
+
+  centroidGap({
+    gapType: "missing_timeout_retry",
+    categoryName: "timeout_retry",
+    phase: "post-probe",
+    severity: "high",
+    question: (step) =>
+      `${stepContext(step)}. What happens if this step times out or the expected response is not received? Is there an automatic retry, a fallback, or does the process escalate?`,
+  }),
+
+  centroidGap({
+    gapType: "missing_notification_failure",
+    categoryName: "notification_failure",
+    phase: "post-probe",
+    severity: "medium",
+    question: (step) =>
+      `${stepContext(step)}. What happens if this notification or message fails to deliver? Is it retried, is the recipient alerted through another channel, or is the failure silently logged?`,
+    preFilter: (step) =>
+      /\b(notif|email|alert|send|message|inform|dispatch|broadcast|confirm|report|sms|deliver)\b/i.test(
+        step.description,
+      ),
+  }),
+
   // =========================================================================
   // STRUCTURAL  (incomplete_actors is always valid; flow-presence checks are
   // only meaningful after at least one probing round)
@@ -130,41 +179,21 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     },
   }),
 
-  structuralGap({
-    gapType: "missing_exception_flows",
-    phase: "post-probe",
-    detect: ({ validationFeedback }): Gap[] => {
-      if (validationFeedback.hasExceptionFlow) return [];
-      return [
-        {
-          type: "missing_exception_flows",
-          severity: "high",
-          description:
-            "No exception flows found. Real-world scenarios need error handling.",
-          suggestedQuestion:
-            "What could go wrong during this process? What error conditions should be handled?",
-        },
-      ];
-    },
-  }),
-
-  structuralGap({
-    gapType: "missing_alternative_flows",
-    phase: "post-probe",
-    detect: ({ validationFeedback }): Gap[] => {
-      if (validationFeedback.hasAlternativeFlow) return [];
-      return [
-        {
-          type: "missing_alternative_flows",
-          severity: "medium",
-          description:
-            "No alternative flows found. Consider different valid paths to the same goal.",
-          suggestedQuestion:
-            "Are there different ways to accomplish this goal? What optional paths exist?",
-        },
-      ];
-    },
-  }),
+  // DISABLED: Global exception/alternative questions hand the LLM the full
+  // step list, making it trivially enumerate one branch per step. This bypasses
+  // the targeted gap-detection → question pipeline and inflates discovery
+  // without proving the HITL architecture's value. Kept for reference.
+  //
+  // structuralGap({
+  //   gapType: "missing_exception_flows",
+  //   phase: "post-probe",
+  //   detect: ({ validationFeedback, useCase }): Gap[] => { ... },
+  // }),
+  // structuralGap({
+  //   gapType: "missing_alternative_flows",
+  //   phase: "post-probe",
+  //   detect: ({ validationFeedback, useCase }): Gap[] => { ... },
+  // }),
 
   // =========================================================================
   // CONDITION QUALITY  (always: on a vague baseline there are no conditions,

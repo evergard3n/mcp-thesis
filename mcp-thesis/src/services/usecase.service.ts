@@ -363,8 +363,8 @@ Your job is to produce a COMPLETE, updated use case that:
 4. UPDATES "summary", "preconditions", and "postconditions" only if the answers provide new information.
 
 Do NOT fabricate scenarios not mentioned in any answer.
-If an answer is tagged confidence:high or confidence:medium and describes a scenario, generate a new ALTERNATIVE or EXCEPTION flow for it. Do not skip a flow just because the answer is not written in structured format — extract the scenario and model it as a flow.
-Do NOT generate a new flow from an answer tagged confidence:low or from an answer whose text contains phrases like "not explicitly mentioned", "not explicitly stated", "drawing from general knowledge", or "hypothetically" — these are speculative and must not produce flows.
+If an answer describes a concrete scenario (specific trigger condition + actor actions + outcome), generate a new ALTERNATIVE or EXCEPTION flow for it regardless of confidence tag. Do not skip a flow just because the answer is not written in structured format — extract the scenario and model it as a flow.
+Only skip an answer if it is purely hypothetical with no concrete steps (e.g. "there could potentially be issues" with no specifics).
 Do NOT hallucinate actors, steps, or conditions.
 </task>
 
@@ -396,7 +396,7 @@ ${FLOW_ID_CONVENTION}
 // normalizeFlowIds (non-exported helper)
 // ---------------------------------------------------------------------------
 
-function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
+export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
   const normalized = JSON.parse(JSON.stringify(useCase)) as GenUseCase;
   const flows = normalized.flows;
   const mainFlow = flows.find((f) => f.kind === "MAIN");

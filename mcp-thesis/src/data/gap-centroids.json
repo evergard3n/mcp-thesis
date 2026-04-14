@@ -128,6 +128,90 @@
       "threshold": 0.5,
       "gapType": "uncertain_conditions",
       "requiresExceptionCheck": false
+    },
+    "user_cancellation": {
+      "keywords": [
+        "cancels the request",
+        "aborts the operation",
+        "decides not to proceed",
+        "withdraws the submission",
+        "stops the process midway",
+        "changes their mind and exits",
+        "abandons the current action",
+        "terminates the session early",
+        "opts out of the process"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_cancellation_handling",
+      "requiresExceptionCheck": true
+    },
+    "alternative_path": {
+      "keywords": [
+        "chooses a different option",
+        "selects an alternative method",
+        "picks another approach",
+        "uses a different channel",
+        "opts for the alternative procedure",
+        "switches to a manual process",
+        "takes an alternate route",
+        "decides on a different workflow"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_alternative_path",
+      "requiresExceptionCheck": true
+    },
+    "authorization_denial": {
+      "keywords": [
+        "denies the request",
+        "rejects the authorization",
+        "refuses permission",
+        "declines the approval",
+        "access is denied",
+        "authorization fails",
+        "permission is not granted",
+        "approval is withheld",
+        "request is turned down"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_authorization_denial",
+      "requiresExceptionCheck": true
+    },
+    "timeout_retry": {
+      "keywords": [
+        "waits for a response",
+        "times out waiting",
+        "retries the operation",
+        "attempts the action again",
+        "the request expires",
+        "no response is received within the deadline",
+        "the system does not respond in time",
+        "reattempts after failure",
+        "polls for a result"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_timeout_retry",
+      "requiresExceptionCheck": true
+    },
+    "notification_failure": {
+      "keywords": [
+        "notifies the user",
+        "sends a confirmation message",
+        "emails the result",
+        "alerts the stakeholder",
+        "delivers a notification",
+        "broadcasts an update",
+        "sends a status report",
+        "informs the relevant party",
+        "dispatches a message"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_notification_failure",
+      "requiresExceptionCheck": true
     }
   }
 }
