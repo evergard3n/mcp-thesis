@@ -1,43 +1,41 @@
-import { useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useEffect } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 
-import { useCreateSession } from "~/modules/sessions.module";
+import { AppSidebar } from "~/components/AppSidebar";
 import { SessionView } from "~/components/SessionView";
 
 export default function ChatRoute() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const createSession = useCreateSession();
-  const hasCreatedRef = useRef(false);
+  const [searchParams] = useSearchParams();
 
-  /**
-   * Create a session exactly once on mount when no sessionId is in the URL.
-   * Intentionally empty dep array — useMutation returns a new object on every
-   * state change, so including it would re-fire the mutation on each render.
-   */
+  const initialVague = searchParams.get("vague") ?? undefined;
+  const initialDomain = searchParams.get("domain") ?? undefined;
+  const initialMaxIterations = searchParams.get("maxIterations")
+    ? Number(searchParams.get("maxIterations"))
+    : undefined;
+  const initialMaxQuestions = searchParams.get("maxQuestions")
+    ? Number(searchParams.get("maxQuestions"))
+    : undefined;
+
   useEffect(() => {
-    if (sessionId || hasCreatedRef.current) return;
-    hasCreatedRef.current = true;
-    createSession.mutate(undefined, {
-      onSuccess: (data) => navigate(`/chat/${data.sessionId}`, { replace: true }),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!sessionId) {
+      navigate("/");
+    }
+  }, [sessionId, navigate]);
 
-  if (!sessionId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        {createSession.isError ? (
-          <p className="text-sm text-red-600">
-            Failed to create session. Is the backend running at{" "}
-            <code>localhost:3006</code>?
-          </p>
-        ) : (
-          <p className="text-sm text-gray-500">Creating session…</p>
-        )}
-      </div>
-    );
-  }
+  if (!sessionId) return null;
 
-  return <SessionView sessionId={sessionId} />;
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      <AppSidebar sessionId={sessionId} />
+      <SessionView
+        sessionId={sessionId}
+        initialVague={initialVague}
+        initialDomain={initialDomain}
+        initialMaxIterations={initialMaxIterations}
+        initialMaxQuestions={initialMaxQuestions}
+      />
+    </div>
+  );
 }

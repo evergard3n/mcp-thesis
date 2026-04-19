@@ -20,6 +20,7 @@ export const useCreateSession = () =>
   useMutation({
     mutationFn: async () => {
       const response = await sessionService.createSession();
+      console.log("response", response);
       return response.data;
     },
   });

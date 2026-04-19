@@ -2,30 +2,39 @@ import type { GenFlow, GenUseCase } from "~/interfaces/hitl.interface";
 
 interface UseCaseDisplayProps {
   useCase: GenUseCase;
+  badge?: string;
 }
 
-export function UseCaseDisplay({ useCase }: UseCaseDisplayProps) {
+export function UseCaseDisplay({ useCase, badge = "Refined Use Case" }: UseCaseDisplayProps) {
   const mainFlow = useCase.flows.find((f) => f.id === "MAIN");
   const otherFlows = useCase.flows.filter((f) => f.id !== "MAIN");
 
   return (
-    <div className="flex flex-col gap-4 rounded border p-4">
+    <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6">
       <div>
-        <span className="mb-1 inline-block rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-          Refined Use Case
+        <span className="mb-2 inline-block rounded-md bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
+          {badge}
         </span>
-        <h2 className="text-base font-semibold text-gray-900">{useCase.name}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-gray-600">{useCase.summary}</p>
+        <h2
+          className="text-xl text-foreground"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {useCase.name}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{useCase.summary}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-          Main actor: {useCase.mainActor}
+        <span className="rounded-md border border-border bg-muted/50 px-2.5 py-1 text-xs text-foreground">
+          {useCase.mainActor}
         </span>
         {useCase.actors
           .filter((a) => a !== useCase.mainActor)
           .map((a) => (
-            <span key={a} className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+            <span
+              key={a}
+              className="rounded-md border border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground"
+            >
               {a}
             </span>
           ))}
@@ -35,7 +44,7 @@ export function UseCaseDisplay({ useCase }: UseCaseDisplayProps) {
 
       {otherFlows.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {otherFlows.length} Alternative / Exception Flow
             {otherFlows.length !== 1 ? "s" : ""}
           </p>
@@ -61,20 +70,23 @@ function FlowSteps({ flow, label, variant }: FlowStepsProps) {
     return (
       <div>
         {label && (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {label}
           </p>
         )}
-        <ol className="flex flex-col gap-2">
+        <ol className="flex flex-col gap-2.5">
           {flow.steps.map((step) => (
             <li key={step.index} className="flex items-start gap-3 text-sm">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-500">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono text-xs text-primary">
                 {step.index}
               </span>
-              <span className="leading-relaxed text-gray-700">
-                <strong>{step.actor}</strong>
-                {step.target ? ` → ${step.target}: ` : ": "}
-                {step.description}
+              <span className="leading-relaxed text-foreground">
+                <strong className="font-medium">{step.actor}</strong>
+                {step.target ? (
+                  <span className="text-muted-foreground"> → {step.target}</span>
+                ) : null}
+                {": "}
+                <span className="text-muted-foreground">{step.description}</span>
               </span>
             </li>
           ))}
@@ -84,17 +96,19 @@ function FlowSteps({ flow, label, variant }: FlowStepsProps) {
   }
 
   return (
-    <div className="rounded border-l-2 border-gray-300 bg-gray-50 px-3 py-2">
+    <div className="rounded-lg border-l-2 border-border bg-muted/20 px-4 py-3">
       <div className="flex items-center gap-2 text-xs">
-        <code className="font-mono font-semibold text-gray-600">{flow.id}</code>
-        {flow.condition && <span className="text-gray-400">· {flow.condition}</span>}
+        <code className="font-mono font-semibold text-foreground">{flow.id}</code>
+        {flow.condition && (
+          <span className="text-muted-foreground">· {flow.condition}</span>
+        )}
       </div>
-      <ol className="mt-2 flex flex-col gap-1">
+      <ol className="mt-2.5 flex flex-col gap-1.5">
         {flow.steps.map((step) => (
-          <li key={step.index} className="flex items-start gap-2 text-xs text-gray-600">
-            <span className="shrink-0 font-mono text-gray-400">{step.index}.</span>
+          <li key={step.index} className="flex items-start gap-2 text-xs text-muted-foreground">
+            <span className="shrink-0 font-mono text-muted-foreground/50">{step.index}.</span>
             <span>
-              <strong>{step.actor}</strong>
+              <strong className="font-medium text-foreground">{step.actor}</strong>
               {step.target ? ` → ${step.target}` : ""}: {step.description}
             </span>
           </li>

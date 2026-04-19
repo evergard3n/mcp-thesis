@@ -4,6 +4,7 @@ import "dotenv/config";
 
 import express from "express";
 import swaggerUi from "swagger-ui-express";
+import cors from "cors";
 import { z } from "zod";
 import { openApiSpec } from "./docs/openapi.js";
 import { OPENROUTER_API_KEY } from "./helpers/env.js";
@@ -122,6 +123,8 @@ const sessions = new SessionManager(OPENROUTER_API_KEY, geminiApiKey);
 const app = express();
 app.use(express.json());
 
+app.use(cors());
+
 app.get("/openapi.json", async (_req, res) => {
   res.status(200).json(openApiSpec);
 });
@@ -134,7 +137,9 @@ app.get("/ping", async (_req, res) => {
 
 app.post("/sessions", async (_req, res) => {
   const session = sessions.createSession();
-  res.status(201).json({ sessionId: session.sessionId, createdAt: session.createdAt });
+  res
+    .status(201)
+    .json({ sessionId: session.sessionId, createdAt: session.createdAt });
 });
 
 app.delete("/sessions/:sessionId", async (req, res) => {
@@ -254,7 +259,10 @@ app.post("/sessions/:sessionId/projects/load-by-name", async (req, res) => {
   }
 
   try {
-    const result = await loadProjectByName(session.projectStore, parsed.data.name);
+    const result = await loadProjectByName(
+      session.projectStore,
+      parsed.data.name,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({
@@ -311,7 +319,10 @@ app.post("/sessions/:sessionId/projects/switch", async (req, res) => {
     return;
   }
   try {
-    const result = await switchToProject(session.projectStore, parsed.data.projectId);
+    const result = await switchToProject(
+      session.projectStore,
+      parsed.data.projectId,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({
@@ -329,7 +340,10 @@ app.post("/sessions/:sessionId/projects/delete", async (req, res) => {
     return;
   }
   try {
-    const result = await deleteProject(session.projectStore, parsed.data.projectId);
+    const result = await deleteProject(
+      session.projectStore,
+      parsed.data.projectId,
+    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({
@@ -374,23 +388,29 @@ app.post("/sessions/:sessionId/testing/embed-dataset", async (req, res) => {
   }
 });
 
-app.post("/sessions/:sessionId/testing/run-hitl-comparison", async (req, res) => {
-  const session = requireSession(req.params.sessionId, res);
-  if (!session) return;
-  const parsed = runHitlComparisonSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  try {
-    const result = await runHITLComparison(session.geminiFunctions, parsed.data);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-});
+app.post(
+  "/sessions/:sessionId/testing/run-hitl-comparison",
+  async (req, res) => {
+    const session = requireSession(req.params.sessionId, res);
+    if (!session) return;
+    const parsed = runHitlComparisonSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      const result = await runHITLComparison(
+        session.geminiFunctions,
+        parsed.data,
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  },
+);
 
 app.post("/sessions/:sessionId/testing/evaluate-results", async (req, res) => {
   const session = requireSession(req.params.sessionId, res);

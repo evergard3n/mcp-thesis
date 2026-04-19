@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
+import { Textarea } from "~/components/ui/textarea";
 import type { OpenEndedQuestion } from "~/interfaces/hitl.interface";
 
 interface Answer {
@@ -20,7 +21,6 @@ export function QuestionForm({ questions, iteration, onSubmit, isLoading }: Ques
     Object.fromEntries(questions.map((q) => [q.id, ""])),
   );
 
-  // Reset answer fields when a new question batch arrives (new iteration)
   useEffect(() => {
     setAnswers(Object.fromEntries(questions.map((q) => [q.id, ""])));
   }, [questions]);
@@ -36,52 +36,58 @@ export function QuestionForm({ questions, iteration, onSubmit, isLoading }: Ques
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-700">
-          Questions — iteration {iteration}
+      <div className="flex items-center gap-2.5">
+        <span className="text-sm font-medium text-foreground">
+          Questions
         </span>
-        <span className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700">
-          {questions.length} to answer
+        <span className="rounded-md bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">
+          iteration {iteration}
+        </span>
+        <span className="ml-auto rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {answeredCount}/{questions.length} answered
         </span>
       </div>
 
       {questions.map((q, i) => (
-        <div key={q.id} className="flex flex-col gap-2 rounded border p-4">
-          <div className="flex items-start gap-2">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs text-gray-500">
+        <div
+          key={q.id}
+          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
+        >
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs text-muted-foreground">
               {i + 1}
             </span>
-            <p className="text-sm leading-relaxed text-gray-800">{q.question}</p>
+            <p className="text-sm leading-relaxed text-foreground">{q.question}</p>
           </div>
 
           {q.context.step && (
-            <span className="self-start rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-500">
-              {q.context.step}
-              {q.context.flowId ? ` · ${q.context.flowId}` : ""}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                {q.context.step}
+                {q.context.flowId ? ` · ${q.context.flowId}` : ""}
+              </span>
+            </div>
           )}
 
-          <p className="text-xs italic text-gray-400">{q.context.whyAsking}</p>
+          {q.context.whyAsking && (
+            <p className="text-xs italic text-muted-foreground/70">{q.context.whyAsking}</p>
+          )}
 
-          <textarea
+          <Textarea
             value={answers[q.id] ?? ""}
             onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-            rows={3}
             placeholder={q.answerGuidance}
             disabled={isLoading}
-            className="rounded border px-3 py-2 text-sm outline-none focus:border-gray-400"
+            className="min-h-[80px]"
           />
         </div>
       ))}
 
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400">
-          {answeredCount}/{questions.length} answered
-        </span>
+      <div className="flex justify-end">
         <button
           type="submit"
           disabled={!allAnswered || isLoading}
-          className="rounded bg-black px-5 py-2 text-sm text-white disabled:opacity-40"
+          className="rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {isLoading ? "Submitting…" : "Submit Answers"}
         </button>
