@@ -942,6 +942,156 @@ export async function probeBlueprintsWithExpert(
 // ---------------------------------------------------------------------------
 
 /**
+ * Phase 0.5: MAIN flow expansion questions — detects when the baseline MAIN flow
+ * is too thin relative to the original description's richness and asks targeted
+ * questions about gaps between consecutive steps.
+ *
+ * This solves the "thin MAIN → no surface area → starvation" problem where
+ * the gap detectors have nothing to work with.
+ */
+async function buildMainExpansionQuestions(
+  useCase: GenUseCase,
+  originalDescription: string,
+  previousQuestions: string[],
+): Promise<{ questions: OpenEndedQuestion[]; asked: string[] }> {
+  const questions: OpenEndedQuestion[] = [];
+  const asked: string[] = [];
+
+  const mainFlow = useCase.flows.find((f) => f.kind === "MAIN");
+  if (!mainFlow) return { questions, asked };
+
+  const mainStepCount = mainFlow.steps.length;
+
+  // Measure description richness: count meaningful sentences
+  const sentences = originalDescription
+    .split(/[.!?]\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 20); // ignore very short fragments
+
+  const descSentenceCount = sentences.length;
+
+  // Heuristic: description has significantly more detail than baseline captured.
+  // If description has ≥10 meaningful sentences but baseline has ≤7 steps,
+  // the MAIN is likely thin. Also trigger if ratio of sentences to steps ≥ 2.
+  const isThin =
+    (descSentenceCount >= 10 && mainStepCount <= 7) ||
+    (descSentenceCount >= 6 && mainStepCount <= 4) ||
+    (descSentenceCount > 0 && descSentenceCount / mainStepCount >= 2.5);
+
+  if (!isThin) return { questions, asked };
+
+  console.log(
+    `[MAIN-EXPANSION] Thin MAIN detected: ${mainStepCount} steps vs ${descSentenceCount} description sentences (ratio=${(descSentenceCount / mainStepCount).toFixed(1)})`,
+  );
+
+  // Find the largest gaps between consecutive steps.
+  // A "gap" is where the description likely contains intermediate actions
+  // that the baseline compressed into a single step or skipped entirely.
+  // We look at step descriptions and identify where large jumps in process occur.
+  const sortedSteps = [...mainFlow.steps].sort((a, b) => a.index - b.index);
+
+  // Build expansion questions for step transitions that seem to skip detail.
+  // Limit to 2-3 questions max to not overwhelm the budget.
+  const MAX_EXPANSION_QUESTIONS = 3;
+
+  // Strategy: Ask about the overall flow expansion — what steps are missing
+  // between the start and end of the process?
+  const firstStep = sortedSteps[0];
+  const lastStep = sortedSteps[sortedSteps.length - 1];
+
+  if (!firstStep || !lastStep) return { questions, asked };
+
+  // Build a summary of current steps for context
+  const currentStepsSummary = sortedSteps
+    .map((s) => `  Step ${s.index}: ${s.actor} — "${s.description}"`)
+    .join("\n");
+
+  // Question 1: Ask about the overall flow — are there missing intermediate steps?
+  const overallQuestion = `The current MAIN flow has ${mainStepCount} steps:\n${currentStepsSummary}\n\nBased on the use case description, are there important intermediate steps missing between these? For example, are there validation steps, confirmation steps, system processing steps, or actor interactions that should appear between the current steps? Describe any missing steps in the order they should occur.`;
+
+  const allPrevious1 = [...previousQuestions, ...asked];
+  if (!(await isQuestionDuplicate(overallQuestion, allPrevious1))) {
+    questions.push({
+      id: "main-expansion-overall",
+      question: overallQuestion,
+      context: {
+        steps: sortedSteps.map((s) => `Step ${s.index}`),
+        patternType: "main_expansion",
+        whyAsking: `The MAIN flow has only ${mainStepCount} steps but the description suggests a richer process with ~${descSentenceCount} distinct actions. Intermediate steps may be missing.`,
+        flowId: "MAIN",
+      },
+      answerGuidance:
+        "List the missing steps in sequence. For each step, state: (1) which actor performs it, (2) what they do, (3) where it fits between existing steps. If no steps are missing, say so explicitly.",
+    });
+    asked.push(overallQuestion);
+  }
+
+  // Question 2-3: Look for the biggest "jumps" between consecutive steps.
+  // A jump is where consecutive step descriptions seem to skip significant process.
+  if (questions.length < MAX_EXPANSION_QUESTIONS && sortedSteps.length >= 3) {
+    // Find pairs of consecutive steps where the semantic gap is largest.
+    // Use a simple heuristic: if actor changes AND the descriptions don't
+    // obviously connect, there's likely a missing step.
+    const gapCandidates: Array<{
+      fromStep: typeof sortedSteps[0];
+      toStep: typeof sortedSteps[0];
+      score: number;
+    }> = [];
+
+    for (let i = 0; i < sortedSteps.length - 1; i++) {
+      const from = sortedSteps[i];
+      const to = sortedSteps[i + 1];
+
+      // Score based on:
+      // - Actor change (suggests intermediate system/user interaction missing)
+      // - Description length difference (one detailed, one vague)
+      // - Presence of "and" in either description (suggests compressed steps)
+      let score = 0;
+      if (from.actor !== to.actor) score += 1;
+      if (from.description.includes(" and ") || to.description.includes(" and ")) score += 2;
+      if (from.description.length < 30 || to.description.length < 30) score += 1;
+
+      gapCandidates.push({ fromStep: from, toStep: to, score });
+    }
+
+    // Sort by score descending, take top candidates
+    gapCandidates.sort((a, b) => b.score - a.score);
+
+    for (const gap of gapCandidates) {
+      if (questions.length >= MAX_EXPANSION_QUESTIONS) break;
+      if (gap.score < 2) break; // only ask about significant gaps
+
+      const gapQuestion = `In the MAIN flow, step ${gap.fromStep.index} is "${gap.fromStep.actor}: ${gap.fromStep.description}" and the next step ${gap.toStep.index} is "${gap.toStep.actor}: ${gap.toStep.description}". Are there any intermediate steps between these two? For instance, does the system perform any validation, display any information, or does the actor need to make any decisions between these actions?`;
+
+      const allPreviousN = [...previousQuestions, ...asked];
+      if (await isQuestionDuplicate(gapQuestion, allPreviousN)) continue;
+
+      questions.push({
+        id: `main-expansion-gap-${gap.fromStep.index}-${gap.toStep.index}`,
+        question: gapQuestion,
+        context: {
+          step: `Step ${gap.fromStep.index}-${gap.toStep.index}`,
+          patternType: "main_expansion",
+          whyAsking: `Steps ${gap.fromStep.index} and ${gap.toStep.index} may have missing intermediate actions between them.`,
+          flowId: "MAIN",
+        },
+        answerGuidance:
+          "Describe any missing steps between these two steps. For each step, state the actor and action. If no steps are missing, say so explicitly.",
+      });
+      asked.push(gapQuestion);
+    }
+  }
+
+  if (questions.length > 0) {
+    console.log(
+      `[MAIN-EXPANSION] Generated ${questions.length} expansion questions`,
+    );
+  }
+
+  return { questions, asked };
+}
+
+/**
  * Phase 0: Coverage seed questions — ask about critical eligibility, assignment, and
  * policy-outcome branches on the first pass before any gaps are known.
  */
@@ -1041,6 +1191,7 @@ async function buildGapExceptionQuestions(
   currentCount: number,
   blueprintOnly: boolean,
   blueprintCap: number,
+  baselineFlowIds?: Set<string>,
 ): Promise<{ questions: OpenEndedQuestion[]; asked: string[]; blueprintEmitted: number }> {
   const questions: OpenEndedQuestion[] = [];
   const asked: string[] = [...askedInThisBatch];
@@ -1071,7 +1222,9 @@ async function buildGapExceptionQuestions(
         {
           label: "centroid-non-main",
           filter: (gapType: string, flowId: string) =>
-            !isBlueprintGap(gapType) && flowId !== "MAIN",
+            !isBlueprintGap(gapType) &&
+            flowId !== "MAIN" &&
+            (!baselineFlowIds || baselineFlowIds.has(flowId)),
         },
       ];
 
@@ -1375,6 +1528,7 @@ export async function generateAdaptiveQuestions(
   baselineFlowIds?: Set<string>,
   globalGaps: Array<{ type: string; severity: string; description: string; suggestedQuestion?: string }> = [],
   useCase?: GenUseCase,
+  originalDescription?: string,
 ): Promise<OpenEndedQuestion[]> {
   const allQuestions: OpenEndedQuestion[] = [];
   let askedInThisBatch: string[] = [];
@@ -1392,6 +1546,21 @@ export async function generateAdaptiveQuestions(
     askedInThisBatch = [...seedAsked];
   }
 
+  // Phase 0.5: MAIN flow expansion (first pass only, when description available)
+  if (!blueprintOnly && previousQuestions.length === 0 && useCase && originalDescription) {
+    const { questions: expansionQs, asked: expansionAsked } =
+      await buildMainExpansionQuestions(
+        useCase,
+        originalDescription,
+        [...previousQuestions, ...askedInThisBatch],
+      );
+    for (const q of expansionQs) {
+      if (allQuestions.length >= maxQuestions) break;
+      allQuestions.push(q);
+    }
+    askedInThisBatch = [...askedInThisBatch, ...expansionAsked];
+  }
+
   // Phase 1: Gap-based exception questions (step-level)
   const BLUEPRINT_CAP = blueprintOnly ? Math.max(confirmedBlueprintCount * 2, 2) : Infinity;
   const { questions: gapQs, asked: gapAsked } = await buildGapExceptionQuestions(
@@ -1402,6 +1571,7 @@ export async function generateAdaptiveQuestions(
     allQuestions.length,
     blueprintOnly,
     BLUEPRINT_CAP,
+    baselineFlowIds,
   );
   for (const q of gapQs) {
     if (allQuestions.length >= maxQuestions) break;

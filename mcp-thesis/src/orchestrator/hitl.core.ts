@@ -49,6 +49,7 @@ function classifyAnswerScope(
   if (!question) return "broad";
 
   if (answer.questionId.startsWith("global-gap-")) return "broad";
+  if (answer.questionId.startsWith("main-expansion-")) return "broad";
 
   const consolidatedMatch = answer.questionId.match(
     /consolidated-[a-z_]+-steps-([0-9-]+)/,
@@ -246,6 +247,7 @@ export async function generateBaseline(
 export interface IterationInput {
   useCase: GenUseCase;
   vague: string;
+  detailed: string;
   conversationHistory: InteractionMemory[];
   allQuestions: string[];
   confirmedBlueprintIds: string[];
@@ -337,6 +339,7 @@ export async function runIteration(
     input.baselineFlowIds,
     globalGaps,
     input.useCase,
+    input.detailed,
   );
 
   if (questions.length === 0) {
@@ -478,6 +481,7 @@ export async function runHITLLoop(
     const result = await runIteration({
       useCase: currentUseCase,
       vague: loopInput.vague,
+      detailed: loopInput.detailed,
       conversationHistory,
       allQuestions,
       confirmedBlueprintIds: confirmed,
