@@ -1,6 +1,7 @@
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import { GeminiOpenRouterFunctions } from "./gemini-openrouter.service.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
+import { parseConsolidatedId } from "../helpers/consolidated-id.js";
 
 // ---------------------------------------------------------------------------
 // Shared prompt fragments
@@ -589,16 +590,11 @@ export async function extractFlowsFromOpenEndedAnswers(
   const questionStepMap = new Map<string, number[]>();
 
   for (const answer of answers) {
-    const consolidatedMatch = answer.questionId.match(
-      /consolidated-[a-z_]+-steps-([0-9-]+)/,
-    );
-    if (!consolidatedMatch) continue;
-    const stepIndexes = consolidatedMatch[1]
-      .split("-")
-      .map((value) => parseInt(value))
-      .filter((value) => !Number.isNaN(value));
-    if (stepIndexes.length > 0) {
-      questionStepMap.set(answer.questionId, stepIndexes);
+    // F3: use shared parser instead of inline regex
+    const parsed = parseConsolidatedId(answer.questionId);
+    if (!parsed) continue;
+    if (parsed.stepIndexes.length > 0) {
+      questionStepMap.set(answer.questionId, parsed.stepIndexes);
     }
   }
 

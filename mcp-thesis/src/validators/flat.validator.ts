@@ -513,8 +513,8 @@ function scoreBranchingDimension(
       // Only consider branches that claim to attach to MAIN
       if (parent === "MAIN" && typeof flow.fromStepIndex === "number") {
         const idx = flow.fromStepIndex;
-        // assume indices are 0-based; adjust if you're using 1-based
-        if (idx >= 0 && idx < mainSteps.length) {
+        // F9: steps are 1-based (1…N), so valid range is [1, mainSteps.length]
+        if (idx >= 1 && idx <= mainSteps.length) {
           anchoredMainIndices.add(idx);
         }
       }
@@ -564,10 +564,11 @@ function scoreAltFlowDimension(flows: GenFlow[]): AltFlowDimensionResult {
   // 2. Have its own ending (last step indicates completion)
   let altFlowResumeCoverage = 0;
   if (altExcFlows.length > 0) {
+    // F10: the previous check `|| flow.steps.length > 0` was tautological (always true
+    // after the length===0 guard). Now require an actual definite ending keyword.
     const validAltFlows = altExcFlows.filter((flow) => {
       if (!flow.steps || flow.steps.length === 0) return false;
-      // Check if it has a clear ending or has steps (indicating it resumes or ends)
-      return hasDefiniteEnding(flow) || flow.steps.length > 0;
+      return hasDefiniteEnding(flow);
     });
     altFlowResumeCoverage = validAltFlows.length / altExcFlows.length;
   }
@@ -671,7 +672,8 @@ function scoreStructuralPenalties(
       const parentFlow = flows.find((f) => f.id === flow.parentFlow);
       if (parentFlow && parentFlow.steps) {
         const parentStepCount = parentFlow.steps.length;
-        if (flow.fromStepIndex < 0 || flow.fromStepIndex >= parentStepCount) {
+        // F9: steps are 1-based (1…N), so valid range is [1, parentStepCount]
+        if (flow.fromStepIndex < 1 || flow.fromStepIndex > parentStepCount) {
           structuralPenalty += 8;
         }
       }
@@ -1069,15 +1071,14 @@ function checkLoopAndIndexValidity(
       const parentFlow = flows.find((f) => f.id === flow.parentFlow);
       if (parentFlow && parentFlow.steps) {
         const parentStepCount = parentFlow.steps.length;
-        if (flow.fromStepIndex < 0 || flow.fromStepIndex >= parentStepCount) {
+        // F9: steps are 1-based (1…N)
+        if (flow.fromStepIndex < 1 || flow.fromStepIndex > parentStepCount) {
           errors.push(
             `CRITICAL: Flow '${flow.id}' has fromStepIndex ${
               flow.fromStepIndex
             }, but parent flow '${
               flow.parentFlow
-            }' only has ${parentStepCount} steps (valid indices: 0-${
-              parentStepCount - 1
-            }).`
+            }' only has ${parentStepCount} steps (valid indices: 1-${parentStepCount}).`
           );
         }
       }

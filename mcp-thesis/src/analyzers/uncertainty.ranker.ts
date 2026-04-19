@@ -177,9 +177,12 @@ function analyzeStepExceptionCoverage(
       f.fromStepIndex === step.index,
   ).length;
 
-  // Steps that need exceptions
+  // Steps that need exceptions.
+  // F5: "processes", "handles", "manages" are flagged as vague by analyzeStepClarity
+  // but were NOT in this regex — they got a free pass (0.8 coverage) despite being
+  // exactly the kind of vague steps most likely to need exception flows.
   const needsException =
-    step.description.toLowerCase().match(/validat|check|verif|submit|enter/i) ||
+    step.description.toLowerCase().match(/validat|check|verif|submit|enter|process|handl|manag/i) ||
     (step.target &&
       step.target.toLowerCase().match(/system|service|api|database/i));
 

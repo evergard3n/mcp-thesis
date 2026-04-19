@@ -4,6 +4,7 @@ import {
   type OpenEndedQuestion,
   type OpenEndedAnswer,
 } from "../validators/llm.validator.js";
+import { parseConsolidatedId } from "./consolidated-id.js";
 
 export async function buildInteractionMemories(
   questions: OpenEndedQuestion[],
@@ -25,13 +26,10 @@ export async function buildInteractionMemories(
     contextsToEmbed.push(contextString);
     questionsToEmbed.push(q.question);
 
-    const consolidatedMatch = q.id.match(/consolidated-([a-z_]+)-steps-([0-9-]+)/);
-    const consolidatedGroupId = consolidatedMatch
-      ? consolidatedMatch[1]
-      : undefined;
-    const consolidatedSteps = consolidatedMatch?.[2]
-      ? consolidatedMatch[2].split("-").map((v) => parseInt(v, 10))
-      : undefined;
+    // F3: use shared parser (previously had divergent capture group positions)
+    const parsedConsolidated = parseConsolidatedId(q.id);
+    const consolidatedGroupId = parsedConsolidated?.groupId;
+    const consolidatedSteps = parsedConsolidated?.stepIndexes;
 
     historyRecords.push({
       stepContext,

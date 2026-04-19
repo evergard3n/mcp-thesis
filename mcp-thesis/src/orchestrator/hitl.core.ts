@@ -14,6 +14,7 @@ import {
   type UncertaintyAnalysis,
 } from "../analyzers/uncertainty.ranker.js";
 import { buildInteractionMemories } from "../helpers/memory.builder.js";
+import { parseConsolidatedId } from "../helpers/consolidated-id.js";
 import {
   classifyUseCaseDomainHybrid,
   resolveBlueprintDomainFilter,
@@ -41,22 +42,42 @@ import semanticService from "../services/semantic.service.js";
 
 const BROAD_SCOPE_STEP_THRESHOLD = 4;
 
+/**
+ * F2: Pattern types that, when asked, do NOT produce new flows.
+ * Kept as a module-level constant so adding a new non-productive pattern
+ * type only requires editing this one place (not searching the loop body).
+ *
+ * - "incomplete_actors": asks about actor roles, not exception/alt flows
+ * - "clarification": asks about step details, not new branches
+ * - "uncertain_conditions": asks about trigger conditions for existing flows,
+ *   not new branches; answered iterations should NOT count as stalls
+ */
+const NON_FLOW_PRODUCING_PATTERN_TYPES = new Set([
+  "incomplete_actors",
+  "clarification",
+  "uncertain_conditions",
+]);
+
 function classifyAnswerScope(
   answer: OpenEndedAnswer,
   questions: OpenEndedQuestion[],
 ): "broad" | "step-specific" {
   const question = questions.find((q) => q.id === answer.questionId);
-  if (!question) return "broad";
+  if (!question) {
+    // F6: log mismatch so it's visible in run output rather than silently triggering a full rebuild
+    console.warn(
+      `[classifyAnswerScope] No question found for ID "${answer.questionId}" — defaulting to "broad". This may cause an unintended full use case rebuild.`,
+    );
+    return "broad";
+  }
 
   if (answer.questionId.startsWith("global-gap-")) return "broad";
   if (answer.questionId.startsWith("main-expansion-")) return "broad";
 
-  const consolidatedMatch = answer.questionId.match(
-    /consolidated-[a-z_]+-steps-([0-9-]+)/,
-  );
-  if (consolidatedMatch) {
-    const stepCount = consolidatedMatch[1].split("-").filter((s) => s !== "").length;
-    if (stepCount > BROAD_SCOPE_STEP_THRESHOLD) return "broad";
+  // F3: use shared parser instead of inline regex
+  const parsed = parseConsolidatedId(answer.questionId);
+  if (parsed) {
+    if (parsed.stepIndexes.length > BROAD_SCOPE_STEP_THRESHOLD) return "broad";
     return "step-specific";
   }
 
@@ -128,6 +149,50 @@ async function deduplicateFlows(
     }
   }
   return unique;
+}
+
+/**
+ * F4: After a broad rebuild, remove delta flows that are not grounded in any
+ * of the broad answers that triggered the rebuild.
+ *
+ * "Grounded" means the flow text has cosine similarity >= threshold to at
+ * least one answer.  This uses the existing semanticService — no new deps.
+ * Threshold 0.45 is intentionally conservative: keeps flows loosely related
+ * to any answer topic, only removes truly unsolicited extrapolations.
+ */
+async function filterUngroundedDeltaFlows(
+  deltaFlows: GenFlow[],
+  broadAnswers: OpenEndedAnswer[],
+  threshold = 0.45,
+): Promise<GenFlow[]> {
+  if (deltaFlows.length === 0 || broadAnswers.length === 0) return deltaFlows;
+
+  const answerTexts = broadAnswers.map((a) => a.answer).filter((t) => t.trim().length > 0);
+  if (answerTexts.length === 0) return deltaFlows;
+
+  const flowTexts = deltaFlows.map(flowToText);
+  const allTexts = [...flowTexts, ...answerTexts];
+  const allEmbeddings = await semanticService.embedBatch(allTexts);
+
+  const flowEmbeddings = allEmbeddings.slice(0, flowTexts.length);
+  const answerEmbeddings = allEmbeddings.slice(flowTexts.length);
+
+  const grounded: GenFlow[] = [];
+  for (let i = 0; i < deltaFlows.length; i++) {
+    let maxSim = 0;
+    for (const answerEmb of answerEmbeddings) {
+      const sim = await semanticService.cosineSimilarity(flowEmbeddings[i], answerEmb);
+      if (sim > maxSim) maxSim = sim;
+    }
+    if (maxSim >= threshold) {
+      grounded.push(deltaFlows[i]);
+    } else {
+      console.log(
+        `[Grounding] Removed ungrounded delta flow "${deltaFlows[i].id}" (max sim to answers: ${maxSim.toFixed(3)} < ${threshold})`,
+      );
+    }
+  }
+  return grounded;
 }
 
 export interface HITLLoopConfig {
@@ -375,6 +440,8 @@ export async function runIteration(
   let updatedUseCase = input.useCase;
 
   if (broadAnswers.length > 0) {
+    const preBroadFlowIds = new Set(updatedUseCase.flows.map((f) => f.id));
+
     updatedUseCase = await refineWithHybridAnswers(
       input.vague,
       updatedUseCase,
@@ -383,6 +450,19 @@ export async function runIteration(
       broadAnswers,
       input.geminiFunctions,
     );
+
+    // F4: remove delta flows not grounded in any broad answer (prevents hallucination accumulation)
+    const deltaFlows = updatedUseCase.flows.filter((f) => !preBroadFlowIds.has(f.id));
+    if (deltaFlows.length > 0) {
+      const groundedDelta = await filterUngroundedDeltaFlows(deltaFlows, broadAnswers);
+      const survivingDeltaIds = new Set(groundedDelta.map((f) => f.id));
+      updatedUseCase = {
+        ...updatedUseCase,
+        flows: updatedUseCase.flows.filter(
+          (f) => preBroadFlowIds.has(f.id) || survivingDeltaIds.has(f.id),
+        ),
+      };
+    }
   }
 
   if (stepSpecificAnswers.length > 0) {
@@ -511,9 +591,9 @@ export async function runHITLLoop(
     const flowCountAfter = currentUseCase.flows.length;
     const newFlowsAdded = flowCountAfter - flowCountBefore;
 
-    const NON_FLOW_PRODUCING_PATTERNS = new Set(["incomplete_actors", "clarification"]);
+    // F2: use module-level constant (includes uncertain_conditions)
     const hadFlowProducingQuestions = result.questions.some(
-      (q) => !NON_FLOW_PRODUCING_PATTERNS.has(q.context.patternType ?? ""),
+      (q) => !NON_FLOW_PRODUCING_PATTERN_TYPES.has(q.context.patternType ?? ""),
     );
 
     conversationHistory.push(...result.memories);
@@ -533,10 +613,11 @@ export async function runHITLLoop(
       answers: result.answers,
     });
 
+    // F7: compound on current dynamic cap, not the static config baseline
     if (newFlowsAdded > 0) {
-      dynamicPerIterationCap = Math.min(config.perIterationCap + 2, 10);
+      dynamicPerIterationCap = Math.min(dynamicPerIterationCap + 2, 10);
     } else {
-      dynamicPerIterationCap = Math.max(config.perIterationCap - 2, 3);
+      dynamicPerIterationCap = Math.max(dynamicPerIterationCap - 2, 3);
     }
 
     callbacks?.onIterationComplete?.(result, iterationIndex + 1);

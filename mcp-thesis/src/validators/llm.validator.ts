@@ -9,6 +9,7 @@ import {
 } from "../analyzers/gap.analyzer.js";
 import { BlueprintActivation } from "../analyzers/blueprint.detector.js";
 import semanticService from "../services/semantic.service.js";
+import { buildConsolidatedId } from "../helpers/consolidated-id.js";
 
 export const COVE_LLM_QUESTIONS: string[] = [
   "Is the use-case name meaningful and unambiguous?",
@@ -962,11 +963,18 @@ async function buildMainExpansionQuestions(
 
   const mainStepCount = mainFlow.steps.length;
 
-  // Measure description richness: count meaningful sentences
-  const sentences = originalDescription
+  // F1: Measure description richness using the larger of prose-sentence count OR
+  // list-item count. The original prose-only split (/[.!?]\s+/) scored 0 for
+  // bullet/numbered descriptions, silently suppressing Phase 0.5.
+  const proseSentences = originalDescription
     .split(/[.!?]\s+/)
     .map((s) => s.trim())
-    .filter((s) => s.length > 20); // ignore very short fragments
+    .filter((s) => s.length > 20);
+  const listItems = originalDescription
+    .split(/\n/)
+    .map((s) => s.replace(/^[\s\-*\d.]+/, "").trim())
+    .filter((s) => s.length > 20);
+  const sentences = proseSentences.length >= listItems.length ? proseSentences : listItems;
 
   const descSentenceCount = sentences.length;
 
@@ -1251,9 +1259,11 @@ async function buildGapExceptionQuestions(
       );
 
       questions.push({
-        id: `consolidated-${consolidatedGroup.groupId}-steps-${consolidatedGroup.steps
-          .map((step) => step.index)
-          .join("-")}`,
+        // F3: use shared builder so all parsers stay in sync
+        id: buildConsolidatedId(
+          consolidatedGroup.groupId,
+          consolidatedGroup.steps.map((step) => step.index),
+        ),
         question: questionText,
         context: {
           step: stepLabels.join(", "),
