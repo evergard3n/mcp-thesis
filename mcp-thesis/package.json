@@ -14,7 +14,8 @@
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepack": "npm run build",
     "watch": "tsc --watch",
-    "dev": "npx -y tsx watch src/index.ts"
+    "dev": "npx -y tsx watch src/index.ts",
+    "test:evaluated-averages": "node test-scripts/calculate-evaluated-averages.js"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
