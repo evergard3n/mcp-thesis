@@ -62,6 +62,7 @@ const metadataExtractionSchema = z.object({
     .describe(
       "Optional notes about the use case (e.g., key characteristics, special patterns)",
     ),
+  detailedInput: z.string().describe("The detailed description of the use case, representing the domain knowledge needed to create this use case, but not the text-based ground truth use case itself"),
 });
 
 export async function prepareTestData(
@@ -84,6 +85,7 @@ Follow these rules:
    - medium: 3-5 extension scenarios
    - complex: 6+ extension scenarios
 4. Add any relevant notes about special characteristics (e.g., "asynchronous validation", "nested exceptions", "temporal patterns").
+5. Extract the detailed description that contains the domain knowledge needed to create this use case, excluding any structured flow information. It should represent the narrative and context of the use case, but NOT the step-by-step flow details.
 </instruction>
 
 <useCaseText>
@@ -138,7 +140,7 @@ Generate a vague summary:`;
         },
         inputs: {
           vague: vagueSummary,
-          detailed: textBasedGroundTruth,
+          detailed: extractedMetadata.detailedInput,
         },
         groundTruth: validatedTruth,
       },
