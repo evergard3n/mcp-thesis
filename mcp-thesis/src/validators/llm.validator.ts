@@ -1557,7 +1557,7 @@ export async function generateAdaptiveQuestions(
   }
 
   // Phase 0.5: MAIN flow expansion (first pass only, when description available)
-  if (!blueprintOnly && previousQuestions.length === 0 && useCase && originalDescription) {
+  if (previousQuestions.length === 0 && useCase && originalDescription) {
     const { questions: expansionQs, asked: expansionAsked } =
       await buildMainExpansionQuestions(
         useCase,

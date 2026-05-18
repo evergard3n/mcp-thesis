@@ -85,7 +85,8 @@ Follow these rules:
    - medium: 3-5 extension scenarios
    - complex: 6+ extension scenarios
 4. Add any relevant notes about special characteristics (e.g., "asynchronous validation", "nested exceptions", "temporal patterns").
-5. Extract the detailed description that contains the domain knowledge needed to create this use case, excluding any structured flow information. It should represent the narrative and context of the use case, but NOT the step-by-step flow details.
+5. Extract the detailed description that contains the domain knowledge needed to create this use case, excluding any structured flow information. It should represent the narrative and context of the use case, containing ALL flows (main flows + alternative flows + exception flows) descriptions, but NOT the step-by-step flow details.
+DO NOT include specific step ids, flow labels, or structured flow information in the detailed description. Focus on capturing the overall narrative and context that encompasses all scenarios.
 </instruction>
 
 <useCaseText>

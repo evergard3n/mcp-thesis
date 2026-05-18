@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:59:41.929Z",
+  "testCases": [
+    {
+      "id": "dung-19",
+      "domain": "Community Project Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A graduate student initiates a request for the system to validate the OCL/UML model of their community project. The system then retrieves and analyzes the project's model, returning the validation results.",
+        "detailed": "Ca sử dụng này cho phép nghiên cứu sinh yêu cầu hệ thống tiến hành xác thực mô hình OCL/UML của một dự án cộng đồng. Việc xác thực giúp phát hiện các lỗi về cấu trúc, quan hệ, ràng buộc OCL, hoặc tính nhất quán tổng thể của mô hình.\n\nKhi người dùng muốn kiểm tra tính hợp lệ của mô hình trong dự án, hệ thống truy xuất mô hình hiện tại của dự án, phân tích và kiểm tra cấu trúc mô hình, các quan hệ giữa các lớp, và các ràng buộc OCL, trả lại kết quả cho người dùng.\n\nNgười dùng có thể yêu cầu xem trước mô hình để đánh giá trực quan. Khi chọn xem mô hình UML của dự án, hệ thống đồng thời xác thực dự án trước rồi mới hiển thị. Trong trường hợp này, hệ thống trích xuất thông tin mô hình và tạo biểu diễn UML trực quan."
+      },
+      "groundTruth": {
+        "name": "Validate OCL/UML Model of a Community Project",
+        "summary": "This use case allows a researcher to request the system to validate the OCL/UML model of a community project, detecting errors in structure, relationships, OCL constraints, or overall model consistency.",
+        "mainActor": "Researcher",
+        "actors": [
+          "Researcher",
+          "System"
+        ],
+        "preconditions": [
+          "The Researcher is logged in.",
+          "The project exists and has a valid data structure model."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Researcher",
+                "description": "Requests validation of the project's model."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Retrieves the current project model, analyzes it, and checks the model structure, relationships between classes, and OCL constraints."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Returns the validation results to the Researcher."
+              }
+            ]
+          },
+          {
+            "id": "ALT_4a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "condition": "The Researcher chooses to preview the model at step 1 of the MAIN flow.",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Researcher",
+                "description": "Requests to preview the current project's model."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Extracts model information."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Generates a visual UML representation."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Displays the visual UML representation to the Researcher."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:58:28.315Z",
+  "testCases": [
+    {
+      "id": "dung-17",
+      "domain": "Quản lý dự án / Cộng đồng",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The project owner designates a community member as a project moderator. The system then assigns this role to the chosen member and informs both the project owner and the new moderator.",
+        "detailed": "Ca sử dụng này cho phép Chủ thể dự án thêm Kiểm duyệt viên dự án vào một dự án cộng đồng đang hoạt động. Ca sử dụng bắt đầu khi Chủ thể dự án muốn chỉ định một thành viên trong cộng đồng làm kiểm duyệt viên cho dự án của mình. Chủ thể dự án yêu cầu thêm kiểm duyệt viên mới vào dự án. Hệ thống yêu cầu cung cấp thông tin của thành viên được chỉ định bao gồm Email người dùng. Chủ thể dự án nhập thông tin thành viên và xác nhận yêu cầu bổ nhiệm. Hệ thống gán vai trò “Kiểm duyệt viên dự án” cho thành viên được chọn trong phạm vi dự án tương ứng, thông báo cho chủ thể dự án và người được bổ nhiệm. Không có luồng thay thế. Tiền điều kiện bao gồm việc Chủ thể dự án đã đăng nhập hợp lệ vào hệ thống, Dự án đã tồn tại và đang trong trạng thái “Đang phát triển”, và Người được chỉ định phải là thành viên hợp lệ trong cộng đồng nghiên cứu. Hậu điều kiện là Người được chỉ định trở thành kiểm duyệt viên của dự án và Hệ thống ghi nhận vai trò mới và thông báo đến các bên liên quan."
+      },
+      "groundTruth": {
+        "name": "Add Project Moderator",
+        "summary": "This use case allows a Project Owner to add a Project Moderator to an active community project.",
+        "mainActor": "Project Owner",
+        "actors": [
+          "Project Owner",
+          "System",
+          "Community Member"
+        ],
+        "preconditions": [
+          "The Project Owner is validly logged into the system.",
+          "The project exists and is in 'In Development' status.",
+          "The designated person must be a valid member of the research community."
+        ],
+        "postconditions": [
+          "The designated person becomes a moderator of the project.",
+          "The system records the new role and notifies relevant parties."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Project Owner",
+                "description": "Requests to add a new moderator to the project."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests the designated member's information (e.g., User Email)."
+              },
+              {
+                "index": 3,
+                "actor": "Project Owner",
+                "description": "Enters the member's information and confirms the appointment request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Assigns the 'Project Moderator' role to the selected member within the corresponding project and notifies the Project Owner and the newly appointed member."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

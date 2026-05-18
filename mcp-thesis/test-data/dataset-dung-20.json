@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T08:00:32.236Z",
+  "testCases": [
+    {
+      "id": "dung-20",
+      "domain": "Project Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": "None"
+      },
+      "inputs": {
+        "vague": "Project Reviewers access a list of pending contributions, choose one to review, and then provide their feedback to the system. The system successfully records their evaluation.",
+        "detailed": "Ca sử dụng này cho phép Chủ thể dự án và Kiểm duyệt viên dự án xem, đánh giá, và đưa ra nhận xét đối với các đóng góp do các Nghiên cứu sinh gửi vào dự án cộng đồng.\n\nNgười đánh giá đã đăng nhập hợp lệ, có quyền tương ứng trong dự án.\n\nKhi Chủ thể dự án hoặc Kiểm duyệt viên muốn xem xét và phản hồi một đóng góp mới được gửi, Hệ thống sẽ hiển thị danh sách đóng góp cùng thông tin người gửi, thời gian gửi, và trạng thái hiện tại. Người đánh giá sau đó chọn một đóng góp cụ thể để xem chi tiết. Hệ thống sẽ hiển thị nội dung đóng góp, phần mô tả thay đổi và vị trí trong mô hình dự án. Người đánh giá nhận xét đóng góp và yêu cầu hệ thống chấp nhận đánh giá.\n\nĐánh giá được ghi nhận và lưu vào hồ sơ đóng góp.\n\nChỉ chủ thể dự án và kiểm duyệt viên mới được phép đánh giá đóng góp."
+      },
+      "groundTruth": {
+        "name": "Review Contribution",
+        "summary": "This use case allows Project Owners and Project Reviewers to view, evaluate, and comment on contributions submitted by Researchers to the community project.",
+        "mainActor": "Project Owner or Project Reviewer",
+        "actors": [
+          "Project Owner",
+          "Project Reviewer",
+          "System"
+        ],
+        "preconditions": [
+          "The reviewer is logged in",
+          "The reviewer has appropriate permissions within the project"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Project Owner or Project Reviewer",
+                "description": "Requests to view the list of pending contributions."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays the list of contributions along with sender information, submission time, and current status."
+              },
+              {
+                "index": 3,
+                "actor": "Project Owner or Project Reviewer",
+                "description": "Selects a specific contribution to view details."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Displays the contribution content, change description, and location in the project model, requesting the reviewer to provide an evaluation comment."
+              },
+              {
+                "index": 5,
+                "actor": "Project Owner or Project Reviewer",
+                "description": "Comments on the contribution and requests the system to accept the evaluation."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Records the comment and notifies of success."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

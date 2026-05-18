@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:38:24.746Z",
+  "testCases": [
+    {
+      "id": "dung-04",
+      "domain": "Account Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Xác thực quyền người dùng; xác thực dữ liệu đầu vào; yêu cầu xác nhận mật khẩu cũ khi thay đổi mật khẩu."
+      },
+      "inputs": {
+        "vague": "The user updates their account details by providing the new information and the system successfully applies those changes, confirming the update. This includes scenarios like changing a password or updating their profile.",
+        "detailed": "Ca sử dụng này cho phép người dùng đã đăng nhập quản lý và cập nhật thông tin tài khoản của mình trong hệ thống. Người dùng có thể chỉnh sửa các thông tin cá nhân, thay đổi mật khẩu, hoặc cập nhật hồ sơ chuyên biệt tùy theo vai trò. Ca sử dụng bắt đầu khi người dùng muốn cập nhật thông tin tài khoản của mình. Người dùng yêu cầu thay đổi mật khẩu. Hệ thống yêu cầu người dùng nhập mật khẩu cũ, mật khẩu mới và xác nhận lại mật khẩu mới. Mật khẩu cũ, mới. Người dùng yêu cầu cập nhật mật khẩu mới. Hệ thống xác nhận mật khẩu mới và cập nhật lên hệ thống, thông báo rằng đã thay đổi mật khẩu thành công. Trong luồng thay thế, tại bước 4, người dùng nhập sai định dạng dữ liệu, hệ thống thông báo rằng các trường chưa hợp lệ, từ chối cập nhật và gửi thông báo tới người dùng. Hệ thống phải xác thực quyền người dùng trước khi cho phép chỉnh sửa thông tin. Mọi thông tin cập nhật phải được kiểm tra hợp lệ trước khi lưu. Việc thay đổi mật khẩu yêu cầu xác nhận mật khẩu cũ. Người dùng đã đăng nhập hợp lệ vào hệ thống. Thông tin tài khoản của người dùng được cập nhật trong cơ sở dữ liệu."
+      },
+      "groundTruth": {
+        "name": "Manage and Update Account Information",
+        "summary": "This use case allows a logged-in user to manage and update their account information within the system, including personal details, password changes, or specialized profile updates based on their role.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "preconditions": [
+          "User is logged in to the system."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "Requests to update account information."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Authenticates user permissions to modify information."
+              },
+              {
+                "index": 3,
+                "actor": "User",
+                "description": "Requests to change password."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Prompts the user to enter their old password, new password, and confirm the new password."
+              },
+              {
+                "index": 5,
+                "actor": "User",
+                "description": "Enters old password, new password, and confirms new password."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Validates the old password provided by the user."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Validates the new password format and confirms it matches the confirmation."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Updates the new password in the system and notifies the user of successful password change."
+              }
+            ]
+          },
+          {
+            "id": "ALT_9a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 9,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Detects invalid data format in the new password or confirmation."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Informs the user that the fields are invalid, rejects the update, and sends a notification."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

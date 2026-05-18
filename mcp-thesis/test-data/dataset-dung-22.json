@@ -1,0 +1,108 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T08:49:02.078Z",
+  "testCases": [
+    {
+      "id": "dung-22",
+      "domain": "Authentication",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Performance Response Constraint, Data Transmission Security"
+      },
+      "inputs": {
+        "vague": "A user wants to log into the system to access their account. The system presents a login screen, the user provides their details, and if everything is correct, they are redirected to their personalized dashboard.",
+        "detailed": "This use case describes how a user logs into the system to access functionalities associated with their specific role. The User requests to log into the system. The system displays the login interface and prompts for credentials. The User enters their login credentials (email and password), which are then validated for format and authenticated against the database. The User submits the login request. The system redirects the User to the dashboard or home page corresponding to their assigned role. Before successful login, the system verifies that the User possesses an existing account within the database and confirms that the account status is active and authorized for access. Upon successful authentication, a secure session token is generated, and the session state is saved to maintain the user's authenticated status across the application. For security, the system intercepts the password entered by the user and applies encryption protocols to the password data before transmitting it to the server. The entire authentication process ensures the processing and navigation response is delivered within a 3-second threshold. If the provided email or password does not match any registered records, the system displays an error notification indicating incorrect login information, clears sensitive fields, and prompts the user to re-enter their credentials."
+      },
+      "groundTruth": {
+        "name": "User Authentication",
+        "summary": "This use case describes how a user logs into the system to access functionalities associated with their specific role.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "preconditions": [
+          "System verifies that the User possesses an existing account within the database.",
+          "System confirms that the account status is active and authorized for access."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "User requests to log into the system."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "System displays the login interface and prompts for credentials."
+              },
+              {
+                "index": 3,
+                "actor": "User",
+                "description": "User enters their login credentials (email and password)."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "System validates the credential format and authenticates the information against the database."
+              },
+              {
+                "index": 5,
+                "actor": "User",
+                "description": "User submits the login request."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "System redirects the User to the dashboard or home page corresponding to their assigned role."
+              }
+            ]
+          },
+          {
+            "id": "ALT_3a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 3,
+            "condition": "System intercepts the password entered by the user",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "System encrypts the password data before transmitting it to the server."
+              }
+            ]
+          },
+          {
+            "id": "EXT_4a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "condition": "Invalid Credentials",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "System determines that the provided email or password does not match any registered records."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "System displays an error notification indicating incorrect login information."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "System clears the sensitive fields and prompts the user to re-enter their credentials."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

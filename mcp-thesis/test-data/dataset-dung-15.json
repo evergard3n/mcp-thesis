@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:57:18.844Z",
+  "testCases": [
+    {
+      "id": "dung-15",
+      "domain": "Education/Bài tập",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Xác thực quyền nộp bài, lưu trữ lịch sử các lần nộp."
+      },
+      "inputs": {
+        "vague": "A student or team submits their completed assignment or exam through the system. The system then processes and records the submission within the assignment's records.",
+        "detailed": "Ca sử dụng này cho phép Sinh viên hoặc Nhóm sinh viên nộp kết quả của các bài tập, bài thi, hoặc bài tập lớn mà họ được giao. Bài nộp có thể bao gồm mô tả nội dung, kết quả thực hiện, hoặc mô hình được hoàn thiện. Luồng sự kiện bắt đầu khi Sinh viên hoặc Nhóm sinh viên muốn nộp bài cho một bài tập, bài thi, hoặc bài tập lớn đã được giao. Sinh viên yêu cầu nộp bài cho một bài tập hoặc bài thi cụ thể. Hệ thống xác nhận người nộp thuộc đối tượng hợp lệ, yêu cầu cung cấp thông tin mô tả cho bài nộp. Sinh viên xác nhận hoàn tất việc nộp bài. Hệ thống ghi nhận bài nộp, lưu thông tin vào hồ sơ bài tập và cập nhật trạng thái “Đã nộp”. Trong trường hợp nộp lại bài, ca sử dụng bắt đầu khi Sinh viên muốn nộp lại bài trong thời gian cho phép. Sinh viên yêu cầu nộp lại bài tập đã được nộp trước đó. Hệ thống yêu cầu sinh viên điền lại các thông tin bài nộp. Sinh viên điền các thông tin cần thiết và nộp bài. Hệ thống ghi nhận phiên bản mới và lưu cùng lịch sử các lần nộp trước đó. Yêu cầu đặc biệt bao gồm việc hệ thống phải xác thực quyền nộp bài (đúng lớp, đúng nhóm, đúng hạn) và cần lưu trữ lịch sử các lần nộp (thời gian, người nộp, phiên bản). Tiền điều kiện là Sinh viên đã đăng nhập hợp lệ vào hệ thống, bài tập, bài thi hoặc bài tập lớn đã được giao và đang trong thời gian cho phép nộp. Với bài tập lớn, nhóm đã được tạo và hoàn tất mô hình trước khi nộp. Hậu điều kiện là bài nộp được lưu trữ trong hệ thống và gắn liền với người nộp hoặc nhóm nộp."
+      },
+      "groundTruth": {
+        "name": "Nộp bài tập, bài thi hoặc bài tập lớn",
+        "summary": "Sinh viên hoặc Nhóm sinh viên nộp kết quả của các bài tập, bài thi, hoặc bài tập lớn đã được giao.",
+        "mainActor": "Sinh viên",
+        "actors": [
+          "Sinh viên",
+          "Hệ thống"
+        ],
+        "preconditions": [
+          "Sinh viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Bài tập, bài thi hoặc bài tập lớn đã được giao và đang trong thời gian cho phép nộp.",
+          "Với bài tập lớn: nhóm đã được tạo và hoàn tất mô hình trước khi nộp."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Sinh viên",
+                "description": "Yêu cầu nộp bài cho một bài tập hoặc bài thi cụ thể."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Xác nhận người nộp thuộc đối tượng hợp lệ và yêu cầu cung cấp thông tin mô tả cho bài nộp."
+              },
+              {
+                "index": 3,
+                "actor": "Sinh viên",
+                "description": "Cung cấp thông tin bài nộp."
+              },
+              {
+                "index": 4,
+                "actor": "Sinh viên",
+                "description": "Xác nhận hoàn tất việc nộp bài."
+              },
+              {
+                "index": 5,
+                "actor": "Hệ thống",
+                "description": "Ghi nhận bài nộp, lưu thông tin vào hồ sơ bài tập và cập nhật trạng thái “Đã nộp”."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Sinh viên",
+                "description": "Yêu cầu nộp lại bài tập đã được nộp trước đó."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Yêu cầu sinh viên điền lại các thông tin bài nộp."
+              },
+              {
+                "index": 3,
+                "actor": "Sinh viên",
+                "description": "Điền các thông tin cần thiết và nộp bài."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Ghi nhận phiên bản mới và lưu cùng lịch sử các lần nộp trước đó."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

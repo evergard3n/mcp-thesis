@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:49:04.052Z",
+  "testCases": [
+    {
+      "id": "dung-08",
+      "domain": "Class Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The teacher adds student emails to a specific class. The system validates the emails and successfully adds the students, providing a confirmation.",
+        "detailed": "Ca sử dụng này cho phép Giáo viên thêm hoặc xóa sinh viên trong lớp học mà họ phụ trách. Chức năng này giúp Giáo viên kiểm soát danh sách sinh viên, đảm bảo lớp học chỉ bao gồm những sinh viên hợp lệ, và duy trì dữ liệu lớp học chính xác trong hệ thống.\n\nLuồng cơ bản bắt đầu khi Giáo viên muốn thêm sinh viên vào một lớp học cụ thể. Giáo viên yêu cầu quản lý danh sách sinh viên của một lớp học. Hệ thống yêu cầu giáo viên nhập email của các sinh viên cần thêm vào và kiểm tra tính hợp lệ của các email. Sau đó, Giáo viên yêu cầu thêm sinh viên vào lớp học. Hệ thống xác nhận thêm sinh viên vào lớp học thành công và thông báo tới giáo viên.\n\nTrong luồng thay thế, Giáo viên có thể xoá sinh viên khỏi lớp học. Giáo viên chọn một sinh viên bất kỳ và yêu cầu hệ thống xoá sinh viên đó khỏi lớp học. Hệ thống yêu cầu xác nhận từ giáo viên rằng có chắc chắn muốn xoá không. Cuối cùng, Giáo viên xác nhận yêu cầu xoá sinh viên khỏi lớp, và Hệ thống xoá sinh viên khỏi lớp học và thông báo tới giáo viên đã xoá thành công.\n\nTiền điều kiện: Giáo viên đã đăng nhập hợp lệ vào hệ thống và có quyền quản lý lớp học tương ứng.\nHậu điều kiện: Danh sách sinh viên của lớp học được cập nhật trong cơ sở dữ liệu."
+      },
+      "groundTruth": {
+        "name": "Quản lý danh sách sinh viên lớp học",
+        "summary": "Ca sử dụng này cho phép Giáo viên thêm hoặc xóa sinh viên trong lớp học mà họ phụ trách. Chức năng này giúp Giáo viên kiểm soát danh sách sinh viên, đảm bảo lớp học chỉ bao gồm những sinh viên hợp lệ, và duy trì dữ liệu lớp học chính xác trong hệ thống.",
+        "mainActor": "Giáo viên",
+        "actors": [
+          "Giáo viên",
+          "Hệ thống"
+        ],
+        "preconditions": [
+          "Giáo viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Giáo viên có quyền quản lý lớp học tương ứng."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "yêu cầu quản lý danh sách sinh viên của một lớp học."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "yêu cầu giáo viên nhập email của các sinh viên cần thêm vào và kiểm tra tính hợp lệ của các email."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "yêu cầu thêm sinh viên vào lớp học."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "xác nhận thêm sinh viên vào lớp học thành công và thông báo tới giáo viên."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "chọn một sinh viên bất kỳ và yêu cầu hệ thống xoá sinh viên đó khỏi lớp học."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "yêu cầu xác nhận từ giáo viên rằng có chắc chắn muốn xoá không."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "xác nhận yêu cầu xoá sinh viên khỏi lớp."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "xoá sinh viên khỏi lớp học và thông báo tới giáo viên đã xoá thành công."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

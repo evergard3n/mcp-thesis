@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:48:25.015Z",
+  "testCases": [
+    {
+      "id": "dung-07",
+      "domain": "Education/Class Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Hệ thống phải đảm bảo tính toàn vẹn dữ liệu khi cập nhật danh sách sinh viên và tiến độ học tập. Hệ thống cần hỗ trợ phân quyền."
+      },
+      "inputs": {
+        "vague": "A teacher successfully creates a new class by providing the required information, which the system then uses to establish the class and confirm its creation.",
+        "detailed": "Ca sử dụng này cho phép Giáo viên thực hiện các hoạt động quản lý và duy trì lớp học mà họ phụ trách. Giáo viên có thể tạo mới lớp học, cập nhật thông tin lớp, thêm hoặc loại bỏ sinh viên, theo dõi tiến độ học tập, và duy trì hoạt động của lớp trong suốt quá trình giảng dạy.\n\nLuồng cơ bản bắt đầu khi Giáo viên muốn khởi tạo lớp học mới. Giáo viên yêu cầu tạo một lớp học mới để duy trì và giảng dạy. Hệ thống yêu cầu giáo viên nhập thông tin của lớp học vào trong biểu mẫu và xác thực thông tin lớp học, bao gồm tên lớp, mã lớp, sinh viên. Giáo viên yêu cầu hệ thống tạo mới một lớp học với các thông tin đã điền. Hệ thống tạo một lớp học mới và thông báo cho giáo viên đã tạo lớp thành công.\n\nTrong luồng thay thế Cập nhật lớp học, ca sử dụng bắt đầu khi giáo viên đã có sẵn lớp học và muốn chỉnh sửa các thông tin của lớp học. Giáo viên yêu cầu hệ thống cho phép chỉnh sửa thông tin lớp học. Hệ thống yêu cầu giáo viên nhập thông tin của lớp học vào trong biểu mẫu và xác thực thông tin lớp học. Giáo viên yêu cầu cập nhật thông tin lớp học. Hệ thống cập nhật mới thông tin lớp học và thông báo tới giáo viên đã cập nhật thành công.\n\nHệ thống phải đảm bảo tính toàn vẹn dữ liệu khi cập nhật danh sách sinh viên và tiến độ học tập. Hệ thống cần hỗ trợ phân quyền để đảm bảo rằng các Giáo viên khác không thể chỉnh sửa lớp không thuộc quyền phụ trách. Tiền điều kiện là Giáo viên đã đăng nhập hợp lệ vào hệ thống. Nếu cập nhật thông tin lớp học hay xoá lớp thì phải là giáo viên chủ nhiệm của lớp học đó. Hậu điều kiện là thông tin lớp học được cập nhật trong hệ thống."
+      },
+      "groundTruth": {
+        "name": "Quản lý lớp học",
+        "summary": "Giáo viên có thể quản lý và duy trì lớp học do mình phụ trách, bao gồm tạo, cập nhật, thêm/bớt sinh viên, và theo dõi tiến độ.",
+        "mainActor": "Giáo viên",
+        "actors": [
+          "Giáo viên",
+          "Hệ thống"
+        ],
+        "preconditions": [
+          "Giáo viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Nếu cập nhật hoặc xóa lớp học, Giáo viên phải là giáo viên chủ nhiệm của lớp đó."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu tạo một lớp học mới."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Yêu cầu giáo viên nhập thông tin lớp học vào biểu mẫu và xác thực thông tin."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu hệ thống tạo mới lớp học với các thông tin đã điền."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Tạo một lớp học mới và thông báo cho giáo viên đã tạo lớp thành công."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu hệ thống cho phép chỉnh sửa thông tin lớp học đã có."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Yêu cầu giáo viên nhập thông tin của lớp học vào biểu mẫu và xác thực thông tin."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu cập nhật thông tin lớp học đã chỉnh sửa."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Cập nhật thông tin lớp học và thông báo đã cập nhật thành công."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
