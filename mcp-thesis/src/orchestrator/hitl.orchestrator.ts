@@ -1,8 +1,5 @@
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
-import {
-  expertAnswerOpenEndedQuestions,
-  normalizeHumanAnswers,
-} from "../validators/llm.validator.js";
+import { normalizeHumanAnswers } from "../validators/llm.validator.js";
 import {
   AnswerInput,
   HITLEvent,
@@ -24,9 +21,7 @@ function createInitialState(sessionId: string): HITLState {
   return {
     sessionId,
     status: "IDLE",
-    mode: "interactive",
     vague: null,
-    detailed: null,
     domain: null,
     currentUseCase: null,
     baselineUseCase: null,
@@ -91,10 +86,6 @@ export class HITLOrchestrator {
       this.waitingResolver = null;
       resolver([]);
     }
-    if (!this.running) {
-      this.state = createInitialState(this.state.sessionId);
-      this.emit({ type: "state", state: this.state });
-    }
   }
 
   async start(input: HITLStartInput): Promise<boolean> {
@@ -105,9 +96,7 @@ export class HITLOrchestrator {
     this.cancelled = false;
     this.state = {
       ...createInitialState(this.state.sessionId),
-      mode: input.mode,
       vague: input.vague,
-      detailed: input.mode === "automated" ? input.detailed ?? null : null,
       domain: input.domain ?? null,
       maxIterations: input.maxIterations ?? 5,
       maxQuestions: input.maxQuestions ?? 20,
@@ -166,7 +155,6 @@ export class HITLOrchestrator {
       throw new Error("Missing vague input");
     }
 
-    const detailed = this.state.detailed ?? vague;
     const domain = this.state.domain ?? "General";
 
     const answerProvider: AnswerProvider = async (questions, _iteration) => {
@@ -183,15 +171,6 @@ export class HITLOrchestrator {
         state: this.state,
       });
 
-      if (this.state.mode === "automated") {
-        return expertAnswerOpenEndedQuestions(
-          questions,
-          detailed,
-          domain,
-          this.geminiFunctions,
-        );
-      }
-
       this.transition("WAITING_FOR_ANSWERS", "Waiting for human answers");
       const providedAnswers = await this.waitForAnswers();
       if (this.cancelled) return [];
@@ -199,12 +178,13 @@ export class HITLOrchestrator {
     };
 
     const loopResult: HITLLoopResult = await runHITLLoop(
-      { vague, detailed, domain, geminiFunctions: this.geminiFunctions },
+      { vague, detailed: vague, domain },
       {
         maxIterations: this.state.maxIterations,
         maxQuestions: this.state.maxQuestions,
         perIterationCap: 6,
       },
+      this.geminiFunctions,
       answerProvider,
       {
         onPhaseChange: (phase, message) => {

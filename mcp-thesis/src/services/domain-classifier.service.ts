@@ -803,27 +803,6 @@ export async function classifyUseCaseDomain(
   }
 }
 
-/**
- * Get human-readable explanation of domain type
- */
-export function getDomainExplanation(domainType: DomainType): string {
-  switch (domainType) {
-    case "human-system":
-      return "Human actors interact with system components. Requires handling user input, decisions, and error recovery.";
-    case "system-system":
-      return "Automated system-to-system interactions. Focus on API reliability, data consistency, and automated error handling.";
-    case "ambiguous":
-      return "Domain type unclear. May involve ambiguous actors or mixed interaction patterns.";
-  }
-}
-
-/**
- * Enrich baseline use case with domain metadata (non-invasive)
- */
-export interface EnrichedBaselineUseCase extends GenUseCase {
-  domainAnalysis?: UseCaseDomainAnalysis;
-}
-
 export function resolveDomainFilter(
   analysis: UseCaseDomainAnalysis,
 ): "human-system" | "system-system" {

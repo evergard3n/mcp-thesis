@@ -189,8 +189,6 @@ async function run() {
     currentUseCase = await refineWithHybridAnswers(
       tc.inputs.vague,
       currentUseCase,
-      [],
-      [],
       answers,
       gemini,
     );

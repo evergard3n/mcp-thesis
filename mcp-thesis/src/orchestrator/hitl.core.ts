@@ -1,40 +1,40 @@
 import {
-  analyzeGaps,
-  clearGapCentroidsCache,
-  collectStepEmbeddings,
-  type InteractionMemory,
-  type GapAnalysis,
-} from "../analyzers/gap.analyzer.js";
-import {
   detectActivatedBlueprints,
   type BlueprintActivation,
 } from "../analyzers/blueprint.detector.js";
 import {
+  analyzeGaps,
+  clearGapCentroidsCache,
+  collectStepEmbeddings,
+  type GapAnalysis,
+  type InteractionMemory,
+} from "../analyzers/gap.analyzer.js";
+import {
   rankAllUncertainties,
   type UncertaintyAnalysis,
 } from "../analyzers/uncertainty.ranker.js";
-import { buildInteractionMemories } from "../helpers/memory.builder.js";
 import { parseConsolidatedId } from "../helpers/consolidated-id.js";
+import { buildInteractionMemories } from "../helpers/memory.builder.js";
+import { type GenFlow, type GenUseCase } from "../interfaces/usecase.interface.new.js";
 import {
   classifyUseCaseDomainHybrid,
   resolveBlueprintDomainFilter,
 } from "../services/domain-classifier.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
+import semanticService from "../services/semantic.service.js";
 import {
-  generateFlatUseCase,
-  refineWithHybridAnswers,
   extractFlowsFromOpenEndedAnswers,
+  generateFlatUseCase,
   normalizeFlowIds,
+  refineWithHybridAnswers,
 } from "../services/usecase.service.js";
 import { validateUseCaseWithFeedback } from "../validators/flat.validator.js";
 import {
-  expertAnswerOpenEndedQuestions,
   generateAdaptiveQuestions,
+  probeBlueprintsWithExpert,
   type OpenEndedAnswer,
-  type OpenEndedQuestion,
+  type OpenEndedQuestion
 } from "../validators/llm.validator.js";
-import { type GenUseCase, type GenFlow } from "../interfaces/usecase.interface.new.js";
-import semanticService from "../services/semantic.service.js";
 
 // ---------------------------------------------------------------------------
 // Answer classification + flow dedup helpers
@@ -205,7 +205,6 @@ export interface HITLLoopInput {
   vague: string;
   detailed: string;
   domain: string;
-  geminiFunctions: GeminiOpenRouterFunctions;
 }
 
 export interface HITLIterationResult {
@@ -281,18 +280,6 @@ export async function probeBlueprints(
   return { activations, confirmed };
 }
 
-async function probeBlueprintsWithExpert(
-  activations: BlueprintActivation[],
-  description: string,
-  domain: string,
-  geminiFunctions: GeminiOpenRouterFunctions,
-): Promise<string[]> {
-  const { probeBlueprintsWithExpert: probe } = await import(
-    "../validators/llm.validator.js"
-  );
-  return probe(activations, description, domain, geminiFunctions);
-}
-
 // ---------------------------------------------------------------------------
 // Baseline generation
 // ---------------------------------------------------------------------------
@@ -305,27 +292,6 @@ export async function generateBaseline(
   return generateFlatUseCase({ description: vague, geminiFunctions });
 }
 
-// ---------------------------------------------------------------------------
-// Single iteration (pure logic — no state management)
-// ---------------------------------------------------------------------------
-
-export interface IterationInput {
-  useCase: GenUseCase;
-  vague: string;
-  detailed: string;
-  conversationHistory: InteractionMemory[];
-  allQuestions: string[];
-  confirmedBlueprintIds: string[];
-  baselineFlowIds: Set<string>;
-  iterationIndex: number;
-  totalQuestionsAsked: number;
-  maxQuestions: number;
-  perIterationCap: number;
-  geminiFunctions: GeminiOpenRouterFunctions;
-  answerProvider: AnswerProvider;
-  previousIterations: HITLIterationResult[];
-}
-
 export interface IterationOutput {
   updatedUseCase: GenUseCase;
   questions: OpenEndedQuestion[];
@@ -336,164 +302,6 @@ export interface IterationOutput {
   stop: "confidence" | "no_questions" | null;
 }
 
-export async function runIteration(
-  input: IterationInput,
-): Promise<IterationOutput> {
-  const validation = await validateUseCaseWithFeedback(input.useCase);
-  const gapAnalysis = await analyzeGaps(
-    input.useCase,
-    validation.score!,
-    input.vague,
-    input.conversationHistory,
-    new Set(input.confirmedBlueprintIds),
-    new Set(),
-    "post-probe",
-  );
-  const uncertaintyAnalysis = rankAllUncertainties(
-    input.useCase,
-    validation.score!,
-    gapAnalysis,
-  );
-
-  const flowCount = input.useCase.flows.length;
-  const recentIterations = input.previousIterations.slice(-2);
-  // Only count as a stall if the iteration asked flow-producing questions
-  // (gap-based, blueprint, consolidated) but still produced 0 new flows.
-  // Iterations that only asked actor-role or clarification questions are
-  // not meaningful stalls — they never had flow-discovery potential.
-  const consecutiveStalls = recentIterations.filter(
-    (it) => it.newFlowsAdded <= 0 && it.hadFlowProducingQuestions,
-  ).length;
-  const isStalled = recentIterations.length >= 2 && consecutiveStalls >= 2;
-
-  const shouldStopByConfidence =
-    uncertaintyAnalysis.overallConfidence > 0.85 &&
-    uncertaintyAnalysis.highPriorityCount === 0;
-
-  const shouldStopByStall =
-    isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
-
-  const hasMinimumFlows = flowCount >= 3;
-
-  if ((shouldStopByConfidence && hasMinimumFlows) || shouldStopByStall) {
-    return {
-      updatedUseCase: input.useCase,
-      questions: [],
-      answers: [],
-      memories: [],
-      gapAnalysis,
-      uncertaintyAnalysis,
-      stop: "confidence",
-    };
-  }
-
-  const remainingBudget = input.maxQuestions - input.totalQuestionsAsked;
-  const isFirstIteration = input.iterationIndex === 0;
-  const hasBlueprintsToExplore = input.confirmedBlueprintIds.length > 0;
-  const globalGaps = gapAnalysis.gaps.filter(
-    (g) => g.relatedStep === undefined,
-  );
-
-  const questions = await generateAdaptiveQuestions(
-    uncertaintyAnalysis.stepPriorities,
-    uncertaintyAnalysis.flowUncertainties,
-    Math.min(input.perIterationCap, remainingBudget),
-    input.allQuestions,
-    isFirstIteration && hasBlueprintsToExplore,
-    input.confirmedBlueprintIds.length,
-    input.baselineFlowIds,
-    globalGaps,
-    input.useCase,
-    input.detailed,
-  );
-
-  if (questions.length === 0) {
-    return {
-      updatedUseCase: input.useCase,
-      questions: [],
-      answers: [],
-      memories: [],
-      gapAnalysis,
-      uncertaintyAnalysis,
-      stop: "no_questions",
-    };
-  }
-
-  const answers = await input.answerProvider(questions, input.iterationIndex);
-
-  const memories = await buildInteractionMemories(
-    questions,
-    answers,
-    input.iterationIndex + 1,
-  );
-
-  const broadAnswers: OpenEndedAnswer[] = [];
-  const stepSpecificAnswers: OpenEndedAnswer[] = [];
-  for (const answer of answers) {
-    if (classifyAnswerScope(answer, questions) === "broad") {
-      broadAnswers.push(answer);
-    } else {
-      stepSpecificAnswers.push(answer);
-    }
-  }
-
-  let updatedUseCase = input.useCase;
-
-  if (broadAnswers.length > 0) {
-    const preBroadFlowIds = new Set(updatedUseCase.flows.map((f) => f.id));
-
-    updatedUseCase = await refineWithHybridAnswers(
-      input.vague,
-      updatedUseCase,
-      [],
-      [],
-      broadAnswers,
-      input.geminiFunctions,
-    );
-
-    // F4: remove delta flows not grounded in any broad answer (prevents hallucination accumulation)
-    const deltaFlows = updatedUseCase.flows.filter((f) => !preBroadFlowIds.has(f.id));
-    if (deltaFlows.length > 0) {
-      const groundedDelta = await filterUngroundedDeltaFlows(deltaFlows, broadAnswers);
-      const survivingDeltaIds = new Set(groundedDelta.map((f) => f.id));
-      updatedUseCase = {
-        ...updatedUseCase,
-        flows: updatedUseCase.flows.filter(
-          (f) => preBroadFlowIds.has(f.id) || survivingDeltaIds.has(f.id),
-        ),
-      };
-    }
-  }
-
-  if (stepSpecificAnswers.length > 0) {
-    const extractedFlows = await extractFlowsFromOpenEndedAnswers(
-      stepSpecificAnswers,
-      updatedUseCase,
-      input.geminiFunctions,
-    );
-    const uniqueFlows = await deduplicateFlows(
-      updatedUseCase.flows,
-      extractedFlows,
-    );
-    if (uniqueFlows.length > 0) {
-      updatedUseCase = normalizeFlowIds({
-        ...updatedUseCase,
-        flows: [...updatedUseCase.flows, ...uniqueFlows],
-      });
-    }
-  }
-
-  return {
-    updatedUseCase,
-    questions,
-    answers,
-    memories,
-    gapAnalysis,
-    uncertaintyAnalysis,
-    stop: null,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Full HITL loop (the shared core both orchestrator and testingTools use)
 // ---------------------------------------------------------------------------
@@ -501,14 +309,16 @@ export async function runIteration(
 export async function runHITLLoop(
   loopInput: HITLLoopInput,
   config: HITLLoopConfig,
+  geminiFunctions: GeminiOpenRouterFunctions,
   answerProvider: AnswerProvider,
   callbacks?: HITLCallbacks,
 ): Promise<HITLLoopResult> {
   callbacks?.onPhaseChange?.("GENERATING_BASELINE", "Generating baseline use case", 0);
 
+  // generating baseline 
   const baseline = await generateBaseline(
     loopInput.vague,
-    loopInput.geminiFunctions,
+    geminiFunctions,
   );
   const baselineFlowIds = new Set(baseline.flows.map((f) => f.id));
 
@@ -516,11 +326,13 @@ export async function runHITLLoop(
 
   callbacks?.onPhaseChange?.("PROBING_BLUEPRINTS", "Probing blueprints", 0);
 
+  // probing blueprints (shared, runs once)
+
   const { activations, confirmed } = await probeBlueprints(
     baseline,
     loopInput.detailed,
     loopInput.domain,
-    loopInput.geminiFunctions,
+    geminiFunctions,
   );
 
   const confirmedSet = new Set(confirmed);
@@ -533,6 +345,7 @@ export async function runHITLLoop(
     droppedBlueprintIds: dropped,
   });
 
+  // main iterative loop
   let currentUseCase = baseline;
   const conversationHistory: InteractionMemory[] = [];
   const allQuestions: string[] = [];
@@ -558,59 +371,154 @@ export async function runHITLLoop(
 
     const flowCountBefore = currentUseCase.flows.length;
 
-    const result = await runIteration({
-      useCase: currentUseCase,
-      vague: loopInput.vague,
-      detailed: loopInput.detailed,
+    // --- analyze ---
+    const validation = await validateUseCaseWithFeedback(currentUseCase);
+    const gapAnalysis = await analyzeGaps(
+      currentUseCase,
+      validation.score!,
+      loopInput.vague,
       conversationHistory,
-      allQuestions,
-      confirmedBlueprintIds: confirmed,
-      baselineFlowIds,
-      iterationIndex,
-      totalQuestionsAsked,
-      maxQuestions: config.maxQuestions,
-      perIterationCap: dynamicPerIterationCap,
-      geminiFunctions: loopInput.geminiFunctions,
-      answerProvider,
-      previousIterations: iterations,
-    });
+      new Set(confirmed),
+      new Set(),
+      "post-probe",
+    );
+    const uncertaintyAnalysis = rankAllUncertainties(
+      currentUseCase,
+      validation.score!,
+      gapAnalysis,
+    );
 
-    lastGapAnalysis = result.gapAnalysis;
-    lastUncertaintyAnalysis = result.uncertaintyAnalysis;
+    lastGapAnalysis = gapAnalysis;
+    lastUncertaintyAnalysis = uncertaintyAnalysis;
 
-    if (result.stop === "confidence" || result.stop === "no_questions") {
-      callbacks?.onIterationComplete?.(result, iterationIndex + 1);
+    // --- stop check ---
+    const recentIterations = iterations.slice(-2);
+    // Only count as a stall if the iteration asked flow-producing questions
+    // (gap-based, blueprint, consolidated) but still produced 0 new flows.
+    // Iterations that only asked actor-role or clarification questions are
+    // not meaningful stalls — they never had flow-discovery potential.
+    const consecutiveStalls = recentIterations.filter(
+      (it) => it.newFlowsAdded <= 0 && it.hadFlowProducingQuestions,
+    ).length;
+    const isStalled = recentIterations.length >= 2 && consecutiveStalls >= 2;
+    const shouldStopByConfidence =
+      uncertaintyAnalysis.overallConfidence > 0.85 &&
+      uncertaintyAnalysis.highPriorityCount === 0;
+    const shouldStopByStall = isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
+    const hasMinimumFlows = currentUseCase.flows.length >= 3;
+
+    if ((shouldStopByConfidence && hasMinimumFlows) || shouldStopByStall) {
+      callbacks?.onIterationComplete?.(
+        { updatedUseCase: currentUseCase, questions: [], answers: [], memories: [], gapAnalysis, uncertaintyAnalysis, stop: "confidence" },
+        iterationIndex + 1,
+      );
       break;
     }
 
-    callbacks?.onQuestions?.(result.questions, iterationIndex + 1);
+    // --- generate questions ---
+    const remainingBudget = config.maxQuestions - totalQuestionsAsked;
+    const globalGaps = gapAnalysis.gaps.filter((g) => g.relatedStep === undefined);
+    const questions: OpenEndedQuestion[] = await generateAdaptiveQuestions(
+      uncertaintyAnalysis.stepPriorities,
+      uncertaintyAnalysis.flowUncertainties,
+      Math.min(dynamicPerIterationCap, remainingBudget),
+      allQuestions,
+      iterationIndex === 0 && confirmed.length > 0,
+      confirmed.length,
+      baselineFlowIds,
+      globalGaps,
+      currentUseCase,
+      loopInput.detailed,
+    );
 
+    if (questions.length === 0) {
+      callbacks?.onIterationComplete?.(
+        { updatedUseCase: currentUseCase, questions: [], answers: [], memories: [], gapAnalysis, uncertaintyAnalysis, stop: "no_questions" },
+        iterationIndex + 1,
+      );
+      break;
+    }
+
+    callbacks?.onQuestions?.(questions, iterationIndex + 1);
     callbacks?.onPhaseChange?.("REFINING", "Refining use case with answers", iterationIndex + 1);
 
-    currentUseCase = result.updatedUseCase;
+    // --- answer + refine ---
+    const answers = await answerProvider(questions, iterationIndex);
+    const memories = await buildInteractionMemories(questions, answers, iterationIndex + 1);
+
+    const broadAnswers: OpenEndedAnswer[] = [];
+    const stepSpecificAnswers: OpenEndedAnswer[] = [];
+    for (const answer of answers) {
+      if (classifyAnswerScope(answer, questions) === "broad") {
+        broadAnswers.push(answer);
+      } else {
+        stepSpecificAnswers.push(answer);
+      }
+    }
+
+    let updatedUseCase = currentUseCase;
+
+    if (broadAnswers.length > 0) {
+      const preBroadFlowIds = new Set(updatedUseCase.flows.map((f) => f.id));
+      updatedUseCase = await refineWithHybridAnswers(
+        loopInput.vague,
+        updatedUseCase,
+        broadAnswers,
+        geminiFunctions,
+      );
+      // F4: remove delta flows not grounded in any broad answer (prevents hallucination accumulation)
+      const deltaFlows = updatedUseCase.flows.filter((f) => !preBroadFlowIds.has(f.id));
+      if (deltaFlows.length > 0) {
+        const groundedDelta = await filterUngroundedDeltaFlows(deltaFlows, broadAnswers);
+        const survivingDeltaIds = new Set(groundedDelta.map((f) => f.id));
+        updatedUseCase = {
+          ...updatedUseCase,
+          flows: updatedUseCase.flows.filter(
+            (f) => preBroadFlowIds.has(f.id) || survivingDeltaIds.has(f.id),
+          ),
+        };
+      }
+    }
+
+    if (stepSpecificAnswers.length > 0) {
+      const extractedFlows = await extractFlowsFromOpenEndedAnswers(
+        stepSpecificAnswers,
+        updatedUseCase,
+        geminiFunctions,
+      );
+      const uniqueFlows = await deduplicateFlows(updatedUseCase.flows, extractedFlows);
+      if (uniqueFlows.length > 0) {
+        updatedUseCase = normalizeFlowIds({
+          ...updatedUseCase,
+          flows: [...updatedUseCase.flows, ...uniqueFlows],
+        });
+      }
+    }
+
+    currentUseCase = updatedUseCase;
     const flowCountAfter = currentUseCase.flows.length;
     const newFlowsAdded = flowCountAfter - flowCountBefore;
 
     // F2: use module-level constant (includes uncertain_conditions)
-    const hadFlowProducingQuestions = result.questions.some(
+    const hadFlowProducingQuestions = questions.some(
       (q) => !NON_FLOW_PRODUCING_PATTERN_TYPES.has(q.context.patternType ?? ""),
     );
 
-    conversationHistory.push(...result.memories);
-    allQuestions.push(...result.questions.map((q) => q.question));
-    totalQuestionsAsked += result.answers.length;
+    conversationHistory.push(...memories);
+    allQuestions.push(...questions.map((q) => q.question));
+    totalQuestionsAsked += answers.length;
 
     iterations.push({
       iteration: iterationIndex + 1,
-      questionsAsked: result.questions.length,
-      overallConfidence: result.uncertaintyAnalysis.overallConfidence,
-      highPriorityCount: result.uncertaintyAnalysis.highPriorityCount,
+      questionsAsked: questions.length,
+      overallConfidence: uncertaintyAnalysis.overallConfidence,
+      highPriorityCount: uncertaintyAnalysis.highPriorityCount,
       flowCountBefore,
       flowCountAfter,
       newFlowsAdded,
       hadFlowProducingQuestions,
-      questions: result.questions,
-      answers: result.answers,
+      questions,
+      answers,
     });
 
     // F7: compound on current dynamic cap, not the static config baseline
@@ -620,7 +528,10 @@ export async function runHITLLoop(
       dynamicPerIterationCap = Math.max(dynamicPerIterationCap - 2, 3);
     }
 
-    callbacks?.onIterationComplete?.(result, iterationIndex + 1);
+    callbacks?.onIterationComplete?.(
+      { updatedUseCase: currentUseCase, questions, answers, memories, gapAnalysis, uncertaintyAnalysis, stop: null },
+      iterationIndex + 1,
+    );
   }
 
   return {

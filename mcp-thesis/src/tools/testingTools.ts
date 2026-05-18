@@ -232,9 +232,9 @@ export async function runHITLComparison(
         vague: tc.inputs.vague,
         detailed: tc.inputs.detailed,
         domain: tc.domain,
-        geminiFunctions,
       },
       { maxIterations: 5, maxQuestions: 20, perIterationCap: 6 },
+      geminiFunctions,
       answerProvider,
     );
 

@@ -20,8 +20,6 @@ export interface AnswerInput {
 
 export interface HITLStartInput {
   vague: string;
-  mode: "interactive" | "automated";
-  detailed?: string;
   domain?: string;
   maxIterations?: number;
   maxQuestions?: number;
@@ -30,9 +28,7 @@ export interface HITLStartInput {
 export interface HITLState {
   sessionId: string;
   status: HITLStatus;
-  mode: "interactive" | "automated";
   vague: string | null;
-  detailed: string | null;
   domain: string | null;
   currentUseCase: GenUseCase | null;
   baselineUseCase: GenUseCase | null;

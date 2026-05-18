@@ -71,8 +71,6 @@ const classifyDomainSchema = z.object({
 
 const startHitlSchema = z.object({
   vague: z.string().min(1),
-  mode: z.enum(["interactive", "automated"]).default("interactive"),
-  detailed: z.string().optional(),
   domain: z.string().optional(),
   maxIterations: z.number().int().positive().max(20).optional(),
   maxQuestions: z.number().int().positive().max(100).optional(),
@@ -182,11 +180,6 @@ app.post("/sessions/:sessionId/hitl/start", async (req, res) => {
   const parsed = startHitlSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-
-  if (parsed.data.mode === "automated" && !parsed.data.detailed) {
-    res.status(400).json({ error: "detailed is required in automated mode" });
     return;
   }
 
