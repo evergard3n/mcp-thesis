@@ -6,8 +6,14 @@ import {
   GapType,
 } from "../analyzers/gap.analyzer.js";
 import { BlueprintActivation } from "../analyzers/blueprint.detector.js";
+import { DomainType } from "../services/domain-classifier.service.js";
 import semanticService from "../services/semantic.service.js";
 import { buildConsolidatedId } from "../helpers/consolidated-id.js";
+import {
+  describeBranchEntry,
+  stepToColonText,
+  stepToSummaryLine,
+} from "../helpers/usecase-text.js";
 
 // ---------------------------------------------------------------------------
 // Prompt builder functions
@@ -88,7 +94,7 @@ ${detailedDescription}
 
 The following process patterns (blueprints) were **automatically suggested** from the draft use case (embedding match). They may include false positives.
 
-Each blueprint has a Domain field: "human-system" (people + systems) or "system-system" (automated).
+Each blueprint has a Domain field: "${DomainType.HumanSystem}" (people + systems) or "${DomainType.SystemSystem}" (automated).
 
 Confirm a blueprint when:
 1. The detailed description **reasonably supports** that process pattern (explicit detail OR clear implication from actors and steps — e.g. insurance claims often imply adjudication, assignment, policy checks, request changes, and approvals), AND
@@ -546,7 +552,7 @@ async function buildMainExpansionQuestions(
 
   // Build a summary of current steps for context
   const currentStepsSummary = sortedSteps
-    .map((s) => `  Step ${s.index}: ${s.actor} — "${s.description}"`)
+    .map((step) => `  ${stepToSummaryLine(step)}`)
     .join("\n");
 
   // Question 1: Ask about the overall flow — are there missing intermediate steps?
@@ -604,7 +610,7 @@ async function buildMainExpansionQuestions(
       if (questions.length >= MAX_EXPANSION_QUESTIONS) break;
       if (gap.score < 2) break; // only ask about significant gaps
 
-      const gapQuestion = `In the MAIN flow, step ${gap.fromStep.index} is "${gap.fromStep.actor}: ${gap.fromStep.description}" and the next step ${gap.toStep.index} is "${gap.toStep.actor}: ${gap.toStep.description}". Are there any intermediate steps between these two? For instance, does the system perform any validation, display any information, or does the actor need to make any decisions between these actions?`;
+      const gapQuestion = `In the MAIN flow, step ${gap.fromStep.index} is "${stepToColonText(gap.fromStep)}" and the next step ${gap.toStep.index} is "${stepToColonText(gap.toStep)}". Are there any intermediate steps between these two? For instance, does the system perform any validation, display any information, or does the actor need to make any decisions between these actions?`;
 
       const allPreviousN = [...previousQuestions, ...asked];
       if (await isQuestionDuplicate(gapQuestion, allPreviousN)) continue;
@@ -879,10 +885,8 @@ async function buildMissingConditionQuestions(
   flowUncertainties: Array<{
     flowId: string;
     flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
-    conditionSpecificity: number;
     hasCondition: boolean;
     uncertaintyScore: number;
-    uncertaintyReasons: string[];
   }>,
   previousQuestions: string[],
   askedInThisBatch: string[],
@@ -908,26 +912,14 @@ async function buildMissingConditionQuestions(
       const flow = useCase.flows.find((f) => f.id === flowUnc.flowId);
       const flowKindLabel =
         flowUnc.flowKind === "ALTERNATIVE" ? "alternative flow" : "exception flow";
-
-      let anchorContext = "";
-      if (flow?.parentFlow && flow.fromStepIndex !== undefined) {
-        const parentFlow = useCase.flows.find((f) => f.id === flow.parentFlow);
-        const anchorStep = parentFlow?.steps.find((s) => s.index === flow.fromStepIndex);
-        if (anchorStep) {
-          anchorContext = ` It branches off from ${flow.parentFlow} step ${flow.fromStepIndex} where ${anchorStep.actor} performs: "${anchorStep.description}".`;
-        } else if (flow.fromStepIndex !== undefined) {
-          anchorContext = ` It branches off from ${flow.parentFlow ?? "the normal flow"} step ${flow.fromStepIndex}.`;
-        }
-      }
-
-      let firstStepContext = "";
-      const firstStep = flow?.steps.find((s) => s.index === 1) ?? flow?.steps[0];
-      if (firstStep) {
-        firstStepContext = ` The first step of this branch is: "${firstStep.actor} ${firstStep.description}".`;
-      }
+      const branchContext = flow
+        ? describeBranchEntry(useCase, flow, {
+            fallbackParentFlowLabel: "the normal flow",
+          })
+        : "";
 
       questionText =
-        `The "${flowUnc.flowId}" ${flowKindLabel} has no documented trigger condition.${anchorContext}${firstStepContext} ` +
+        `The "${flowUnc.flowId}" ${flowKindLabel} has no documented trigger condition.${branchContext} ` +
         `What is the exact condition or event that causes execution to enter "${flowUnc.flowId}"? ` +
         `Describe the specific state, actor action, or system signal that initiates this branch.`;
       whyAsking = `Flow "${flowUnc.flowId}" is missing a condition entirely. Without a trigger, this branch cannot be reliably implemented or tested.`;
@@ -1061,10 +1053,8 @@ export async function generateAdaptiveQuestions(
   flowUncertainties: Array<{
     flowId: string;
     flowKind: "MAIN" | "ALTERNATIVE" | "EXCEPTION";
-    conditionSpecificity: number;
     hasCondition: boolean;
     uncertaintyScore: number;
-    uncertaintyReasons: string[];
   }>,
   maxQuestions: number = 6,
   previousQuestions: string[] = [],

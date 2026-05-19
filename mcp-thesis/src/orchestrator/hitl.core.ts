@@ -14,11 +14,12 @@ import {
   type UncertaintyAnalysis,
 } from "../analyzers/uncertainty.ranker.js";
 import { parseConsolidatedId } from "../helpers/consolidated-id.js";
+import { flowToPipeText } from "../helpers/usecase-text.js";
 import { buildInteractionMemories } from "../helpers/memory.builder.js";
 import { type GenFlow, type GenUseCase } from "../interfaces/usecase.interface.new.js";
 import {
   classifyUseCaseDomainHybrid,
-  resolveBlueprintDomainFilter,
+  DomainType,
 } from "../services/domain-classifier.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import semanticService from "../services/semantic.service.js";
@@ -28,7 +29,6 @@ import {
   normalizeFlowIds,
   refineWithHybridAnswers,
 } from "../services/usecase.service.js";
-import { validateUseCaseWithFeedback } from "../validators/flat.validator.js";
 import {
   generateAdaptiveQuestions,
   probeBlueprintsWithExpert,
@@ -90,13 +90,6 @@ function classifyAnswerScope(
   return "broad";
 }
 
-function flowToText(flow: GenFlow): string {
-  const parts: string[] = [flow.kind];
-  if (flow.condition) parts.push(flow.condition);
-  parts.push(...flow.steps.map((s) => `${s.actor}: ${s.description}`));
-  return parts.join(" | ");
-}
-
 async function deduplicateFlows(
   existingFlows: GenFlow[],
   newFlows: GenFlow[],
@@ -105,8 +98,8 @@ async function deduplicateFlows(
   if (newFlows.length === 0) return [];
   if (existingFlows.length === 0 && newFlows.length === 1) return newFlows;
 
-  const existingTexts = existingFlows.map(flowToText);
-  const newTexts = newFlows.map(flowToText);
+  const existingTexts = existingFlows.map(flowToPipeText);
+  const newTexts = newFlows.map(flowToPipeText);
   const allTexts = [...existingTexts, ...newTexts];
   const embeddings = await semanticService.embedBatch(allTexts);
 
@@ -170,7 +163,7 @@ async function filterUngroundedDeltaFlows(
   const answerTexts = broadAnswers.map((a) => a.answer).filter((t) => t.trim().length > 0);
   if (answerTexts.length === 0) return deltaFlows;
 
-  const flowTexts = deltaFlows.map(flowToText);
+  const flowTexts = deltaFlows.map(flowToPipeText);
   const allTexts = [...flowTexts, ...answerTexts];
   const allEmbeddings = await semanticService.embedBatch(allTexts);
 
@@ -259,10 +252,14 @@ export async function probeBlueprints(
   description: string,
   domain: string,
   geminiFunctions: GeminiOpenRouterFunctions,
-): Promise<{ activations: BlueprintActivation[]; confirmed: string[] }> {
+): Promise<{
+  activations: BlueprintActivation[];
+  confirmed: string[];
+  domainType: DomainType;
+}> {
   const stepEmbeddings = await collectStepEmbeddings(useCase);
-  const domainAnalysis = await classifyUseCaseDomainHybrid(useCase);
-  const activationFilter = resolveBlueprintDomainFilter(domainAnalysis);
+  const domainType = await classifyUseCaseDomainHybrid(useCase);
+  const activationFilter = domainType === DomainType.Ambiguous ? undefined : domainType;
 
   const activations = await detectActivatedBlueprints(
     stepEmbeddings,
@@ -277,7 +274,7 @@ export async function probeBlueprints(
     geminiFunctions,
   );
 
-  return { activations, confirmed };
+  return { activations, confirmed, domainType };
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +325,11 @@ export async function runHITLLoop(
 
   // probing blueprints (shared, runs once)
 
-  const { activations, confirmed } = await probeBlueprints(
+  const {
+    activations,
+    confirmed,
+    domainType: initialDomainType,
+  } = await probeBlueprints(
     baseline,
     loopInput.detailed,
     loopInput.domain,
@@ -372,19 +373,14 @@ export async function runHITLLoop(
     const flowCountBefore = currentUseCase.flows.length;
 
     // --- analyze ---
-    const validation = await validateUseCaseWithFeedback(currentUseCase);
     const gapAnalysis = await analyzeGaps(
       currentUseCase,
-      validation.score!,
       loopInput.vague,
+      { domainType: initialDomainType, activations, confirmedIds: new Set(confirmed) },
       conversationHistory,
-      new Set(confirmed),
-      new Set(),
-      "post-probe",
     );
     const uncertaintyAnalysis = rankAllUncertainties(
       currentUseCase,
-      validation.score!,
       gapAnalysis,
     );
 

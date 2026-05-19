@@ -5,16 +5,21 @@ import {
 } from "../interfaces/usecase.interface.new.js";
 import semanticService from "../services/semantic.service.js";
 import { type GapCategory, type GapType } from "../data/gap-centroids.loader.js";
-import { type UseCaseTermScore } from "../validators/flat.validator.js";
 
 // ---------------------------------------------------------------------------
 // Core data types (moved here so blueprint.detector.ts and gap.analyzer.ts
 // can both depend on this file without a circular import).
 // ---------------------------------------------------------------------------
 
+export enum GapSeverity {
+  High = "high",
+  Medium = "medium",
+  Low = "low",
+}
+
 export interface Gap {
   type: GapType;
-  severity: "high" | "medium" | "low";
+  severity: GapSeverity;
   description: string;
   relatedStep?: number;
   relatedFlow?: string;
@@ -71,7 +76,6 @@ export interface GapDetectionContext {
   categories: GapCategory[];
   coveredStepKeys: Set<string>;
   suppressedGapTypes: Set<GapType>;
-  validationFeedback: UseCaseTermScore;
 }
 
 export interface GapDetectorConfig {

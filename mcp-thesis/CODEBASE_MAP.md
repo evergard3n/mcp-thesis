@@ -111,7 +111,6 @@ Express server, port mặc định `3006`. Khởi động model embedding ngay l
 | `POST` | `/sessions/:sessionId/testing/embed-dataset` | Embed ground truth flows |
 | `POST` | `/sessions/:sessionId/testing/run-hitl-comparison` | Chạy thử nghiệm so sánh A/B |
 | `POST` | `/sessions/:sessionId/testing/evaluate-results` | Đánh giá kết quả raw |
-| `POST` | `/sessions/:sessionId/testing/classify-domain` | Phân loại domain của use case |
 
 **SSE Events** (stream từ `/hitl/stream`):
 - `state` — snapshot trạng thái đầy đủ

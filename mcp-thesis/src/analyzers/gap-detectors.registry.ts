@@ -1,10 +1,12 @@
 import semanticService from "../services/semantic.service.js";
+import { describeBranchEntry } from "../helpers/usecase-text.js";
 import {
   type Gap,
   type GapDetectorConfig,
   type GapDetectionContext,
   type StepSource,
   type ConditionSource,
+  GapSeverity,
   centroidGap,
   keywordGap,
   structuralGap,
@@ -43,7 +45,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_validation_handling",
     categoryName: "validation",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens when this validation encounters partial data, format mismatches, or conflicting records? Describe the specific failure scenario and how it's handled.`,
   }),
@@ -52,7 +54,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_search_handling",
     categoryName: "search_lookup",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens when this search returns no results, multiple ambiguous matches, or stale/outdated data? How does the actor proceed?`,
   }),
@@ -61,7 +63,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_data_quality_handling",
     categoryName: "data_input",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens when the submitted data is incomplete, contains contradictory information, or duplicates an existing entry? What are the minimum required fields?`,
   }),
@@ -70,7 +72,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_resource_availability",
     categoryName: "resource_assignment",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens when no suitable resource is available, the assigned resource becomes unavailable, or the assignment times out? Is there a default fallback?`,
   }),
@@ -79,7 +81,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_system_failure_handling",
     categoryName: "system_interaction",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens when the system is unavailable, responds with a timeout, or returns a partial/corrupted response? Is data automatically saved?`,
   }),
@@ -88,7 +90,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_post_completion_scenarios",
     categoryName: "completion",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens if the actor attempts to finish without completing all required information? Can the process be saved for later, reopened, or reversed after this point?`,
   }),
@@ -97,7 +99,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_save_resume_handling",
     categoryName: "save_resume",
     phase: "post-probe",
-    severity: "medium",
+    severity: GapSeverity.Medium,
     question: (step) =>
       `${stepContext(step)}. Can this step be partially completed and saved as a draft for later? What state is preserved, and what happens when the actor resumes?`,
     // Only probe multi-field / complex submission steps
@@ -112,7 +114,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_cancellation_handling",
     categoryName: "user_cancellation",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens if the actor decides to cancel or abort at this point? Is data saved, discarded, or rolled back? Who is notified?`,
   }),
@@ -121,7 +123,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_alternative_path",
     categoryName: "alternative_path",
     phase: "post-probe",
-    severity: "medium",
+    severity: GapSeverity.Medium,
     question: (step) =>
       `${stepContext(step)}. Is there an alternative way to accomplish this step (e.g., a different method, channel, or workflow)? Under what condition would the actor choose the alternative?`,
   }),
@@ -130,7 +132,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_authorization_denial",
     categoryName: "authorization_denial",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens if the required authorization or approval is denied at this point? Is there an escalation path, appeal, or does the process terminate?`,
   }),
@@ -139,7 +141,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_timeout_retry",
     categoryName: "timeout_retry",
     phase: "post-probe",
-    severity: "high",
+    severity: GapSeverity.High,
     question: (step) =>
       `${stepContext(step)}. What happens if this step times out or the expected response is not received? Is there an automatic retry, a fallback, or does the process escalate?`,
   }),
@@ -148,7 +150,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
     gapType: "missing_notification_failure",
     categoryName: "notification_failure",
     phase: "post-probe",
-    severity: "medium",
+    severity: GapSeverity.Medium,
     question: (step) =>
       `${stepContext(step)}. What happens if this notification or message fails to deliver? Is it retried, is the recipient alerted through another channel, or is the failure silently logged?`,
     preFilter: (step) =>
@@ -172,7 +174,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
         .filter((actor) => !usedActors.has(actor.toLowerCase()))
         .map((actor) => ({
           type: "incomplete_actors" as const,
-          severity: "low" as const,
+          severity: GapSeverity.Low,
           description: `Actor '${actor}' is declared but never appears in any step.`,
           suggestedQuestion: `What role does ${actor} play in this use case?`,
         }));
@@ -259,38 +261,16 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
           const flow = src.flow;
           const flowKindLabel =
             flow.kind === "ALTERNATIVE" ? "alternative flow" : "exception flow";
-
-          // Find the parent step this branch diverges from
-          let anchorContext = "";
-          if (flow.parentFlow && flow.fromStepIndex !== undefined) {
-            const parentFlow = ctx.useCase.flows.find(
-              (f) => f.id === flow.parentFlow,
-            );
-            const anchorStep = parentFlow?.steps.find(
-              (s) => s.index === flow.fromStepIndex,
-            );
-            if (anchorStep) {
-              anchorContext = ` It branches off from ${flow.parentFlow} step ${flow.fromStepIndex} where ${anchorStep.actor} performs: "${anchorStep.description}".`;
-            } else if (flow.fromStepIndex !== undefined) {
-              anchorContext = ` It branches off from ${flow.parentFlow ?? "the main flow"} step ${flow.fromStepIndex}.`;
-            }
-          }
-
-          // Describe the first step of this branch so the expert has immediate content
-          let firstStepContext = "";
-          const firstStep = flow.steps.find((s) => s.index === 1) ?? flow.steps[0];
-          if (firstStep) {
-            firstStepContext = ` The first step of this branch is: "${firstStep.actor} ${firstStep.description}".`;
-          }
+          const branchContext = describeBranchEntry(ctx.useCase, flow);
 
           const suggestedQuestion =
-            `In the "${src.flowId}" ${flowKindLabel}:${anchorContext}${firstStepContext} ` +
+            `In the "${src.flowId}" ${flowKindLabel}:${branchContext} ` +
             `What is the exact condition or event that triggers this branch? ` +
             `Describe the specific state, actor action, or system signal that causes execution to leave the normal flow and enter "${src.flowId}".`;
 
           gaps.push({
             type: "uncertain_conditions",
-            severity: qualityScore < 0.3 ? "high" : "medium",
+            severity: qualityScore < 0.3 ? GapSeverity.High : GapSeverity.Medium,
             description: `Flow "${src.flowId}" has weak condition: ${issues.join(", ")}`,
             relatedFlow: src.flowId,
             suggestedQuestion,
@@ -316,7 +296,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       "while",
     ],
     phase: "always",
-    severity: "high",
+    severity: GapSeverity.High,
     description:
       "Description mentions scenarios that can occur 'at any time' but no global exception flows found.",
     question:
@@ -340,7 +320,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       "does not supply",
     ],
     phase: "always",
-    severity: "medium",
+    severity: GapSeverity.Medium,
     description:
       "Description mentions timeout or non-response scenarios but no nested exception flows found.",
     question:
@@ -369,7 +349,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       "external event",
     ],
     phase: "always",
-    severity: "medium",
+    severity: GapSeverity.Medium,
     description:
       "Description mentions environmental or external interruptions but no related exception flows found.",
     question:
@@ -404,7 +384,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       "offline",
     ],
     phase: "always",
-    severity: "low",
+    severity: GapSeverity.Low,
     description:
       "Description mentions different technology or implementation methods but no alternative flows found.",
     question:
@@ -501,7 +481,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       if (hasPolicyValidation && !hasDeclineTermination) {
         gaps.push({
           type: "missing_eligibility_failure_handling",
-          severity: "high",
+          severity: GapSeverity.High,
           description:
             "Main flow validates policy/eligibility but no explicit decline-and-terminate outcome is modeled for invalid cases.",
           suggestedQuestion:
@@ -512,7 +492,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       if (hasAssignment && !hasAssignmentUnavailable) {
         gaps.push({
           type: "missing_assignment_unavailability_handling",
-          severity: "high",
+          severity: GapSeverity.High,
           description:
             "Main flow assigns an agent/reviewer but no branch describes what happens when no assignee is available.",
           suggestedQuestion:
@@ -523,7 +503,7 @@ export const GAP_DETECTORS: GapDetectorConfig[] = [
       if (hasGuidelineReview && !hasNegotiation) {
         gaps.push({
           type: "missing_policy_outcome_branching",
-          severity: "medium",
+          severity: GapSeverity.Medium,
           description:
             "Main flow checks policy guidelines but does not model differentiated outcomes for severe vs minor violations.",
           suggestedQuestion:

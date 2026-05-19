@@ -1,4 +1,5 @@
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
+import { collectUseCaseText } from "../helpers/usecase-text.js";
 
 /**
  * Coarse vertical / process-family labels for second-stage blueprint filtering.
@@ -48,38 +49,14 @@ export const BLUEPRINT_FAMILY_KEYWORDS: Record<string, string[]> = {
   generic: [],
 };
 
-export interface FamilyPrediction {
-  /** Matched family keys (never includes "generic" from keywords — generic is implicit fallback). */
-  labels: Set<string>;
-  /** 0–1 heuristic strength; used to decide whether to apply family filter. */
-  strength: number;
-}
-
-function collectUseCaseText(useCase: GenUseCase, originalDescription: string): string {
-  const flowBits = useCase.flows.flatMap((f) => [
-    f.id,
-    f.condition ?? "",
-    ...f.steps.map((s) => `${s.actor} ${s.description}`),
-  ]);
-  return [
-    useCase.name,
-    useCase.summary,
-    originalDescription,
-    ...(useCase.actors ?? []),
-    ...flowBits,
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
 /**
- * Keyword-based multi-label family prediction. If no keyword hits, returns empty labels
- * and strength 0 → callers should skip family filtering.
+ * Keyword-based multi-label family prediction. If no keyword hits, returns an empty set
+ * so callers can skip family filtering.
  */
 export function predictBlueprintFamilies(
   useCase: GenUseCase,
   originalDescription: string,
-): FamilyPrediction {
+): Set<string> {
   const text = collectUseCaseText(useCase, originalDescription);
   const labels = new Set<string>();
   for (const [family, keywords] of Object.entries(BLUEPRINT_FAMILY_KEYWORDS)) {
@@ -88,9 +65,7 @@ export function predictBlueprintFamilies(
       labels.add(family);
     }
   }
-  const strength =
-    labels.size === 0 ? 0 : Math.min(1, 0.35 + labels.size * 0.18);
-  return { labels, strength };
+  return labels;
 }
 
 /**

@@ -10,15 +10,14 @@ import {
   predictBlueprintFamilies,
   blueprintMatchesPredictedFamilies,
 } from "../services/blueprint-family.service.js";
-import { Gap } from "./gap-detector.types.js";
+import { DomainType } from "../services/domain-classifier.service.js";
+import { Gap, GapSeverity } from "./gap-detector.types.js";
 
 export interface BlueprintGapResult {
   gaps: Gap[];
   coveredStepKeys: Set<string>;
-  detectedDomains: Set<"human-system" | "system-system">;
+  detectedDomains: Set<DomainType>;
 }
-
-export type DomainType = "human-system" | "system-system";
 
 interface BlueprintActivationRules {
   minRolesMatched: number;
@@ -39,7 +38,7 @@ interface BlueprintScenarioDefinition {
   description: string;
   triggerCondition: string;
   anchorRole: string;
-  severity: "high" | "medium" | "low";
+  severity: GapSeverity;
   threshold: number;
   questionTemplate: string;
   checkPhrases: string[];
@@ -93,7 +92,7 @@ export interface BlueprintActivation {
   probeQuestion: string;
   confidence: number;
   assignments: RoleAssignment[];
-  domainType?: string;
+  domainType?: DomainType;
 }
 
 export interface EmbeddedStep {
@@ -155,7 +154,11 @@ async function loadBlueprints(): Promise<BlueprintDefinition[]> {
         acc[bp.domainType] = (acc[bp.domainType] || 0) + 1;
         return acc;
       },
-      {} as Record<DomainType, number>,
+      {
+        [DomainType.HumanSystem]: 0,
+        [DomainType.SystemSystem]: 0,
+        [DomainType.Ambiguous]: 0,
+      } as Record<DomainType, number>,
     );
     console.log(`Domain distribution:`, domainCounts);
 
@@ -318,17 +321,17 @@ export async function detectActivatedBlueprints(
   }
 
   if (options?.useCase && options.originalDescription !== undefined) {
-    const { labels, strength } = predictBlueprintFamilies(
+    const labels = predictBlueprintFamilies(
       options.useCase,
       options.originalDescription,
     );
-    if (labels.size > 0 && strength >= 0.35) {
+    if (labels.size > 0) {
       const before = blueprints.length;
       blueprints = blueprints.filter((bp) =>
         blueprintMatchesPredictedFamilies(bp.families, labels),
       );
       console.log(
-        `[Blueprint families] predicted=[${[...labels].join(", ")}] strength=${strength.toFixed(2)} → ${blueprints.length}/${before} blueprints`,
+        `[Blueprint families] predicted=[${[...labels].join(", ")}] → ${blueprints.length}/${before} blueprints`,
       );
     }
   }
@@ -378,7 +381,6 @@ export async function detectBlueprintGaps(
   embeddedSteps: EmbeddedStep[],
   filterByDomain?: DomainType,
   confirmedBlueprintIds?: Set<string>,
-  _droppedBlueprintIds?: Set<string>,
   options?: BlueprintActivationOptions,
 ): Promise<BlueprintGapResult> {
   let blueprints = await loadBlueprints();
@@ -393,11 +395,11 @@ export async function detectBlueprintGaps(
   }
 
   if (options?.useCase && options.originalDescription !== undefined) {
-    const { labels, strength } = predictBlueprintFamilies(
+    const labels = predictBlueprintFamilies(
       options.useCase,
       options.originalDescription,
     );
-    if (labels.size > 0 && strength >= 0.35) {
+    if (labels.size > 0) {
       const before = blueprints.length;
       blueprints = blueprints.filter((bp) =>
         blueprintMatchesPredictedFamilies(bp.families, labels),

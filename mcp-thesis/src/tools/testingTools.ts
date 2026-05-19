@@ -1,14 +1,9 @@
 import { readFile, writeFile } from "fs/promises";
 import { z } from "zod";
-import {
-  evaluateUseCase,
-  flowToText,
-} from "../evaluators/three-tier.evaluator.js";
-import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
+import { evaluateUseCase } from "../evaluators/three-tier.evaluator.js";
+import { flowToSentenceText } from "../helpers/usecase-text.js";
+import { GenFlow } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-import {
-  classifyUseCaseDomain,
-} from "../services/domain-classifier.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import semanticService from "../services/semantic.service.js";
 import {
@@ -187,7 +182,7 @@ export async function embedDataset(input: {
         continue;
       }
 
-      const text = flowToText(flow);
+      const text = flowToSentenceText(flow);
       flow.embedding = await semanticService.embed(text);
       embeddedCount += 1;
     }
@@ -238,27 +233,15 @@ export async function runHITLComparison(
       answerProvider,
     );
 
-    const baselineDomainAnalysis = await classifyUseCaseDomain(
-      loopResult.baseline,
-      geminiFunctions,
-    );
-
     const detailedBaseline = await generateFlatUseCase({
       description: tc.inputs.detailed,
       geminiFunctions,
     });
 
-    const detailedDomainAnalysis = await classifyUseCaseDomain(
-      detailedBaseline,
-      geminiFunctions,
-    );
-
     results.push({
       testCaseId: tc.id,
       conditionA_Baseline: loopResult.baseline,
-      conditionA_BaselineDomain: baselineDomainAnalysis,
       conditionA_DetailedBaseline: detailedBaseline,
-      conditionA_DetailedDomain: detailedDomainAnalysis,
       conditionB_EnhancedHITL: loopResult.useCase,
       iterativeRefinement: {
         totalIterations: loopResult.iterations.length,
@@ -312,10 +295,7 @@ export async function evaluateResults(
         key === "groundTruth" ||
         key === "hitlQuestions" ||
         key === "intermediateData" ||
-        key === "iterativeRefinement" ||
-        key === "conditionA_BaselineDomain" ||
-        key === "conditionA_DetailedDomain" ||
-        key === "conditionB_EnhancedHITLDomain"
+        key === "iterativeRefinement"
       ) {
         continue;
       }
@@ -376,11 +356,4 @@ export async function evaluateResults(
     summary,
     outputPath,
   };
-}
-
-export async function classifyUseCaseDomainTool(
-  geminiFunctions: GeminiOpenRouterFunctions,
-  useCase: GenUseCase,
-) {
-  return classifyUseCaseDomain(useCase, geminiFunctions);
 }

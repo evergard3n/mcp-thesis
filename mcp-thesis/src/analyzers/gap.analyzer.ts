@@ -1,47 +1,35 @@
-import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import semanticService from "../services/semantic.service.js";
-import { UseCaseTermScore } from "../validators/flat.validator.js";
-import {
-  detectBlueprintGaps,
-  detectActivatedBlueprints,
-  type BlueprintActivation,
-  type EmbeddedStep,
-} from "./blueprint.detector.js";
-import {
-  classifyUseCaseDomainHybrid,
-  resolveBlueprintDomainFilter,
-  type DomainType as ClassifierDomainType,
-} from "../services/domain-classifier.service.js";
 import {
   loadGapCentroids,
   type GapType,
 } from "../data/gap-centroids.loader.js";
+import { GenUseCase } from "../interfaces/usecase.interface.new.js";
 import {
-  type Gap,
-  type EmbeddedText,
-  type StepSource,
-  type ConditionSource,
-  type GapDetectionContext,
-  type DetectionPhase,
-  type GapDetectorConfig,
+  DomainType,
+} from "../services/domain-classifier.service.js";
+import semanticService from "../services/semantic.service.js";
+import {
+  detectBlueprintGaps,
+  type BlueprintActivation,
+  type EmbeddedStep,
+} from "./blueprint.detector.js";
+import {
+  GapSeverity,
   isStepSource,
-  isConditionSource,
+  type DetectionPhase,
+  type EmbeddedText,
+  type Gap,
+  type GapDetectionContext,
+  type StepSource
 } from "./gap-detector.types.js";
 import { GAP_DETECTORS } from "./gap-detectors.registry.js";
 
 // ---------------------------------------------------------------------------
 // Re-exports — maintain backward-compatible public API for all callers.
 // ---------------------------------------------------------------------------
-export type { GapType } from "../data/gap-centroids.loader.js";
 export { clearGapCentroidsCache } from "../data/gap-centroids.loader.js";
+export type { GapType } from "../data/gap-centroids.loader.js";
 export type {
-  Gap,
-  EmbeddedText,
-  StepSource,
-  ConditionSource,
-  GapDetectionContext,
-  DetectionPhase,
-  GapDetectorConfig,
+  ConditionSource, DetectionPhase, EmbeddedText, Gap, GapDetectionContext, GapDetectorConfig, StepSource
 } from "./gap-detector.types.js";
 
 // ---------------------------------------------------------------------------
@@ -51,22 +39,8 @@ export type {
 export interface GapAnalysis {
   missingExceptionFlows: boolean;
   missingAlternativeFlows: boolean;
-  incompleteActors: string[];
-  uncertainConditions: string[];
   gaps: Gap[];
   priorityGaps: GapType[];
-  completenessScore: number;
-  detectedDomains?: Set<"human-system" | "system-system">;
-  dominantDomain?: "human-system" | "system-system" | "mixed";
-  activatedBlueprints: BlueprintActivation[];
-  /** Hybrid classifier output (includes `ambiguous`); for evaluation / batch JSON. */
-  classifierDominantDomain?: ClassifierDomainType;
-  classifierOverallConfidence?: number;
-  classifierFlowDomains?: Array<{
-    flowId: string;
-    domainType: ClassifierDomainType;
-    confidence: number;
-  }>;
 }
 
 export interface InteractionMemory {
@@ -98,6 +72,17 @@ export interface ConsolidationGroup {
     }>,
   ) => string;
   answerGuidance: string;
+}
+
+/**
+ * Carries the outputs of the blueprint probe phase into gap analysis.
+ * Groups domain type, activated blueprints, and the confirmed subset
+ * so they travel as one coherent unit.
+ */
+export interface BlueprintProbeContext {
+  domainType: DomainType;
+  activations: BlueprintActivation[];
+  confirmedIds: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,35 +175,6 @@ const GAP_TYPE_PRIORITY: GapType[] = [
   "uncertain_conditions",
   "incomplete_actors",
 ];
-
-// ---------------------------------------------------------------------------
-// Blueprint → centroid suppression map
-// When a blueprint family is dropped by the expert, linked centroid gap types
-// are suppressed to avoid asking questions the expert already ruled out.
-// ---------------------------------------------------------------------------
-
-const BLUEPRINT_CENTROID_SUPPRESSION: Partial<Record<string, GapType[]>> = {
-  session_persistence: ["missing_save_resume_handling"],
-};
-
-function buildSuppressedGapTypes(
-  droppedBlueprintIds?: Set<string>,
-): Set<GapType> {
-  const suppressed = new Set<GapType>();
-  if (!droppedBlueprintIds) return suppressed;
-  for (const blueprintId of droppedBlueprintIds) {
-    const linked = BLUEPRINT_CENTROID_SUPPRESSION[blueprintId];
-    if (linked) {
-      for (const gapType of linked) {
-        suppressed.add(gapType);
-        console.log(
-          `[Blueprint-Centroid Suppression] Suppressing gap type "${gapType}" because blueprint "${blueprintId}" was dropped`,
-        );
-      }
-    }
-  }
-  return suppressed;
-}
 
 // ---------------------------------------------------------------------------
 // Embedding helpers (used by orchestrator + probe phase)
@@ -363,48 +319,6 @@ async function isGapCoveredByHistory(
 // Scoring & priority helpers
 // ---------------------------------------------------------------------------
 
-function calculateCompletenessScore(
-  validationFeedback: UseCaseTermScore,
-  gaps: Gap[],
-  missingExceptionFlows: boolean,
-  missingAlternativeFlows: boolean,
-): number {
-  let score = validationFeedback.overall / 100;
-
-  if (missingExceptionFlows) {
-    score *= 0.6;
-  }
-
-  const validationGapCount = gaps.filter(
-    (g) =>
-      g.type === "missing_validation_handling" ||
-      g.type === "missing_system_failure_handling",
-  ).length;
-  if (validationGapCount > 0) {
-    score *= Math.max(0.5, 1 - validationGapCount * 0.1);
-  }
-
-  const dataQualityGapCount = gaps.filter(
-    (g) => g.type === "missing_data_quality_handling",
-  ).length;
-  if (dataQualityGapCount > 0) {
-    score *= Math.max(0.5, 1 - dataQualityGapCount * 0.15);
-  }
-
-  const resourceGapCount = gaps.filter(
-    (g) => g.type === "missing_resource_availability",
-  ).length;
-  if (resourceGapCount > 0) {
-    score *= Math.max(0.6, 1 - resourceGapCount * 0.1);
-  }
-
-  if (missingAlternativeFlows) {
-    score *= 0.85;
-  }
-
-  return score;
-}
-
 function computePriorityGaps(gaps: Gap[]): GapType[] {
   const priorityGaps: GapType[] = [];
   const blueprintTypes = Array.from(
@@ -414,7 +328,7 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
   );
 
   for (const type of blueprintTypes) {
-    if (gaps.some((g) => g.type === type && g.severity === "high")) {
+    if (gaps.some((g) => g.type === type && g.severity === GapSeverity.High)) {
       priorityGaps.push(type);
     }
   }
@@ -423,7 +337,7 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
   }
 
   for (const type of GAP_TYPE_PRIORITY) {
-    if (gaps.some((g) => g.type === type && g.severity === "high")) {
+    if (gaps.some((g) => g.type === type && g.severity === GapSeverity.High)) {
       priorityGaps.push(type);
     }
   }
@@ -454,24 +368,15 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
  */
 export async function analyzeGaps(
   useCase: GenUseCase,
-  validationFeedback: UseCaseTermScore,
   originalDescription: string,
+  probeContext: BlueprintProbeContext,
   conversationHistory?: InteractionMemory[],
-  confirmedBlueprintIds?: Set<string>,
-  droppedBlueprintIds?: Set<string>,
-  phase: DetectionPhase = "initial",
+  phase: DetectionPhase = "post-probe",
 ): Promise<GapAnalysis> {
   const gaps: Gap[] = [];
+  const { domainType, confirmedIds } = probeContext;
 
-  // Phase 0: Classify domain to filter blueprints
-  console.log(`[Gap Analyzer] Classifying use case domain...`);
-  const domainAnalysis = await classifyUseCaseDomainHybrid(useCase);
-  const blueprintDomainFilter = resolveBlueprintDomainFilter(domainAnalysis);
-  console.log(
-    `[Gap Analyzer] Classifier domain: ${domainAnalysis.dominantDomain} | blueprint pool: ${blueprintDomainFilter ?? "all (ambiguous → union)"}`,
-  );
-
-  // Phase 1: Collect and embed all texts
+  // Phase 1: Embed all texts in the use case (steps + flow conditions)
   const embeddedTexts = await collectAndEmbedTexts(useCase);
   const stepEmbeddings = embeddedTexts
     .filter((item) => isStepSource(item.source))
@@ -481,34 +386,26 @@ export async function analyzeGaps(
       embedding: item.embedding,
     }));
   const categories = await loadGapCentroids();
+  const blueprintDomainFilter = domainType === DomainType.Ambiguous ? undefined : domainType;
 
-  // Phase 1.5: Blueprint detection (soft-drop: dropped IDs do not remove blueprints from gap pass)
+  // Phase 2: Detect blueprint-specific gaps using confirmed blueprints from probe
   const blueprintResult = await detectBlueprintGaps(
     useCase,
     stepEmbeddings,
     blueprintDomainFilter,
-    confirmedBlueprintIds,
-    droppedBlueprintIds,
+    confirmedIds,
     { useCase, originalDescription },
   );
   gaps.push(...blueprintResult.gaps);
 
-  const activatedBlueprints = await detectActivatedBlueprints(
-    stepEmbeddings,
-    blueprintDomainFilter,
-    { useCase, originalDescription },
-  );
-
-  // Phase 2+: Run the registered detector pipeline (centroid suppression from probe drops disabled with soft-drop)
-  const suppressedGapTypes = buildSuppressedGapTypes(new Set());
+  // Phase 3: Run the registered detector pipeline (centroid, structural, pattern detectors)
   const ctx: GapDetectionContext = {
     useCase,
     originalDescription,
     embeddedTexts,
     categories,
     coveredStepKeys: blueprintResult.coveredStepKeys,
-    suppressedGapTypes,
-    validationFeedback,
+    suppressedGapTypes: new Set(),
   };
 
   const activeDetectors = GAP_DETECTORS.filter(
@@ -519,27 +416,8 @@ export async function analyzeGaps(
     gaps.push(...(await detector.detect(ctx)));
   }
 
-  // Structural flags — computed from validationFeedback independently of
-  // whether detectors fired, so GapAnalysis always reflects the true state.
-  const missingExceptionFlows = !validationFeedback.hasExceptionFlow;
-  const missingAlternativeFlows = !validationFeedback.hasAlternativeFlow;
-
-  // Derive incompleteActors from gaps emitted by the structural detector
-  const incompleteActors = gaps
-    .filter((g) => g.type === "incomplete_actors")
-    .map((g) => {
-      const match = g.description.match(/Actor '(.+)' is declared/);
-      return match ? match[1] : "";
-    })
-    .filter(Boolean);
-
-  // Phase 6: Filter stale gaps, compute completeness and priority
-  const completenessScore = calculateCompletenessScore(
-    validationFeedback,
-    gaps,
-    missingExceptionFlows,
-    missingAlternativeFlows,
-  );
+  const missingExceptionFlows = !useCase.flows.some((f) => f.kind === "EXCEPTION");
+  const missingAlternativeFlows = !useCase.flows.some((f) => f.kind === "ALTERNATIVE");
 
   const filteredGaps =
     conversationHistory && conversationHistory.length > 0
@@ -548,37 +426,10 @@ export async function analyzeGaps(
 
   const priorityGaps = computePriorityGaps(filteredGaps);
 
-  // Derive uncertainConditions from gaps — replaces the former side channel
-  const uncertainConditions = filteredGaps
-    .filter((g) => g.type === "uncertain_conditions" && g.relatedFlow)
-    .map((g) => g.relatedFlow!);
-
-  let dominantDomain: "human-system" | "system-system" | "mixed" | undefined;
-  if (blueprintResult.detectedDomains.size === 1) {
-    dominantDomain = Array.from(blueprintResult.detectedDomains)[0];
-  } else if (blueprintResult.detectedDomains.size > 1) {
-    dominantDomain = "mixed";
-  }
-
-  const classifierFlowDomains = domainAnalysis.flowClassifications.map((f) => ({
-    flowId: f.flowId,
-    domainType: f.domainType,
-    confidence: f.confidence,
-  }));
-
   return {
     missingExceptionFlows,
     missingAlternativeFlows,
-    incompleteActors,
-    uncertainConditions,
     gaps: filteredGaps,
     priorityGaps,
-    completenessScore: Math.max(0, Math.min(1, completenessScore)),
-    detectedDomains: blueprintResult.detectedDomains,
-    dominantDomain,
-    activatedBlueprints,
-    classifierDominantDomain: domainAnalysis.dominantDomain,
-    classifierOverallConfidence: domainAnalysis.overallConfidence,
-    classifierFlowDomains,
   };
 }

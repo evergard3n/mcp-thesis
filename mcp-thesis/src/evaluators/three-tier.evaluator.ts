@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { GenFlow, GenUseCase } from "../interfaces/usecase.interface.new.js";
+import {
+  flowToSentenceText,
+  stepToSentenceText,
+} from "../helpers/usecase-text.js";
 import semanticService from "../services/semantic.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 
@@ -15,14 +19,6 @@ const batchFlowEvalSchema = z.array(
 );
 
 type GroundTruthFlow = GenFlow & { embedding?: number[] };
-
-export function flowToText(flow: GenFlow): string {
-  const stepsText = flow.steps
-    .map((step) => `${step.actor} ${step.description}`)
-    .join(". ");
-  const conditionText = flow.condition ? ` ${flow.condition}` : "";
-  return `${flow.kind}${conditionText}: ${stepsText}`;
-}
 
 type BranchInferenceContext = {
   mainSteps: GenFlow["steps"];
@@ -43,7 +39,7 @@ async function inferBranchStepIndex(
   if (candidateIndexes.length === 0) return null;
   if (candidateIndexes.length === 1) return candidateIndexes[0];
 
-  const flowText = flowToText(flow);
+  const flowText = flowToSentenceText(flow);
   const [flowEmbedding] = await semanticService.embedBatch([flowText]);
   let bestScore = -Infinity;
   let bestIndex: number | null = null;
@@ -67,9 +63,7 @@ async function inferBranchStepIndex(
 async function buildBranchInferenceContext(
   mainFlow: GenFlow,
 ): Promise<BranchInferenceContext> {
-  const mainStepTexts = mainFlow.steps.map(
-    (step) => `${step.actor} ${step.description}`,
-  );
+  const mainStepTexts = mainFlow.steps.map(stepToSentenceText);
   const mainStepEmbeddings = await semanticService.embedBatch(mainStepTexts);
   const actorToStepIndexes = new Map<string, number[]>();
 
@@ -98,7 +92,7 @@ async function getGroundTruthEmbeddings(
     if (flow.embedding && flow.embedding.length > 0) {
       embeddings[index] = flow.embedding;
     } else {
-      missingTexts.push(flowToText(flow));
+      missingTexts.push(flowToSentenceText(flow));
       missingIndexes.push(index);
     }
   });
@@ -142,7 +136,7 @@ async function matchFlowsToGroundTruth(
 
   const groundTruthEmbeddings =
     await getGroundTruthEmbeddings(groundTruthFlows);
-  const generatedTexts = generatedFlows.map(flowToText);
+  const generatedTexts = generatedFlows.map(flowToSentenceText);
   const generatedEmbeddings = await semanticService.embedBatch(generatedTexts);
 
   const groundTruthBranchIndexes: Array<number | null> = [];

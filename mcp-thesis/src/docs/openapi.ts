@@ -394,27 +394,6 @@ export const openApiSpec = {
         },
       },
     },
-    "/sessions/{sessionId}/testing/classify-domain": {
-      post: {
-        tags: ["Testing"],
-        summary: "Classify use case domain",
-        parameters: [{ $ref: "#/components/parameters/SessionId" }],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: { $ref: "#/components/schemas/ClassifyDomainRequest" },
-            },
-          },
-        },
-        responses: {
-          "200": { $ref: "#/components/responses/GenericSuccess" },
-          "400": { $ref: "#/components/responses/BadRequest" },
-          "404": { $ref: "#/components/responses/NotFound" },
-          "500": { $ref: "#/components/responses/InternalServerError" },
-        },
-      },
-    },
   },
   components: {
     parameters: {
@@ -544,17 +523,6 @@ export const openApiSpec = {
           datasetPath: { type: "string", minLength: 1 },
         },
         required: ["resultsPath", "datasetPath"],
-      },
-      ClassifyDomainRequest: {
-        type: "object",
-        properties: {
-          useCase: {
-            type: "object",
-            additionalProperties: true,
-            description: "Free-form use case object",
-          },
-        },
-        required: ["useCase"],
       },
       GenericObject: {
         type: "object",

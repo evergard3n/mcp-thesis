@@ -45,11 +45,11 @@ GenFlow:
   //   - Do NOT include parentFlow or fromStepIndex.
   //
   // For ALTERNATIVE and EXCEPTION:
-  //   - parentFlow must be "MAIN" (for now).
-  //   - fromStepIndex is the step index in the MAIN flow where this branch starts.
+  //   - parentFlow is usually "MAIN", but may reference another flow ID for nested branches.
+  //   - fromStepIndex is the step index in the parent flow where this branch starts.
   //
-  // Example: fromStepIndex = 5 means "this flow branches from step 5 of MAIN".
-  "parentFlow"?: "MAIN",
+  // Example: fromStepIndex = 5 means "this flow branches from step 5 of its parent flow".
+  "parentFlow"?: string,
   "fromStepIndex"?: number,
 
   // For MAIN, condition is usually omitted or null.
@@ -164,10 +164,11 @@ ${answersContext}
 For each answer:
 1. Identify if it describes one or MULTIPLE scenarios
 2. For each scenario, determine if it's an EXCEPTION flow (error, failure) or ALTERNATIVE flow (different valid path)
-3. Generate a unique flow ID following the convention (e.g., "EXT_2a", "ALT_3a").
-4. Determine which flow step this branches from (fromStepIndex and parentFlow)
-5. Extract the branching condition from the answer
-6. Break down the scenario into sequential steps with actors and descriptions
+3. Set "kind" to exactly "ALTERNATIVE" or "EXCEPTION" (uppercase enum values only).
+4. Generate a unique flow ID following the convention (e.g., "EXT_2a", "ALT_3a").
+5. Determine which flow step this branches from (fromStepIndex and parentFlow)
+6. Extract the branching condition from the answer
+7. Break down the scenario into sequential steps with actors and descriptions
 
  Consolidated question handling:
  - If the answer references multiple steps (see "Covered steps"), map scenarios to the appropriate step.
@@ -306,12 +307,17 @@ ${JSON.stringify(useCase, null, 2)}
 ${qaContext}
 </expert_answers>
 
+<schema>
+${USECASE_SCHEMA_BLOCK}
+</schema>
+
 <constraints>
 1. Output ONLY a single JSON object matching the GenUseCase schema below.
 2. MAIN flow should be rebuilt from the original description and expert answers. You MUST preserve existing steps but MAY add new steps, insert actors into existing steps, or enrich step descriptions if the answers reveal a richer sequence. Do NOT remove or reorder existing steps. The rebuilt MAIN must remain consistent with the original description.
 3. When adding new flows, follow the flow ID convention strictly.
 4. The "actors" array must reflect all actors mentioned in ALL steps (existing + new).
 5. Preserve existing flow IDs exactly.
+6. Every flow "kind" must be exactly one of: "MAIN", "ALTERNATIVE", "EXCEPTION".
 
 ${FLOW_ID_CONVENTION}
 </constraints>

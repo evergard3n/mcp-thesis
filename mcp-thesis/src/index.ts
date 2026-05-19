@@ -18,7 +18,6 @@ import {
   viewProjectUseCases,
 } from "./tools/projectTools.js";
 import {
-  classifyUseCaseDomainTool,
   embedDataset,
   evaluateResults,
   prepareTestData,
@@ -63,10 +62,6 @@ const runHitlComparisonSchema = z.object({
 const evaluateResultsSchema = z.object({
   resultsPath: z.string().min(1),
   datasetPath: z.string().min(1),
-});
-
-const classifyDomainSchema = z.object({
-  useCase: z.any(),
 });
 
 const startHitlSchema = z.object({
@@ -415,27 +410,6 @@ app.post("/sessions/:sessionId/testing/evaluate-results", async (req, res) => {
   }
   try {
     const result = await evaluateResults(session.geminiFunctions, parsed.data);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-});
-
-app.post("/sessions/:sessionId/testing/classify-domain", async (req, res) => {
-  const session = requireSession(req.params.sessionId, res);
-  if (!session) return;
-  const parsed = classifyDomainSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-  try {
-    const result = await classifyUseCaseDomainTool(
-      session.geminiFunctions,
-      parsed.data.useCase,
-    );
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({
