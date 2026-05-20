@@ -10,7 +10,7 @@ import {
 } from "../helpers/usecase.prompts.js";
 
 // ---------------------------------------------------------------------------
-// normalizeFlowIds 
+// normalizeFlowIds
 // ---------------------------------------------------------------------------
 
 // Recursively computes nesting depth of a flow (MAIN's direct children = 0).
@@ -164,20 +164,18 @@ export async function extractFlowsFromOpenEndedAnswers(
   }
 
   const answersContext = answers
-    .map(
-      (a, i) => {
-        const stepIndexes = questionStepMap.get(a.questionId);
-        const stepHint = stepIndexes
-          ? `Covered steps: ${stepIndexes.join(", ")}`
-          : "";
-        return `
+    .map((a, i) => {
+      const stepIndexes = questionStepMap.get(a.questionId);
+      const stepHint = stepIndexes
+        ? `Covered steps: ${stepIndexes.join(", ")}`
+        : "";
+      return `
 Answer ${i + 1} (ID: ${a.questionId}):
 ${a.answer}
 ${stepHint}
 Confidence: ${a.confidence || "medium"}
 `;
-      },
-    )
+    })
     .join("\n---\n");
 
   const prompt = buildExtractFlowsPrompt(baseUseCase, answersContext);
@@ -186,6 +184,79 @@ Confidence: ${a.confidence || "medium"}
     prompt,
     schema: extractedFlowSchema,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Flow consolidation (post-loop cleanup)
+// ---------------------------------------------------------------------------
+
+function buildConsolidateFlowsPrompt(
+  flows: Array<{
+    id: string;
+    kind: string;
+    condition?: string;
+    steps: Array<{ actor: string; description: string }>;
+  }>,
+): string {
+  const flowSummaries = flows
+    .filter((f) => f.id !== "MAIN")
+    .map((f) => {
+      const stepLines = f.steps
+        .map((s) => `    - ${s.actor}: ${s.description}`)
+        .join("\n");
+      const cond = f.condition ? ` [condition: ${f.condition}]` : "";
+      return `  ${f.id} (${f.kind})${cond}:\n${stepLines}`;
+    })
+    .join("\n\n");
+
+  return `
+<task>
+You are reviewing a set of use case flows for redundancy. Identify flows that are superseded by more specific flows that together cover the same scenario.
+
+A flow is REDUNDANT if:
+- Another flow (or set of flows) already covers the same trigger condition and outcome with equal or greater specificity.
+- Example: a vague "product unavailable" flow is redundant when "product sold out" AND "product unlisted" both exist.
+- Example: two flows that both say "Spirit Director modifies event details" from the same branch point are redundant — keep only one.
+
+Rules:
+- NEVER mark MAIN as redundant.
+- Only mark a flow redundant if it is fully covered by other flow(s). Partial overlap is NOT enough.
+- If nothing is clearly redundant, return an empty array.
+</task>
+
+<flows>
+${flowSummaries}
+</flows>
+
+Return a JSON array of flow IDs to remove. If nothing to remove, return an empty array.
+`;
+}
+
+export async function consolidateFlows(
+  useCase: GenUseCase,
+  geminiFunctions: GeminiOpenRouterFunctions,
+): Promise<GenUseCase> {
+  if (useCase.flows.length <= 2) return useCase;
+
+  const { z } = await import("zod");
+  const removeSchema = z.array(z.string());
+
+  const prompt = buildConsolidateFlowsPrompt(useCase.flows);
+  const idsToRemove = (
+    await geminiFunctions.generateStructured({ prompt, schema: removeSchema })
+  ).filter((id) => id !== "MAIN");
+
+  console.log(
+    `[Consolidation] LLM returned IDs to remove: ${JSON.stringify(idsToRemove)}`,
+  );
+  if (idsToRemove.length === 0) return useCase;
+
+  const removeSet = new Set(idsToRemove);
+  const consolidated = {
+    ...useCase,
+    flows: useCase.flows.filter((f) => !removeSet.has(f.id)),
+  };
+  return normalizeFlowIds(consolidated);
 }
 
 export async function refineWithHybridAnswers(
@@ -199,10 +270,17 @@ export async function refineWithHybridAnswers(
   geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<GenUseCase> {
   const qaContext = openEndedAnswers
-    .map((a) => `Answer [${a.questionId}] (confidence: ${a.confidence ?? "high"}):\n${a.answer}`)
+    .map(
+      (a) =>
+        `Answer [${a.questionId}] (confidence: ${a.confidence ?? "high"}):\n${a.answer}`,
+    )
     .join("\n\n");
 
-  const prompt = buildRefineWithHybridAnswersPrompt(originalDescription, baseUseCase, qaContext);
+  const prompt = buildRefineWithHybridAnswersPrompt(
+    originalDescription,
+    baseUseCase,
+    qaContext,
+  );
 
   const rebuiltUseCase = await geminiFunctions.generateStructured({
     prompt,

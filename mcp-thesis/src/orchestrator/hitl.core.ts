@@ -16,7 +16,10 @@ import {
 import { parseConsolidatedId } from "../helpers/consolidated-id.js";
 import { flowToPipeText } from "../helpers/usecase-text.js";
 import { buildInteractionMemories } from "../helpers/memory.builder.js";
-import { type GenFlow, type GenUseCase } from "../interfaces/usecase.interface.new.js";
+import {
+  type GenFlow,
+  type GenUseCase,
+} from "../interfaces/usecase.interface.new.js";
 import {
   classifyUseCaseDomainHybrid,
   DomainType,
@@ -28,12 +31,13 @@ import {
   generateFlatUseCase,
   normalizeFlowIds,
   refineWithHybridAnswers,
+  consolidateFlows,
 } from "../services/usecase.service.js";
 import {
   generateAdaptiveQuestions,
   probeBlueprintsWithExpert,
   type OpenEndedAnswer,
-  type OpenEndedQuestion
+  type OpenEndedQuestion,
 } from "../validators/llm.validator.js";
 
 // ---------------------------------------------------------------------------
@@ -81,7 +85,10 @@ function classifyAnswerScope(
     return "step-specific";
   }
 
-  if (question.context.steps && question.context.steps.length > BROAD_SCOPE_STEP_THRESHOLD) {
+  if (
+    question.context.steps &&
+    question.context.steps.length > BROAD_SCOPE_STEP_THRESHOLD
+  ) {
     return "broad";
   }
 
@@ -160,7 +167,9 @@ async function filterUngroundedDeltaFlows(
 ): Promise<GenFlow[]> {
   if (deltaFlows.length === 0 || broadAnswers.length === 0) return deltaFlows;
 
-  const answerTexts = broadAnswers.map((a) => a.answer).filter((t) => t.trim().length > 0);
+  const answerTexts = broadAnswers
+    .map((a) => a.answer)
+    .filter((t) => t.trim().length > 0);
   if (answerTexts.length === 0) return deltaFlows;
 
   const flowTexts = deltaFlows.map(flowToPipeText);
@@ -174,7 +183,10 @@ async function filterUngroundedDeltaFlows(
   for (let i = 0; i < deltaFlows.length; i++) {
     let maxSim = 0;
     for (const answerEmb of answerEmbeddings) {
-      const sim = await semanticService.cosineSimilarity(flowEmbeddings[i], answerEmb);
+      const sim = await semanticService.cosineSimilarity(
+        flowEmbeddings[i],
+        answerEmb,
+      );
       if (sim > maxSim) maxSim = sim;
     }
     if (maxSim >= threshold) {
@@ -259,7 +271,8 @@ export async function probeBlueprints(
 }> {
   const stepEmbeddings = await collectStepEmbeddings(useCase);
   const domainType = await classifyUseCaseDomainHybrid(useCase);
-  const activationFilter = domainType === DomainType.Ambiguous ? undefined : domainType;
+  const activationFilter =
+    domainType === DomainType.Ambiguous ? undefined : domainType;
 
   const activations = await detectActivatedBlueprints(
     stepEmbeddings,
@@ -310,13 +323,14 @@ export async function runHITLLoop(
   answerProvider: AnswerProvider,
   callbacks?: HITLCallbacks,
 ): Promise<HITLLoopResult> {
-  callbacks?.onPhaseChange?.("GENERATING_BASELINE", "Generating baseline use case", 0);
-
-  // generating baseline 
-  const baseline = await generateBaseline(
-    loopInput.vague,
-    geminiFunctions,
+  callbacks?.onPhaseChange?.(
+    "GENERATING_BASELINE",
+    "Generating baseline use case",
+    0,
   );
+
+  // generating baseline
+  const baseline = await generateBaseline(loopInput.vague, geminiFunctions);
   const baselineFlowIds = new Set(baseline.flows.map((f) => f.id));
 
   callbacks?.onBaseline?.(baseline);
@@ -376,7 +390,11 @@ export async function runHITLLoop(
     const gapAnalysis = await analyzeGaps(
       currentUseCase,
       loopInput.vague,
-      { domainType: initialDomainType, activations, confirmedIds: new Set(confirmed) },
+      {
+        domainType: initialDomainType,
+        activations,
+        confirmedIds: new Set(confirmed),
+      },
       conversationHistory,
     );
     const uncertaintyAnalysis = rankAllUncertainties(
@@ -400,12 +418,21 @@ export async function runHITLLoop(
     const shouldStopByConfidence =
       uncertaintyAnalysis.overallConfidence > 0.85 &&
       uncertaintyAnalysis.highPriorityCount === 0;
-    const shouldStopByStall = isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
+    const shouldStopByStall =
+      isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
     const hasMinimumFlows = currentUseCase.flows.length >= 3;
 
     if ((shouldStopByConfidence && hasMinimumFlows) || shouldStopByStall) {
       callbacks?.onIterationComplete?.(
-        { updatedUseCase: currentUseCase, questions: [], answers: [], memories: [], gapAnalysis, uncertaintyAnalysis, stop: "confidence" },
+        {
+          updatedUseCase: currentUseCase,
+          questions: [],
+          answers: [],
+          memories: [],
+          gapAnalysis,
+          uncertaintyAnalysis,
+          stop: "confidence",
+        },
         iterationIndex + 1,
       );
       break;
@@ -413,7 +440,9 @@ export async function runHITLLoop(
 
     // --- generate questions ---
     const remainingBudget = config.maxQuestions - totalQuestionsAsked;
-    const globalGaps = gapAnalysis.gaps.filter((g) => g.relatedStep === undefined);
+    const globalGaps = gapAnalysis.gaps.filter(
+      (g) => g.relatedStep === undefined,
+    );
     const questions: OpenEndedQuestion[] = await generateAdaptiveQuestions(
       uncertaintyAnalysis.stepPriorities,
       uncertaintyAnalysis.flowUncertainties,
@@ -429,18 +458,34 @@ export async function runHITLLoop(
 
     if (questions.length === 0) {
       callbacks?.onIterationComplete?.(
-        { updatedUseCase: currentUseCase, questions: [], answers: [], memories: [], gapAnalysis, uncertaintyAnalysis, stop: "no_questions" },
+        {
+          updatedUseCase: currentUseCase,
+          questions: [],
+          answers: [],
+          memories: [],
+          gapAnalysis,
+          uncertaintyAnalysis,
+          stop: "no_questions",
+        },
         iterationIndex + 1,
       );
       break;
     }
 
     callbacks?.onQuestions?.(questions, iterationIndex + 1);
-    callbacks?.onPhaseChange?.("REFINING", "Refining use case with answers", iterationIndex + 1);
+    callbacks?.onPhaseChange?.(
+      "REFINING",
+      "Refining use case with answers",
+      iterationIndex + 1,
+    );
 
     // --- answer + refine ---
     const answers = await answerProvider(questions, iterationIndex);
-    const memories = await buildInteractionMemories(questions, answers, iterationIndex + 1);
+    const memories = await buildInteractionMemories(
+      questions,
+      answers,
+      iterationIndex + 1,
+    );
 
     const broadAnswers: OpenEndedAnswer[] = [];
     const stepSpecificAnswers: OpenEndedAnswer[] = [];
@@ -463,9 +508,14 @@ export async function runHITLLoop(
         geminiFunctions,
       );
       // F4: remove delta flows not grounded in any broad answer (prevents hallucination accumulation)
-      const deltaFlows = updatedUseCase.flows.filter((f) => !preBroadFlowIds.has(f.id));
+      const deltaFlows = updatedUseCase.flows.filter(
+        (f) => !preBroadFlowIds.has(f.id),
+      );
       if (deltaFlows.length > 0) {
-        const groundedDelta = await filterUngroundedDeltaFlows(deltaFlows, broadAnswers);
+        const groundedDelta = await filterUngroundedDeltaFlows(
+          deltaFlows,
+          broadAnswers,
+        );
         const survivingDeltaIds = new Set(groundedDelta.map((f) => f.id));
         updatedUseCase = {
           ...updatedUseCase,
@@ -482,7 +532,10 @@ export async function runHITLLoop(
         updatedUseCase,
         geminiFunctions,
       );
-      const uniqueFlows = await deduplicateFlows(updatedUseCase.flows, extractedFlows);
+      const uniqueFlows = await deduplicateFlows(
+        updatedUseCase.flows,
+        extractedFlows,
+      );
       if (uniqueFlows.length > 0) {
         updatedUseCase = normalizeFlowIds({
           ...updatedUseCase,
@@ -525,8 +578,50 @@ export async function runHITLLoop(
     }
 
     callbacks?.onIterationComplete?.(
-      { updatedUseCase: currentUseCase, questions, answers, memories, gapAnalysis, uncertaintyAnalysis, stop: null },
+      {
+        updatedUseCase: currentUseCase,
+        questions,
+        answers,
+        memories,
+        gapAnalysis,
+        uncertaintyAnalysis,
+        stop: null,
+      },
       iterationIndex + 1,
+    );
+  }
+
+  callbacks?.onPhaseChange?.(
+    "CONSOLIDATING",
+    "Consolidating redundant flows",
+    iterations.length,
+  );
+  const flowCountBeforeConsolidate = currentUseCase.flows.length;
+  currentUseCase = await consolidateFlows(
+    currentUseCase,
+    loopInput.geminiFunctions,
+  );
+  const removed = flowCountBeforeConsolidate - currentUseCase.flows.length;
+  if (removed > 0) {
+    console.log(
+      `[Consolidation] Removed ${removed} redundant flow(s). Flows: ${flowCountBeforeConsolidate} → ${currentUseCase.flows.length}`,
+    );
+  }
+
+  callbacks?.onPhaseChange?.(
+    "CONSOLIDATING",
+    "Consolidating redundant flows",
+    iterations.length,
+  );
+  const flowCountBeforeConsolidate = currentUseCase.flows.length;
+  currentUseCase = await consolidateFlows(
+    currentUseCase,
+    loopInput.geminiFunctions,
+  );
+  const removed = flowCountBeforeConsolidate - currentUseCase.flows.length;
+  if (removed > 0) {
+    console.log(
+      `[Consolidation] Removed ${removed} redundant flow(s). Flows: ${flowCountBeforeConsolidate} → ${currentUseCase.flows.length}`,
     );
   }
 
