@@ -15,7 +15,8 @@
     "prepack": "npm run build",
     "watch": "tsc --watch",
     "dev": "npx -y tsx watch src/index.ts",
-    "test:evaluated-averages": "node test-scripts/calculate-evaluated-averages.js"
+    "test:evaluated-averages": "node test-scripts/calculate-evaluated-averages.js",
+    "test:hitl-all-datasets": "tsx test-scripts/test-hitl-all-datasets.ts"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

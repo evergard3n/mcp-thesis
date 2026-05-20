@@ -597,27 +597,7 @@ export async function runHITLLoop(
     iterations.length,
   );
   const flowCountBeforeConsolidate = currentUseCase.flows.length;
-  currentUseCase = await consolidateFlows(
-    currentUseCase,
-    loopInput.geminiFunctions,
-  );
-  const removed = flowCountBeforeConsolidate - currentUseCase.flows.length;
-  if (removed > 0) {
-    console.log(
-      `[Consolidation] Removed ${removed} redundant flow(s). Flows: ${flowCountBeforeConsolidate} → ${currentUseCase.flows.length}`,
-    );
-  }
-
-  callbacks?.onPhaseChange?.(
-    "CONSOLIDATING",
-    "Consolidating redundant flows",
-    iterations.length,
-  );
-  const flowCountBeforeConsolidate = currentUseCase.flows.length;
-  currentUseCase = await consolidateFlows(
-    currentUseCase,
-    loopInput.geminiFunctions,
-  );
+  currentUseCase = await consolidateFlows(currentUseCase, geminiFunctions);
   const removed = flowCountBeforeConsolidate - currentUseCase.flows.length;
   if (removed > 0) {
     console.log(

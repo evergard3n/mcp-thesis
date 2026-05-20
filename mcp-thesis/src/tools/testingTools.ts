@@ -34,6 +34,31 @@ interface DatasetFile {
   testCases: DatasetTestCase[];
 }
 
+export interface HitlComparisonTestCaseResult {
+  testCaseId: string;
+  conditionA_Baseline: unknown;
+  conditionA_DetailedBaseline: unknown;
+  conditionB_EnhancedHITL: unknown;
+  iterativeRefinement: {
+    totalIterations: number;
+    totalQuestionsAsked: number;
+    iterations: Array<{
+      iteration: number;
+      questionsAsked: number;
+      overallConfidence: number;
+      highPriorityCount: number;
+      flowCountBefore: number;
+      flowCountAfter: number;
+      newFlowsAdded: number;
+      hadFlowProducingQuestions: boolean;
+      questions: string[];
+      answers: string[];
+    }>;
+    debugInfo: Record<string, unknown>;
+  };
+  groundTruth: unknown;
+}
+
 const metadataExtractionSchema = z.object({
   testCaseId: z
     .string()
@@ -204,14 +229,14 @@ export async function runHITLComparison(
     datasetPath: string;
     testCaseIds?: string[];
   },
-) {
+): Promise<{ results: HitlComparisonTestCaseResult[]; outputPath: string }> {
   const { datasetPath, testCaseIds } = input;
   const dataset = JSON.parse(await readFile(datasetPath, "utf-8"));
   const testCases = testCaseIds
     ? dataset.testCases.filter((tc: any) => testCaseIds.includes(tc.id))
     : dataset.testCases;
 
-  const results = [];
+  const results: HitlComparisonTestCaseResult[] = [];
 
   for (const tc of testCases) {
     const answerProvider: AnswerProvider = async (questions) =>
