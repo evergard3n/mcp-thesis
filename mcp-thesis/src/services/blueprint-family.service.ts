@@ -76,13 +76,13 @@ export function predictBlueprintFamilies(
  */
 export function blueprintMatchesPredictedFamilies(
   blueprintFamilies: string[] | undefined,
-  predicted: Set<string>,
+  predictedBlueprints: Set<string>,
 ): boolean {
   const fams =
     blueprintFamilies && blueprintFamilies.length > 0
       ? blueprintFamilies
       : ["generic"];
   if (fams.includes("generic")) return true;
-  if (predicted.size === 0) return true;
-  return fams.some((f) => predicted.has(f));
+  if (predictedBlueprints.size === 0) return true;
+  return fams.some((f) => predictedBlueprints.has(f));
 }

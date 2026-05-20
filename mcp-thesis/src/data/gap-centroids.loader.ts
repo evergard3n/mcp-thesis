@@ -35,6 +35,7 @@ export interface GapCategory {
   threshold: number;
   gapType: GapType;
   requiresExceptionCheck: boolean;
+  answerGuidance?: string;
 }
 
 interface GapCentroidData {
@@ -61,6 +62,19 @@ export function getCentroidByName(name: string): GapCategory | undefined {
   return gapCentroidsCache?.find((c) => c.name === name);
 }
 
+const DEFAULT_ANSWER_GUIDANCE =
+  "Describe the scenario: what triggers it, what steps are taken, and how it resolves or integrates with the main flow.";
+
+/**
+ * Synchronous lookup — safe to call after loadGapCentroids() has resolved.
+ * Returns the answerGuidance stored in gap-centroids.json for the given gapType,
+ * or a generic fallback if the type is not found.
+ */
+export function getGuidanceForGapType(gapType: string): string {
+  const cat = gapCentroidsCache?.find((c) => c.gapType === gapType);
+  return cat?.answerGuidance ?? DEFAULT_ANSWER_GUIDANCE;
+}
+
 export async function loadGapCentroids(): Promise<GapCategory[]> {
   if (gapCentroidsCache) return gapCentroidsCache;
 
@@ -73,7 +87,7 @@ export async function loadGapCentroids(): Promise<GapCategory[]> {
     let categoriesWithCentroids = 0;
 
     for (const [name, category] of Object.entries(data.categories)) {
-      if (!category.centroid) {
+      if (!category.centroid && category.keywords.length > 0) {
         console.log(
           `  Computing centroid for "${name}" from ${category.keywords.length} keywords`,
         );

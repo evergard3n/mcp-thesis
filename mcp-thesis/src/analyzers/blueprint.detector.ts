@@ -103,11 +103,6 @@ export interface EmbeddedStep {
 
 let blueprintCache: BlueprintDefinition[] | null = null;
 
-export function clearBlueprintCache(): void {
-  blueprintCache = null;
-  console.log("Blueprint cache cleared");
-}
-
 async function loadBlueprints(): Promise<BlueprintDefinition[]> {
   if (blueprintCache) return blueprintCache;
 
@@ -167,25 +162,6 @@ async function loadBlueprints(): Promise<BlueprintDefinition[]> {
     console.error("Failed to load blueprints:", error);
     return [];
   }
-}
-
-/**
- * Get blueprints filtered by domain type
- */
-export async function getBlueprintsByDomain(
-  domainType?: DomainType,
-): Promise<BlueprintDefinition[]> {
-  const allBlueprints = await loadBlueprints();
-  if (!domainType) return allBlueprints;
-  return allBlueprints.filter((bp) => bp.domainType === domainType);
-}
-
-/**
- * Get available domain types from loaded blueprints
- */
-export async function getAvailableDomains(): Promise<DomainType[]> {
-  const blueprints = await loadBlueprints();
-  return Array.from(new Set(blueprints.map((bp) => bp.domainType)));
 }
 
 function collectEmbeddedMainSteps(
@@ -372,8 +348,6 @@ export async function detectActivatedBlueprints(
  * @param embeddedSteps Embedded steps with precomputed embeddings
  * @param filterByDomain Optional domain filter to only activate matching blueprints (prevents cross-domain overlap)
  * @param confirmedBlueprintIds If provided and non-empty, only process blueprints in this set
- * @param droppedBlueprintIds Ignored for blueprint selection (soft-drop policy: only
- *   `confirmedBlueprintIds` gates which blueprints emit gaps; probe non-confirmation is not permanent exclusion).
  * @returns Blueprint gap analysis result
  */
 export async function detectBlueprintGaps(
@@ -381,7 +355,6 @@ export async function detectBlueprintGaps(
   embeddedSteps: EmbeddedStep[],
   filterByDomain?: DomainType,
   confirmedBlueprintIds?: Set<string>,
-  options?: BlueprintActivationOptions,
 ): Promise<BlueprintGapResult> {
   let blueprints = await loadBlueprints();
 
@@ -392,22 +365,6 @@ export async function detectBlueprintGaps(
     console.log(
       `Blueprint domain filter: ${filterByDomain} (${blueprints.length}/${originalCount} blueprints active)`,
     );
-  }
-
-  if (options?.useCase && options.originalDescription !== undefined) {
-    const labels = predictBlueprintFamilies(
-      options.useCase,
-      options.originalDescription,
-    );
-    if (labels.size > 0) {
-      const before = blueprints.length;
-      blueprints = blueprints.filter((bp) =>
-        blueprintMatchesPredictedFamilies(bp.families, labels),
-      );
-      console.log(
-        `[Blueprint families] gap pass: ${blueprints.length}/${before} blueprints after family filter`,
-      );
-    }
   }
 
   // If confirmed set is provided but empty, probe hasn't happened yet — emit nothing
@@ -427,7 +384,10 @@ export async function detectBlueprintGaps(
   if (blueprints.length === 0)
     return { gaps, coveredStepKeys, detectedDomains };
 
+  // Step 1: Lấy các step thuộc MAIN flow — đây là input để match roles của blueprint
   const mainSteps = collectEmbeddedMainSteps(embeddedSteps);
+
+  // Step 2: thu thập điều kiện và mô tả của tất cả các step trong use case để tạo coverage embedding sau này
   const coverageTexts: Array<{ text: string; weight: number }> = [];
   for (const flow of useCase.flows) {
     if (flow.kind === "MAIN") continue;
@@ -438,6 +398,8 @@ export async function detectBlueprintGaps(
       coverageTexts.push({ text: step.description, weight: 1 });
     }
   }
+
+  // Step 3: Embed toàn bộ coverage texts thành vector để so sánh với scenario centroid
   const coverageEmbeddings = coverageTexts.length
     ? await semanticService.embedBatch(coverageTexts.map((t) => t.text))
     : [];
@@ -446,6 +408,7 @@ export async function detectBlueprintGaps(
     weight: coverageTexts[index].weight,
   }));
 
+  // Step 4: Với mỗi confirmed blueprint, chạy lại role matching và phát hiện gap
   for (const blueprint of blueprints) {
     const candidatesMap = new Map<string, RoleCandidate[]>();
     for (const role of blueprint.roles) {
@@ -456,7 +419,6 @@ export async function detectBlueprintGaps(
     const assignments = assignRolesOrdered(blueprint, candidatesMap);
     if (!assignments) continue;
 
-    // Track detected domain when blueprint activates
     detectedDomains.add(blueprint.domainType);
 
     const blueprintConfidence =
@@ -466,19 +428,24 @@ export async function detectBlueprintGaps(
       assignments.map((assignment) => [assignment.roleId, assignment]),
     );
 
+    // Đánh dấu các step đã được blueprint này "chiếm" → tránh gap detector khác đặt câu hỏi trùng
     for (const assignment of assignments) {
       coveredStepKeys.add(`${assignment.flowId}|${assignment.stepIndex}`);
     }
 
+    // Step 5: Với mỗi expected scenario của blueprint, kiểm tra xem đã được cover chưa
     for (const scenario of blueprint.expectedScenarios) {
+      // Scenario chỉ áp dụng khi anchor role của nó đã được gán
       if (!assignmentsByRole.has(scenario.anchorRole)) continue;
 
+      // So sánh scenario centroid với coverage embeddings — nếu đã cover thì bỏ qua
       const covered = await isScenarioCovered(scenario, coverageItems);
       if (covered) continue;
 
       const anchor = assignmentsByRole.get(scenario.anchorRole);
       if (!anchor) continue;
 
+      // Điền thông tin actor/step cụ thể vào template câu hỏi (vd: "What if {APPROVER.actor} rejects?")
       const suggestedQuestion = interpolateTemplate(
         scenario.questionTemplate,
         assignmentsByRole,

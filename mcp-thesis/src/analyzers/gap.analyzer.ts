@@ -394,7 +394,6 @@ export async function analyzeGaps(
     stepEmbeddings,
     blueprintDomainFilter,
     confirmedIds,
-    { useCase, originalDescription },
   );
   gaps.push(...blueprintResult.gaps);
 
