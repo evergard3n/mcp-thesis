@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:32:00.243Z",
+  "testCases": [
+    {
+      "id": "dung-02",
+      "domain": "Authentication",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Mật khẩu phải có tối thiểu 8 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 ký tự đặc biệt. Email phải hợp lệ theo chuẩn định dạng example@domain.com."
+      },
+      "inputs": {
+        "vague": "A new user requests to create an account, provides their basic personal information, and the system successfully registers them, allowing them to access system functionalities.",
+        "detailed": "Ca sử dụng này cho phép người dùng mới (chưa có tài khoản trong hệ thống) đăng ký một tài khoản để có thể đăng nhập và sử dụng các chức năng phù hợp với vai trò được cấp. Người dùng cần cung cấp thông tin cá nhân cơ bản và xác nhận mật khẩu để hoàn tất quá trình đăng ký. Email được cung cấp cũng cần phải là duy nhất, không được phép trùng với các email đã được đăng ký."
+      },
+      "groundTruth": {
+        "name": "Register New Account",
+        "summary": "This use case allows a new user (who does not have an account in the system yet) to register an account to be able to log in and use functions appropriate to their assigned role. The user needs to provide basic personal information and confirm their password to complete the registration process.",
+        "mainActor": "New User",
+        "actors": [
+          "New User",
+          "System"
+        ],
+        "postconditions": [
+          "A new account is created and saved in the database.",
+          "The user can log in using the newly registered information."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "New User",
+                "description": "Requests to register an account upon first access to the system."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays the registration interface and asks the user to enter authentication information."
+              },
+              {
+                "index": 3,
+                "actor": "New User",
+                "description": "Enters their registration information (name, email, password, etc.)."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Checks the format and validates the registration information (e.g., if the email already exists)."
+              },
+              {
+                "index": 5,
+                "actor": "New User",
+                "description": "Submits the registration request with the filled-in information."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Validates the information, creates a new account for the user, displays a \"Registration successful\" message, and optionally automatically logs the user in."
+              }
+            ]
+          },
+          {
+            "id": "ALT_4a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Displays a message indicating that an account with the entered email already exists and asks the user to log in."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

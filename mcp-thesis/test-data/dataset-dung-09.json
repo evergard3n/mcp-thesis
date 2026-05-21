@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:50:02.170Z",
+  "testCases": [
+    {
+      "id": "dung-09",
+      "domain": "Education/Course Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The teacher creates a new course by providing the necessary details. The system then successfully generates the course in the database based on the provided information.",
+        "detailed": "Giáo viên có thể thực hiện các hoạt động tổ chức và quản lý môn học mà họ phụ trách. Giáo viên có thể tạo mới môn học, cập nhật thông tin khi cần thiết. Khi Giáo viên muốn khởi tạo một môn học mới, Giáo viên yêu cầu tạo môn học, hệ thống yêu cầu Giáo viên nhập thông tin môn học và xác thực dữ liệu. Sau đó, Giáo viên gửi yêu cầu tạo mới với thông tin đã nhập, và hệ thống sẽ tạo mới môn học trong cơ sở dữ liệu và thông báo tạo thành công. Thay vào đó, nếu Giáo viên đã có sẵn môn học và muốn chỉnh sửa thông tin, Giáo viên yêu cầu hệ thống cho phép chỉnh sửa. Hệ thống truy xuất thông tin môn học hiện tại và yêu cầu Giáo viên nhập thông tin cập nhật. Giáo viên xác nhận yêu cầu cập nhật, và hệ thống sẽ xác nhận tính hợp lệ của dữ liệu để cập nhật thông tin môn học trong cơ sở dữ liệu. Giáo viên đã đăng nhập hợp lệ vào hệ thống và có quyền quản lý môn học đó. Sau khi hoàn tất, thông tin môn học sẽ được thêm mới hoặc cập nhật trong hệ thống."
+      },
+      "groundTruth": {
+        "name": "Quản lý và tổ chức môn học",
+        "summary": "Use case này cho phép Giáo viên thực hiện các hoạt động tổ chức và quản lý môn học mà họ phụ trách, bao gồm tạo mới và cập nhật thông tin môn học.",
+        "mainActor": "Giáo viên",
+        "actors": [
+          "Giáo viên",
+          "Hệ thống"
+        ],
+        "preconditions": [
+          "Giáo viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Giáo viên có quyền quản lý môn học đó."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu tạo một môn học mới."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "target": "Giáo viên",
+                "description": "Yêu cầu Giáo viên nhập thông tin môn học vào biểu mẫu và xác thực dữ liệu nhập vào."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "Gửi yêu cầu tạo mới môn học với thông tin đã nhập."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Tạo mới môn học trong cơ sở dữ liệu và thông báo tạo thành công."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu hệ thống cho phép chỉnh sửa thông tin môn học."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "target": "Giáo viên",
+                "description": "Truy xuất thông tin môn học hiện tại và yêu cầu Giáo viên nhập thông tin cập nhật."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "Xác nhận yêu cầu cập nhật thông tin môn học."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Xác nhận tính hợp lệ của dữ liệu và cập nhật thông tin môn học trong cơ sở dữ liệu."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:45:01.033Z",
+  "testCases": [
+    {
+      "id": "dung-06",
+      "domain": "Quản trị hệ thống",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Dữ liệu thống kê phải được cập nhật theo thời gian thực. Hệ thống phải đảm bảo tính toàn vẹn và chính xác của dữ liệu."
+      },
+      "inputs": {
+        "vague": "The administrator wants to see a summary of system statistics. The system then displays various aggregate statistics about the platform's operation. This provides the administrator with an overview of system performance.",
+        "detailed": "Ca sử dụng này cho phép Quản trị viên hệ thống theo dõi, xem và phân tích các thống kê tổng hợp của toàn bộ hệ thống. Các thống kê bao gồm số lượng người dùng, lớp học, dự án cộng đồng, hoạt động đăng nhập, và các chỉ số khác phản ánh tình trạng vận hành của hệ thống. Dữ liệu thống kê giúp Quản trị viên đánh giá hiệu quả, phát hiện vấn đề và hỗ trợ ra quyết định quản trị.\n\nLuồng cơ bản:\nQuản trị viên muốn xem các thống kê chung của hệ thống. Hệ thống hiển thị các thống kê của hệ thống (Người dùng, Lớp học, Dự án cộng đồng, Hoạt động truy cập, v.v.).\n\nLuồng thay thế:\n* Không có dữ liệu thống kê: Nếu không có dữ liệu để hiển thị, hệ thống sẽ hiển thị thông báo “Không có dữ liệu thống kê”.\n* Xuất dữ liệu thống kê: Quản trị viên có thể yêu cầu xuất kết quả báo cáo. Hệ thống sẽ phân tích và trả kết quả báo cáo dưới dạng tệp .pdf, sau đó tự động tải xuống cho quản trị viên.\n\nYêu cầu đặc biệt:\nDữ liệu thống kê phải được cập nhật theo thời gian thực và hệ thống phải đảm bảo tính toàn vẹn và chính xác của dữ liệu trong quá trình tổng hợp thống kê.\n\nTiền điều kiện:\nQuản trị viên đã đăng nhập hợp lệ vào hệ thống và có dữ liệu thống kê khả dụng trong cơ sở dữ liệu."
+      },
+      "groundTruth": {
+        "name": "View System Statistics",
+        "summary": "This use case allows a System Administrator to monitor, view, and analyze aggregate system statistics, including user counts, classes, community projects, login activities, and other metrics reflecting system operational status. Statistical data helps the Administrator evaluate effectiveness, detect issues, and support management decisions.",
+        "mainActor": "System Administrator",
+        "actors": [
+          "System Administrator",
+          "System"
+        ],
+        "preconditions": [
+          "System Administrator has successfully logged into the system.",
+          "Statistical data is available in the database."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System Administrator",
+                "description": "Requests access to the system statistics viewing function."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays system statistics (Users, Classes, Community Projects, Access Activities, etc.)."
+              }
+            ]
+          },
+          {
+            "id": "ALT_3a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 3,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Displays “No statistical data” if the corresponding data is empty."
+              }
+            ]
+          },
+          {
+            "id": "ALT_4a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System Administrator",
+                "description": "Requests to export the results as a report."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Analyzes and returns the report as a .pdf file, which is automatically downloaded for the administrator."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

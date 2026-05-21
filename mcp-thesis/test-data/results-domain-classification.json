@@ -1,0 +1,285 @@
+{
+  "testCaseId": "MO1",
+  "timestamp": "2026-02-25T08:16:23.496Z",
+  "duration": "64ms",
+  "vague": {
+    "useCase": {
+      "name": "Receive a Box and Distribute Bags",
+      "summary": "The Receiving Agent receives a box, records its arrival and content into the system, and then hands over the bags to the Registration Operator.",
+      "mainActor": "Receiving Agent",
+      "actors": [
+        "Receiving Agent",
+        "Transport Company",
+        "System",
+        "Registration Operator"
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "Receiving Agent",
+              "target": "Transport Company",
+              "description": "Receives a box from the Transport Company."
+            },
+            {
+              "index": 2,
+              "actor": "Receiving Agent",
+              "description": "Validates the box's ID."
+            },
+            {
+              "index": 3,
+              "actor": "Receiving Agent",
+              "target": "System",
+              "description": "Records the box's arrival into the System, including the number of bags inside."
+            },
+            {
+              "index": 4,
+              "actor": "Receiving Agent",
+              "description": "Removes the bags from the box."
+            },
+            {
+              "index": 5,
+              "actor": "Receiving Agent",
+              "target": "Registration Operator",
+              "description": "Gives the bags to the Registration Operator."
+            }
+          ]
+        }
+      ]
+    },
+    "domain": {
+      "dominantDomain": "human-system",
+      "flowClassifications": [
+        {
+          "flowId": "MAIN",
+          "domainType": "human-system",
+          "confidence": 0.6,
+          "reasoning": "Flow has 1 human actor(s) interacting with systems",
+          "actorTypes": [
+            {
+              "actor": "Receiving Agent",
+              "type": "human"
+            }
+          ],
+          "method": "hybrid"
+        }
+      ],
+      "overallConfidence": 0.6,
+      "summary": "Human-system use case with 1 human-initiated flow(s)",
+      "actorClassifications": [
+        {
+          "actor": "Receiving Agent",
+          "type": "human",
+          "confidence": 0.6,
+          "method": "hybrid"
+        }
+      ]
+    }
+  },
+  "detailed": {
+    "useCase": {
+      "name": "UC MO1. Register arrival of a box",
+      "summary": "The Receiving Agent registers the arrival of a box containing bags into the system, validating its ID and preparing it for further processing.",
+      "mainActor": "Receiving Agent (RA)",
+      "actors": [
+        "Receiving Agent (RA)",
+        "Registration Operator (RO)",
+        "Department Supervisor (DS)",
+        "Transport Company (TC)",
+        "System"
+      ],
+      "preconditions": [
+        "A box with bags has arrived from a Transport Company.",
+        "The System is operational."
+      ],
+      "postconditions": [
+        "Box arrival is registered in the system.",
+        "Bags are prepared for the Registration Operator."
+      ],
+      "flows": [
+        {
+          "id": "MAIN",
+          "kind": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "RA",
+              "description": "Receives a box with bags from Transport Company TC."
+            },
+            {
+              "index": 2,
+              "actor": "RA",
+              "target": "System",
+              "description": "Validates the box ID against registered IDs of the Transport Company."
+            },
+            {
+              "index": 3,
+              "actor": "RA",
+              "description": "Signs a paper form for the delivery person (optional)."
+            },
+            {
+              "index": 4,
+              "actor": "RA",
+              "target": "System",
+              "description": "Registers arrival into the System, inputting RA ID, date, time, box ID, Transport Company, number of bags, and estimated value."
+            },
+            {
+              "index": 5,
+              "actor": "RA",
+              "description": "Removes bags from the box, places them onto a cart, and takes them to the Registration Operator (RO)."
+            }
+          ]
+        },
+        {
+          "id": "EXT_6a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Notifies RA that the box ID does not match the Transport Company's registered IDs."
+            },
+            {
+              "index": 2,
+              "actor": "RA",
+              "description": "Follows a defined procedure for unmatched box IDs (e.g., contacts supervisor, returns box)."
+            }
+          ]
+        },
+        {
+          "id": "EXT_7a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Alerts RA about a fire alarm."
+            },
+            {
+              "index": 2,
+              "actor": "RA",
+              "description": "Interrupts the registration process and follows emergency procedures."
+            }
+          ]
+        },
+        {
+          "id": "EXT_8a",
+          "kind": "EXCEPTION",
+          "parentFlow": "MAIN",
+          "steps": [
+            {
+              "index": 1,
+              "actor": "System",
+              "description": "Indicates that the computer is down."
+            },
+            {
+              "index": 2,
+              "actor": "RA",
+              "description": "Temporarily places payment (if any) on the desk."
+            },
+            {
+              "index": 3,
+              "actor": "RA",
+              "description": "Waits for the computer to become operational again to resume registration."
+            }
+          ]
+        }
+      ]
+    },
+    "domain": {
+      "dominantDomain": "ambiguous",
+      "flowClassifications": [
+        {
+          "flowId": "MAIN",
+          "domainType": "ambiguous",
+          "confidence": 0.3,
+          "reasoning": "Unable to confidently classify: 1 ambiguous actor(s)",
+          "actorTypes": [
+            {
+              "actor": "RA",
+              "type": "ambiguous"
+            }
+          ],
+          "method": "hybrid"
+        },
+        {
+          "flowId": "EXT_6a",
+          "domainType": "ambiguous",
+          "confidence": 0.3,
+          "reasoning": "Unable to confidently classify: 1 ambiguous actor(s)",
+          "actorTypes": [
+            {
+              "actor": "System",
+              "type": "system"
+            },
+            {
+              "actor": "RA",
+              "type": "ambiguous"
+            }
+          ],
+          "method": "hybrid"
+        },
+        {
+          "flowId": "EXT_7a",
+          "domainType": "ambiguous",
+          "confidence": 0.3,
+          "reasoning": "Unable to confidently classify: 1 ambiguous actor(s)",
+          "actorTypes": [
+            {
+              "actor": "System",
+              "type": "system"
+            },
+            {
+              "actor": "RA",
+              "type": "ambiguous"
+            }
+          ],
+          "method": "hybrid"
+        },
+        {
+          "flowId": "EXT_8a",
+          "domainType": "ambiguous",
+          "confidence": 0.3,
+          "reasoning": "Unable to confidently classify: 1 ambiguous actor(s)",
+          "actorTypes": [
+            {
+              "actor": "System",
+              "type": "system"
+            },
+            {
+              "actor": "RA",
+              "type": "ambiguous"
+            }
+          ],
+          "method": "hybrid"
+        }
+      ],
+      "overallConfidence": 0.3,
+      "summary": "Mixed or ambiguous use case with unclear actor types",
+      "actorClassifications": [
+        {
+          "actor": "RA",
+          "type": "ambiguous",
+          "confidence": 0.5,
+          "method": "hybrid"
+        },
+        {
+          "actor": "System",
+          "type": "system",
+          "confidence": 0.6,
+          "method": "hybrid"
+        }
+      ]
+    }
+  },
+  "comparison": {
+    "domainAgreement": false,
+    "vagueDomain": "human-system",
+    "detailedDomain": "ambiguous"
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-16T08:55:05.539Z",
+  "testCases": [
+    {
+      "id": "1010",
+      "domain": "Insurance/Operations",
+      "metadata": {
+        "complexity": "complex",
+        "expectedFlows": 9,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A reporting party informs the insurance company about a claim, which is then assigned to a claims adjuster. The adjuster investigates, evaluates, negotiates, and resolves the claim by closing it.",
+        "detailed": "UC #: 1010 Handle Claim (business)\nScope: Insurance company Operations\nLevel: Business strategic\nRelease: Future Status: Draft Revision: Current\nContext of use: Claims Adjuster handles claim.\nPrimary Actor: Claimant\nPreconditions: A loss has occurred\nTrigger: A claim is reported to Insurance company\nMain Success Scenario:\n1. A reporting party who is aware of the event reports a claim to Insurance company.\n2. Clerk receives and assigns the claim to a claims adjuster.\n3. The assigned Claims Adjuster\n-conducts an investigation\n-evaluates damages\n-sets reserves\n-negotiates the claim\n-resolves the claim and closes it.\nExtensions:\n1a. Reported claim information is incomplete\n1a1. Insurance company requests additional information from the reporting party.\n1a2. Claimant or reporting party supplies the missing information.\n1a3. Claim processing resumes with the assigned Claims Adjuster.\n\n1b. Claim is reported by someone other than the Claimant\n1b1. Insurance company records the reporter’s relationship to the Claimant and continues processing.\n\n2a. No Claims Adjuster is available\n2a1. Claim is placed in a pending queue until an adjuster becomes available.\n2a2. A supervisor may assign the claim manually if priority rules require.\n\n3a. Investigation reveals the loss is not covered\n3a1. Claims Adjuster denies the claim according to policy terms.\n3a2. Insurance company notifies the Claimant and records the denial.\n3a3. Claim is closed.\n\n3b. Investigation reveals partial coverage or disputed damages\n3b1. Claims Adjuster negotiates a partial settlement with the Claimant.\n3b2. Agreed settlement is recorded and paid.\n3b3. Claim is closed.\n\n3c. Claimant provides new information after settlement negotiations begin\n3c1. Claims Adjuster reviews new information and re-evaluates the claim.\n3c2. Negotiation and evaluation steps are repeated as necessary.\n\n3d. Claimant withdraws the claim\n3d1. Claims Adjuster records withdrawal and closes the claim.\n\n3e. Claim cannot be resolved within required timeframes\n3e1. Claims Adjuster escalates the claim to management.\n3e2. Claim continues under supervisory review."
+      },
+      "groundTruth": {
+        "name": "Handle Claim",
+        "summary": "This use case describes how an insurance company handles a claim from reporting to closure, involving a Claims Adjuster and various internal processes.",
+        "mainActor": "Claimant",
+        "actors": [
+          "Claimant",
+          "Reporting Party",
+          "Insurance Company",
+          "Clerk",
+          "Claims Adjuster",
+          "Supervisor",
+          "Management"
+        ],
+        "preconditions": [
+          "A loss has occurred"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Reporting Party",
+                "description": "Reports a claim to the Insurance Company."
+              },
+              {
+                "index": 2,
+                "actor": "Insurance Company",
+                "description": "Receives the claim and assigns it to a Claims Adjuster."
+              },
+              {
+                "index": 3,
+                "actor": "Claims Adjuster",
+                "description": "Conducts an investigation, evaluates damages, sets reserves, and negotiates the claim."
+              },
+              {
+                "index": 4,
+                "actor": "Claims Adjuster",
+                "description": "Resolves the claim and closes it."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance Company",
+                "description": "Requests additional information from the reporting party."
+              },
+              {
+                "index": 2,
+                "actor": "Claimant",
+                "description": "Supplies the missing information."
+              },
+              {
+                "index": 3,
+                "actor": "Claims Adjuster",
+                "description": "Resumes claim processing."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance Company",
+                "description": "Records the reporter’s relationship to the Claimant and continues processing."
+              }
+            ]
+          },
+          {
+            "id": "ALT_7a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance Company",
+                "description": "Places the claim in a pending queue until an adjuster becomes available."
+              },
+              {
+                "index": 2,
+                "actor": "Supervisor",
+                "description": "Manually assigns the claim if priority rules require."
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Denies the claim according to policy terms."
+              },
+              {
+                "index": 2,
+                "actor": "Insurance Company",
+                "description": "Notifies the Claimant and records the denial."
+              },
+              {
+                "index": 3,
+                "actor": "Insurance Company",
+                "description": "Closes the claim."
+              }
+            ]
+          },
+          {
+            "id": "ALT_9a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Negotiates a partial settlement with the Claimant."
+              },
+              {
+                "index": 2,
+                "actor": "Insurance Company",
+                "description": "Records and pays the agreed settlement."
+              },
+              {
+                "index": 3,
+                "actor": "Insurance Company",
+                "description": "Closes the claim."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Reviews new information and re-evaluates the claim."
+              },
+              {
+                "index": 2,
+                "actor": "Claims Adjuster",
+                "description": "Repeats negotiation and evaluation steps as necessary."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Records withdrawal and closes the claim."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claims Adjuster",
+                "description": "Escalates the claim to management."
+              },
+              {
+                "index": 2,
+                "actor": "Insurance Company",
+                "description": "Continues claim under supervisory review."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

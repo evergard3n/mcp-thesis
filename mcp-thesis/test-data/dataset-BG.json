@@ -1,0 +1,115 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-18T14:04:31.015Z",
+  "testCases": [
+    {
+      "id": "BG",
+      "domain": "Company Level",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 4,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A buyer submits a purchase request, the company processes that order, ships the goods, and then invoices the buyer, who subsequently pays for the items received.",
+        "detailed": "Buy Goods: a business use case\nContext of use: Buyer issues request directly to our company, expects goods shipped and to be\nbilled.\nScope: Company Level: Summary\nPreconditions: We know Buyer, their address, etc.\nSuccess End Condition: Buyer has goods, we have money for the goods.\nFailed End Condition: We have not sent the goods, Buyer has not spent the money.\nPrimary Actor: Buyer, any agent (or computer) acting for the customer\nTrigger: purchase request comes in.\nMain Success Scenario\n1. Buyer calls in with a purchase request.\n2. Company captures buyer's name, address, requested goods, etc.\n3. Company gives buyer information on goods, prices, delivery dates, etc.\n4. Buyer signs for order.\n5. Company creates order.\n6. Company ships ordered goods to buyer.\n7. Company ships invoice to buyer.\n8. Buyers pays invoice.\nExtensions\n3a. Company is out of one of the ordered items:\n3a1. Renegotiate order.\n4a. Buyer pays directly with credit card:\n4a1. Take payment by credit card (use case 44)\n8a. Buyer returns goods:\n8a. Handle returned goods (use case 105)"
+      },
+      "groundTruth": {
+        "name": "Buy Goods",
+        "summary": "Buyer requests and receives goods, is billed, and pays the invoice.",
+        "mainActor": "Buyer",
+        "actors": [
+          "Buyer",
+          "Company"
+        ],
+        "preconditions": [
+          "Buyer is known, including their address and other necessary details by the Company."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Calls in with a purchase request."
+              },
+              {
+                "index": 2,
+                "actor": "Company",
+                "description": "Captures buyer's name, address, requested goods, etc."
+              },
+              {
+                "index": 3,
+                "actor": "Company",
+                "description": "Gives buyer information on goods, prices, delivery dates, etc."
+              },
+              {
+                "index": 4,
+                "actor": "Buyer",
+                "description": "Signs for order."
+              },
+              {
+                "index": 5,
+                "actor": "Company",
+                "description": "Creates order."
+              },
+              {
+                "index": 6,
+                "actor": "Company",
+                "description": "Ships ordered goods to buyer."
+              },
+              {
+                "index": 7,
+                "actor": "Company",
+                "description": "Ships invoice to buyer."
+              },
+              {
+                "index": 8,
+                "actor": "Buyer",
+                "description": "Pays invoice."
+              }
+            ]
+          },
+          {
+            "id": "ALT_9a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Company",
+                "description": "Renegotiates order due to item unavailability."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Pays directly with credit card (use case 44)."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Buyer",
+                "description": "Returns goods (use case 105)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

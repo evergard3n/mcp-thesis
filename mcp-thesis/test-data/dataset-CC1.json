@@ -1,0 +1,156 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-18T14:05:28.019Z",
+  "testCases": [
+    {
+      "id": "CC1",
+      "domain": "Resource Management",
+      "metadata": {
+        "complexity": "complex",
+        "expectedFlows": 8,
+        "notes": "Handles multiple extension scenarios for resource access management, including policies for conversion, compatibility, and selection, as well as handling holding timers and exceptions."
+      },
+      "inputs": {
+        "vague": "A service client requests access to a resource, uses it, and then signals that it is finished. The resource lock then cleans up allowing other clients to potentially use the resource.",
+        "detailed": "UC CC1: Serialize access to a resource\nMain Success Scenario\n1) Service Client asks a Resource Lock to give it specified access.\n2) The Resource Lock returns control to the Service Client so that it may use the Resource.\n3) Service Client uses the Resource.\n4) Service Client informs the Resource Lock that it is finished with the Resource.\n5) Resource Lock cleans up after the Service Client.\nExtensions\n2a. Resource Lock finds that Service Client already has access to the resource.\n2a1. Resource Lock applies a conversion policy (see CC 4) to the request.\n2b. Resource Lock finds that the resource is already in use:\n2b1. The Resource Lock applies a compatibility policy (see CC 2) to grant access to the\nService Client.\n2c. Resource Locking Holding time limit is non-zero:\n2c1. Resource Lock starts the holding timer.\n3a. Holding Timer expires before the Client informs the Resource Lock that it is finished:\n3a1. Resource Lock sends an Exception to the Client’s process.\n3a2. Fail!\n4a. Resource Lock finds non-zero lock count on Service Client:\n4a1. Resource Lock decrements the reference count of the request.\n4a2. Success!\n5a. Resource Lock finds that the resource is currently not in use:\n5a1. Resource Lock applies a selection policy (see CC 3) to grant access to any\nsuspended Service Clients.\n5b. Holding Timer is still running:\n5b1. Resource Lock cancels Holding Timer."
+      },
+      "groundTruth": {
+        "name": "Serialize access to a resource",
+        "summary": "This use case describes how a Service Client acquires and releases access to a shared resource managed by a Resource Lock, including various policies for handling concurrent access and timeouts.",
+        "mainActor": "Service Client",
+        "actors": [
+          "Service Client",
+          "Resource Lock",
+          "System"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Service Client",
+                "description": "Asks a Resource Lock to give it specified access."
+              },
+              {
+                "index": 2,
+                "actor": "Resource Lock",
+                "description": "Returns control to the Service Client so that it may use the Resource."
+              },
+              {
+                "index": 3,
+                "actor": "Service Client",
+                "description": "Uses the Resource."
+              },
+              {
+                "index": 4,
+                "actor": "Service Client",
+                "description": "Informs the Resource Lock that it is finished with the Resource."
+              },
+              {
+                "index": 5,
+                "actor": "Resource Lock",
+                "description": "Cleans up after the Service Client."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Applies a conversion policy to the request."
+              }
+            ]
+          },
+          {
+            "id": "ALT_7a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Applies a compatibility policy to grant access to the Service Client."
+              }
+            ]
+          },
+          {
+            "id": "ALT_8a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Starts the holding timer."
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Sends an Exception to the Client’s process."
+              },
+              {
+                "index": 2,
+                "actor": "Resource Lock",
+                "description": "Indicates failure."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Decrements the reference count of the request."
+              },
+              {
+                "index": 2,
+                "actor": "Resource Lock",
+                "description": "Indicates success."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Applies a selection policy to grant access to any suspended Service Clients."
+              }
+            ]
+          },
+          {
+            "id": "ALT_12a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Resource Lock",
+                "description": "Cancels Holding Timer."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

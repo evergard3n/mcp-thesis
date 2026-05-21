@@ -1,0 +1,279 @@
+{
+  "modelId": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+  "categories": {
+    "validation": {
+      "keywords": [
+        "validates the data",
+        "verifies the information",
+        "checks for errors",
+        "confirms the input is correct",
+        "matches records to policy",
+        "authenticates the user credentials",
+        "ensures data is valid",
+        "compares submitted data against records",
+        "checks for duplicate records",
+        "detects competing claims"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_validation_handling",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what specific data condition triggers the failure, (2) who detects it, (3) what the actor does in response, (4) how the process resumes or terminates.",
+      "questionSuffix": "What happens when this validation encounters partial data, format mismatches, or conflicting records? Describe the specific failure scenario and how it's handled."
+    },
+    "search_lookup": {
+      "keywords": [
+        "finds the matching policy",
+        "looks up the account record",
+        "searches for the existing entry",
+        "retrieves the matching entry",
+        "looks up the policy information",
+        "finds the associated record",
+        "searches the database for the item"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_search_handling",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what the actor searches for and what goes wrong, (2) whether they can proceed with partial information, (3) how the process continues.",
+      "questionSuffix": "What happens when this search returns no results, multiple ambiguous matches, or stale/outdated data? How does the actor proceed?"
+    },
+    "data_input": {
+      "keywords": [
+        "submits the form data",
+        "enters the information",
+        "provides customer details",
+        "inputs the required data",
+        "reports an incident or claim",
+        "fills out the form fields",
+        "uploads a document or file",
+        "registers a new record",
+        "sends the request to system"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_data_quality_handling",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what specific data problem occurs, (2) whether the system or actor detects it, (3) what correction or fallback is available.",
+      "questionSuffix": "What happens when the submitted data is incomplete, contains contradictory information, or duplicates an existing entry? What are the minimum required fields?"
+    },
+    "resource_assignment": {
+      "keywords": [
+        "assigns a resource or agent",
+        "allocates system resources",
+        "schedules an appointment",
+        "reserves a time slot",
+        "books a service",
+        "distributes work to agents",
+        "selects an available adjuster",
+        "supports the assignment of an adjuster",
+        "facilitates resource allocation",
+        "coordinates agent selection"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_resource_availability",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) why the resource is unavailable, (2) whether a default or fallback is assigned automatically, (3) what happens if no assignment occurs within a time limit.",
+      "questionSuffix": "What happens when no suitable resource is available, the assigned resource becomes unavailable, or the assignment times out? Is there a default fallback?"
+    },
+    "system_interaction": {
+      "keywords": [
+        "calls external service",
+        "queries the database",
+        "fetches data from system",
+        "retrieves information from API",
+        "connects to external system",
+        "accesses the database",
+        "requests data from another system"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_system_failure_handling",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) the nature of the failure, (2) whether work in progress is preserved, (3) what the actor does while waiting or after the failure.",
+      "questionSuffix": "What happens when the system is unavailable, responds with a timeout, or returns a partial/corrupted response? Is data automatically saved?"
+    },
+    "completion": {
+      "keywords": [
+        "closes the case or claim",
+        "completes the transaction",
+        "finishes the process",
+        "terminates the session",
+        "ends the workflow",
+        "settles the claim",
+        "finalizes the record"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_post_completion_scenarios",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what minimum information is required to finish, (2) what the system does if requirements are not met, (3) whether the actor can save and return later.",
+      "questionSuffix": "What happens if the actor attempts to finish without completing all required information? Can the process be saved for later, reopened, or reversed after this point?"
+    },
+    "save_resume": {
+      "keywords": [
+        "saves progress as draft",
+        "resumes later where left off",
+        "reopens a partially completed form",
+        "comes back to finish the entry",
+        "partially completes and returns",
+        "stores incomplete submission for later",
+        "bookmarks current state and exits"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "missing_save_resume_handling",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) whether progress can be saved, (2) what data is preserved, (3) how resume works and whether re-validation is required.",
+      "questionSuffix": "Can this step be partially completed and saved as a draft for later? What state is preserved, and what happens when the actor resumes?"
+    },
+    "vague_condition": {
+      "keywords": [
+        "something goes wrong",
+        "an error occurs",
+        "a problem happens",
+        "an issue is detected",
+        "the process fails",
+        "something unexpected happens",
+        "it does not work"
+      ],
+      "centroid": null,
+      "threshold": 0.5,
+      "gapType": "uncertain_conditions",
+      "requiresExceptionCheck": false,
+      "answerGuidance": "Describe: (1) the exact state, actor action, or system signal that causes execution to leave the normal flow and enter this branch, (2) which step in the normal flow this branch forks from and why, (3) what the actor or system does as the first step of the branch, (4) whether the branch re-joins the normal flow or terminates.",
+      "questionTemplate": "In the \"{flowId}\" {flowKindLabel}:{branchContext} What is the exact condition or event that triggers this branch? Describe the specific state, actor action, or system signal that causes execution to leave the normal flow and enter \"{flowId}\"."
+    },
+    "user_cancellation": {
+      "keywords": [
+        "cancels the request",
+        "aborts the operation",
+        "decides not to proceed",
+        "withdraws the submission",
+        "stops the process midway",
+        "changes their mind and exits",
+        "abandons the current action",
+        "terminates the session early",
+        "opts out of the process"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_cancellation_handling",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) at which step the actor can cancel, (2) what data or state is discarded, (3) whether the actor is prompted for confirmation, (4) how the system notifies relevant parties.",
+      "questionSuffix": "What happens if the actor decides to cancel or abort at this point? Is data saved, discarded, or rolled back? Who is notified?"
+    },
+    "alternative_path": {
+      "keywords": [
+        "chooses a different option",
+        "selects an alternative method",
+        "picks another approach",
+        "uses a different channel",
+        "opts for the alternative procedure",
+        "switches to a manual process",
+        "takes an alternate route",
+        "decides on a different workflow"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_alternative_path",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what triggers the actor to take this path instead of the main flow, (2) how the steps differ, (3) whether this path re-joins the main flow or terminates independently.",
+      "questionSuffix": "Is there an alternative way to accomplish this step (e.g., a different method, channel, or workflow)? Under what condition would the actor choose the alternative?"
+    },
+    "authorization_denial": {
+      "keywords": [
+        "denies the request",
+        "rejects the authorization",
+        "refuses permission",
+        "declines the approval",
+        "access is denied",
+        "authorization fails",
+        "permission is not granted",
+        "approval is withheld",
+        "request is turned down"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_authorization_denial",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) who denies the authorization and under what condition, (2) what feedback the actor receives, (3) whether a re-request or appeal path is available.",
+      "questionSuffix": "What happens if the required authorization or approval is denied at this point? Is there an escalation path, appeal, or does the process terminate?"
+    },
+    "timeout_retry": {
+      "keywords": [
+        "waits for a response",
+        "times out waiting",
+        "retries the operation",
+        "attempts the action again",
+        "the request expires",
+        "no response is received within the deadline",
+        "the system does not respond in time",
+        "reattempts after failure",
+        "polls for a result"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_timeout_retry",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what operation times out and after how long, (2) how many retries are attempted, (3) what the actor or system does after exhausting retries.",
+      "questionSuffix": "What happens if this step times out or the expected response is not received? Is there an automatic retry, a fallback, or does the process escalate?"
+    },
+    "notification_failure": {
+      "keywords": [
+        "notifies the user",
+        "sends a confirmation message",
+        "emails the result",
+        "alerts the stakeholder",
+        "delivers a notification",
+        "broadcasts an update",
+        "sends a status report",
+        "informs the relevant party",
+        "dispatches a message"
+      ],
+      "centroid": null,
+      "threshold": 0.48,
+      "gapType": "missing_notification_failure",
+      "requiresExceptionCheck": true,
+      "answerGuidance": "Describe: (1) what notification fails to deliver, (2) whether the system retries delivery, (3) whether the recipient is alerted through an alternative channel, (4) whether the failure is logged or escalated.",
+      "questionSuffix": "What happens if this notification or message fails to deliver? Is it retried, is the recipient alerted through another channel, or is the failure silently logged?"
+    },
+    "incomplete_actors": {
+      "keywords": [],
+      "centroid": null,
+      "threshold": 0,
+      "gapType": "incomplete_actors",
+      "requiresExceptionCheck": false,
+      "answerGuidance": "Describe the role this actor plays and the steps they should participate in.",
+      "questionTemplate": "What role does {actor} play in this use case?"
+    },
+    "eligibility_failure": {
+      "keywords": [],
+      "centroid": null,
+      "threshold": 0,
+      "gapType": "missing_eligibility_failure_handling",
+      "requiresExceptionCheck": false,
+      "answerGuidance": "Describe: (1) the exact validation failure trigger, (2) whether the claim is declined immediately, (3) what claimant notifications and records are required, (4) whether the process terminates or allows retry/appeal.",
+      "questionTemplate": "If eligibility or policy validation fails, what exact steps occur (decline, notify claimant, record details), and does the process terminate or allow retry/appeal?"
+    },
+    "assignment_unavailability": {
+      "keywords": [],
+      "centroid": null,
+      "threshold": 0,
+      "gapType": "missing_assignment_unavailability_handling",
+      "requiresExceptionCheck": false,
+      "answerGuidance": "Describe: (1) what happens when no assignee is available, (2) whether the case is queued/on hold, (3) who is notified, (4) how and when assignment resumes.",
+      "questionTemplate": "What happens if no reviewer/agent is available at assignment time? Is the case queued or put on hold, who is notified, and when does processing resume?"
+    },
+    "policy_outcome": {
+      "keywords": [],
+      "centroid": null,
+      "threshold": 0,
+      "gapType": "missing_policy_outcome_branching",
+      "requiresExceptionCheck": false,
+      "answerGuidance": "Describe: (1) how severe vs minor policy violations are distinguished, (2) which path declines/terminates, (3) which path allows negotiation or adjusted payout, (4) who decides each outcome.",
+      "questionTemplate": "When policy guidelines are violated, how are major violations handled versus minor violations? Does one path terminate while another allows negotiation or adjusted payment?"
+    }
+  }
+}

@@ -1,182 +1,192 @@
-# MCP Thesis - Agent Guidelines
+# AGENTS.md
 
-This document provides coding guidelines for AI agents working on the MCP Thesis codebase.
+## Scope
+This is the default operating guide for agentic coding agents in this repository.
+Primary codebase: `mcp-thesis/`.
 
-## Project Overview
+## Repo Map
+- App root: `mcp-thesis/`
+- Entrypoint: `mcp-thesis/src/index.ts`
+- Build output: `mcp-thesis/build/`
+- Test scripts: `mcp-thesis/test-scripts/`
+- Data/eval files: `mcp-thesis/test-data/`
 
-**MCP Thesis** is a Model Context Protocol server for UML use case management, focused on LLM-assisted use case extraction, validation, and iterative improvement. Uses Gemini 2.0 Flash via OpenRouter.
+## Cursor/Copilot Rules Check
+The repository was checked for additional agent rules:
+- `.cursorrules`: not found
+- `.cursor/rules/`: not found
+- `.github/copilot-instructions.md`: not found
+No extra Cursor/Copilot instruction files are currently present.
 
-**Working Directory**: `/Users/arya/Documents/code/mcp-thesis/mcp-thesis/`
-
-## Build & Development Commands
+## Setup
+Run commands from `mcp-thesis/` unless explicitly noted.
 
 ```bash
-npm install                    # Install dependencies
-npm run dev                    # Run server in dev mode (tsx)
-npm run watch                  # Compile TypeScript on file changes
-npm run build                  # Build production bundle (tsc)
-npm run inspector              # Run MCP inspector for debugging
+cd mcp-thesis
+npm install
 ```
 
-**Testing**: No Jest/Mocha/Vitest. Testing via MCP tools: `runHITLComparison` and `evaluateResults`. Test data: `test-data/dataset-*.json`. No single test command available.
+## Environment
+Current runtime expects environment variables for:
+- `OPENROUTER_API_KEY`
+- `GEMINI_API_KEY`
+- Firebase config vars referenced by `src/helpers/env.ts`
+
+Security rules:
+- Never commit secrets.
+- Never print API keys in logs.
+- Treat `.env` as sensitive.
+
+## Build/Lint/Test Commands
+
+### Build
+```bash
+npm run build
+```
+- Compiles TypeScript via `tsc`.
+- Produces `build/` artifacts.
+
+### Dev Server
+```bash
+npm run dev
+```
+- Runs `tsx watch src/index.ts`.
+- Starts backend server (default port `3006`).
+
+### TypeScript Watch
+```bash
+npm run watch
+```
+
+### Lint
+- No lint script is defined in `package.json`.
+- Do not add ESLint/Prettier unless explicitly requested.
+
+## Testing Model
+This repository does not use Jest/Vitest/Mocha as primary workflow.
+Testing is script-based and dataset/evaluation driven.
+
+Important: many scripts import from `build/`.
+Compile first:
+
+```bash
+npm run build
+```
+
+### Run a Single Test (recommended)
+Fastest single test path:
+
+```bash
+node test-scripts/test-domain-simple.js
+```
+
+Other single-test scripts:
+
+```bash
+node test-scripts/test-domain-classification.js
+node test-scripts/test-domain-detailed.js
+node test-scripts/test-domain-filtering.js
+```
+
+### Run Full Batch Test
+```bash
+node test-scripts/test-all-datasets.js
+```
+- Runs all dataset files under `test-data/dataset-*.json`.
+- Slower and API-costly.
+
+## API-level Evaluation Endpoints
+When server is running, testing endpoints in `src/index.ts` include:
+- `POST /sessions/:sessionId/testing/prepare-test-data`
+- `POST /sessions/:sessionId/testing/embed-dataset`
+- `POST /sessions/:sessionId/testing/run-hitl-comparison`
+- `POST /sessions/:sessionId/testing/evaluate-results`
+- `POST /sessions/:sessionId/testing/classify-domain`
 
 ## Code Style Guidelines
 
-### TypeScript Configuration
-- **Target**: ES2022, **Module**: Node16 with ES modules
-- **Strict mode**: Enabled, **Output**: `build/` directory
+### Language/Module Rules
+- TypeScript strict mode is enabled.
+- ESM project (`"type": "module"`).
+- In TS source, local imports must include `.js` extension.
 
-### Import Conventions
-**CRITICAL**: Always use `.js` extensions in imports (ES module requirement):
-
-```typescript
-// ✅ Correct
-import { JsonProjectStore } from "./stores/projectStore.js";
-
-// ❌ Wrong  
-import { JsonProjectStore } from "./stores/projectStore";
-import { JsonProjectStore } from "./stores/projectStore.ts";
+Example:
+```ts
+import { SessionManager } from "./session/session.manager.js";
 ```
 
-**Import order**: Node built-ins → MCP SDK → local absolute → local relative
+### Imports
+- Keep imports at top of file.
+- Preferred order:
+  1) built-in/external packages
+  2) internal relative imports
+- Prefer named imports/exports unless existing default export pattern is established.
 
-```typescript
-import { randomUUID } from "crypto";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import { validateUseCase } from "./validators.js";
-```
+### Formatting
+- Match existing style:
+  - 2-space indentation
+  - semicolons
+  - double-quoted strings
+  - trailing commas where already used
+- Keep functions focused; avoid sprawling methods unless consistent with file pattern.
 
-### Naming Conventions
-- **Files**: `camelCase.ts` (single-purpose), `kebab-case.ts` (multi-word), `*.interface.ts`, `*.schema.ts`, `*.service.ts`, `*Tools.ts`
-- **Variables/Functions**: `camelCase`
-- **Classes/Interfaces/Types**: `PascalCase`
-- **Constants**: `UPPER_SNAKE_CASE`
+### Types
+- Type function params and return values for public/service boundaries.
+- Prefer `interface` for object contracts.
+- Use `type` for unions/compositions.
+- Validate external input and LLM output with Zod before business logic.
 
-```typescript
-export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-export interface GenUseCase { }
-export class JsonProjectStore { }
-export async function generateUseCase() { }
-```
-
-### Type Definitions
-Prefer interfaces for object shapes, types for unions/literals:
-
-```typescript
-// ✅ Preferred
-export interface Gap { type: GapType; severity: "high" | "medium" | "low"; }
-export type GapType = "missing_exception_flows" | "missing_alternative_flows";
-
-// ✅ Always type params and returns
-export async function analyzeGaps(useCase: GenUseCase): Promise<GapAnalysis> { }
-```
+### Naming
+- variables/functions: `camelCase`
+- classes/interfaces/types: `PascalCase`
+- constants/env vars: `UPPER_SNAKE_CASE`
+- keep existing file suffix patterns:
+  - `*.service.ts`
+  - `*.validator.ts`
+  - `*.analyzer.ts`
+  - `*.interface.ts`
 
 ### Error Handling
-**MCP Tools** - Return structured errors, never throw:
-```typescript
-async (args) => {
-  try {
-    const result = await doSomething(args);
-    return { content: [{ type: "text" as const, text: `Success: ${result}` }] };
-  } catch (error) {
-    return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-      isError: true
-    };
-  }
-}
-```
+- Express handlers:
+  - validate with `safeParse`
+  - return structured `400/404/409` for expected request/state issues
+  - use `try/catch` and return `500` for unexpected failures
+- Service functions may throw `Error` with actionable context.
+- Do not swallow exceptions silently.
 
-**Services/Helpers** - Use try-catch with meaningful messages:
-```typescript
-export async function generateUseCase(description: string): Promise<GenUseCase> {
-  try {
-    const result = await llmCall(description);
-    if (!result) throw new Error("LLM returned empty result");
-    return result;
-  } catch (error) {
-    throw new Error(`Generation failed: ${error.message}`);
-  }
-}
-```
+### Async/Concurrency
+- Prefer `async/await` over `.then()` chains.
+- Avoid uncontrolled parallel LLM/API calls.
+- Preserve deterministic loop behavior in HITL orchestration.
 
-### Async/Await
-Always use async/await, never raw promises:
-```typescript
-// ✅ Correct
-const useCase = await extractUseCase(description);
+### State/Architecture
+- Respect session isolation (`SessionManager`, session-scoped store/orchestrator).
+- Do not share mutable state across sessions.
+- Keep persistence routed through store/service abstractions.
 
-// ❌ Avoid
-extractUseCase(description).then(...);
-```
+### Logging
+- Keep logs concise and diagnostic.
+- Never log secrets.
 
-### Comments
-JSDoc for public APIs, inline comments for complex logic:
-```typescript
-/**
- * Analyzes use case for gaps and missing flows
- * @param useCase - Use case to analyze
- * @returns Prioritized gap analysis
- */
-export async function analyzeGaps(useCase: GenUseCase): Promise<GapAnalysis> {
-  // Calculate uncertainty × criticality for each step
-  const priorities = flow.steps.map(step => calculatePriority(step));
-}
-```
+## Agent Guardrails
+Do:
+- Make minimal, targeted edits.
+- Preserve existing conventions and structure.
+- Build before script tests that depend on `build/`.
+- Report what changed and how verified.
 
-## Architecture Patterns
+Do not:
+- Add new tooling/frameworks without request.
+- Remove `.js` import extensions in TS source.
+- Mix unrelated refactors into the same task.
+- Commit credentials or sensitive files.
 
-### Session Isolation
-Each MCP session gets isolated instances: `SessionServer`, `JsonProjectStore`, `GeminiOpenRouterFunctions`. Never share state between sessions.
-
-### Store Pattern
-All data operations through `JsonProjectStore`:
-```typescript
-await projectStore.initProject(name, description);
-await projectStore.saveUseCase(useCase);
-const useCases = await projectStore.getAllUseCases();
-```
-
-### LLM Interaction Pattern
-All LLM calls through `GeminiOpenRouterFunctions`:
-```typescript
-const result = await geminiFunctions.generateObject({
-  schema: genUseCaseSchema,
-  prompt: "...",
-  systemInstructions: "You are a business analyst..."
-});
-```
-
-### Zod Validation
-Always validate LLM outputs with Zod:
-```typescript
-import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
-const validated = genUseCaseSchema.parse(llmOutput);
-```
-
-## Environment Variables
-
-Required in `.env`:
+## Quick Commands
 ```bash
-OPENROUTER_API_KEY=sk-or-v1-...    # Server-side LLM access
-GEMINI_API_KEY=...                  # Session-specific (via HTTP header)
-API_KEY=...                          # Firebase config
-AUTH_DOMAIN=...
-PROJECT_ID=...
-STORAGE_BUCKET=...
-MESSAGING_SENDER_ID=...
-APP_ID=...
-MEASUREMENT_ID=...
+cd mcp-thesis
+npm install
+npm run build
+npm run dev
+node test-scripts/test-domain-simple.js
+node test-scripts/test-all-datasets.js
 ```
-
-## DO NOT
-
-- ❌ Add linting/formatting configs (ESLint, Prettier, etc.)
-- ❌ Create unit test files (Jest, Mocha, Vitest)
-- ❌ Use `.ts` extensions in import paths
-- ❌ Throw errors in MCP tool handlers
-- ❌ Share state between sessions
-- ❌ Use `require()` - ES module project
-- ❌ Commit `.env` file
-- ❌ Use `any` type (except for legitimate unknown types)

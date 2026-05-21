@@ -1,0 +1,106 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T04:01:05.083Z",
+  "testCases": [
+    {
+      "id": "UC24",
+      "domain": "Student Engagement",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Includes a grace period for late completion marking."
+      },
+      "inputs": {
+        "vague": "A SuperFrog Student accesses their schedule, finds an assigned appearance, and successfully marks it as completed, which then updates the system and informs relevant people.",
+        "detailed": "Primary Actor:\nSuperFrog Student\nSecondary Actors:\nSpirit Director, Customer\nTrigger:\nThe SuperFrog Student indicates to mark an “Assigned” appearance request as “Completed”.\nDescription:\nThe SuperFrog Student wants to mark an appearance request as “Completed”, so that she can let the Spirit Director and the Customer know that she has completed this appearance.\nPreconditions:\nPRE-1. The SuperFrog Student is logged into the System.\nPRE-2. There exists at least one assigned appearance request for this SuperFrog Student.\nPostconditions:\nPOST-1. The appearance request is updated in the System with a status of “Completed”.\nMain Success Scenario:\nThe SuperFrog Student indicates to mark an “Assigned” appearance request as “Completed”.\nThe SuperFrog Student views the details of an appearance request from her personal schedule.\nThe SuperFrog Student chooses to mark this assigned appearance as “Completed”.\nThe System validates that the end time of the event is earlier than the current System time.\nThe System updates the status of the appearance request from “Assigned” to “Completed”.\nThe System notifies relevant actors about the completion according to the “Notification” defined in the Associated Information of this use case.\nUse case ends\nExtensions:\n1a. The SuperFrog Student forgets to mark a completed request as “Completed”:\n1a1. The System updates the status of the appearance request from “Assigned” to “Completed” after a grace period (2 days) from the date of this appearance.\n1a2. Returns to step 6 of the normal flow.\n4a. The event has not finished yet:\n4a1. The System alerts the SuperFrog Student that it is too early to confirm the appearance has been completed and then terminates the use case.\n\n"
+      },
+      "groundTruth": {
+        "name": "Mark Appearance Request as Completed",
+        "summary": "The SuperFrog Student marks an assigned appearance request as completed to notify the Spirit Director and the Customer.",
+        "mainActor": "SuperFrog Student",
+        "actors": [
+          "SuperFrog Student",
+          "Spirit Director",
+          "Customer",
+          "System"
+        ],
+        "preconditions": [
+          "The SuperFrog Student is logged into the System.",
+          "There exists at least one assigned appearance request for this SuperFrog Student."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Indicates to mark an \"Assigned\" appearance request as \"Completed\"."
+              },
+              {
+                "index": 2,
+                "actor": "SuperFrog Student",
+                "description": "Views the details of an appearance request from her personal schedule."
+              },
+              {
+                "index": 3,
+                "actor": "SuperFrog Student",
+                "description": "Chooses to mark this assigned appearance as \"Completed\"."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates that the end time of the event is earlier than the current System time."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Updates the status of the appearance request from \"Assigned\" to \"Completed\"."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Notifies relevant actors about the completion according to the “Notification” defined in the Associated Information of this use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_7a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Updates the status of the appearance request from \"Assigned\" to \"Completed\" after a grace period (2 days) from the date of this appearance."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Notifies relevant actors about the completion."
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the SuperFrog Student that it is too early to confirm the appearance has been completed."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

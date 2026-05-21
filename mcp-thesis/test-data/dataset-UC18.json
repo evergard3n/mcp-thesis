@@ -1,0 +1,167 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:54:35.641Z",
+  "testCases": [
+    {
+      "id": "UC18",
+      "domain": "Payroll",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 5,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The Spirit Director can successfully generate and print official payment request forms for SuperFrog Students after selecting completed appearance requests within a specified timeframe and confirming the details.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nTCU Payroll Services\nTrigger:\nThe Spirit Director indicates to generate payment for services request forms for selected SuperFrog Students. (See BR-14).\nDescription:\nThe Spirit Director wants to generate TCU Honorarium (Payment for services) Requests for SuperFrog Students who have completed at least one appearance during a time period, so that the SuperFrog Students can get paid by the TCU Payroll Services. The payment requests will then be printed, signed, and sent to the TCU Payroll Services.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The details of the report are returned and displayed to the Spirit Director.\nPOST-2. The System updates the statuses of the selected appearance requests from “Completed” to “Submitted to payroll”.\nMain Success Scenario:\nThe Spirit Director indicates to generate TCU Honorarium (Payment for services) Request Forms.\nThe System asks the Spirit Director to provide configurable report generating parameters according to the “Report generating parameters” defined in the Associated Information of this use case.\nThe Spirit Director enters the required parameters and confirms that she has finished entering.\nThe System validates the input parameters according to the “Report generating parameters” defined in the Associated Information of this use case.\nThe System retrieves and displays a list of “Completed” appearance requests within the specified time period, organized by SuperFrog Students.\nThe Spirit Director validates each “Completed” appearance request and then selects appearance requests to generate TCU Honorarium (Payment for services) Request Forms.\nThe System generates the TCU Honorarium (Payment for services) Request Forms according to the “Report generating algorithm” defined in the Associated Information of this use case and displays to the Spirit Director according to the “Report generating parameters” defined in the Associated Information of this use case.\nThe Spirit Director validates every generated TCU Honorarium (Payment for Services) Request Form.\nThe System delivers the generated report according to the specified report disposition in the specified format in the “Report generating parameters” defined in the Associated Information of this use case.\nThe Spirit Director enters SSNs of each SuperFrog Student (BR-14), enters Authorized Codes (Account, Fund, Dept, and Project), and confirms printing.\nThe System prints all the payment requests.\nThe System updates the statuses of the selected appearance requests from “Completed” to “Submitted to payroll”.\nUse case ends.\nExtensions:\n4a. Input validation rule violation:\n4a1. The System alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error.\n4a2. The Spirit Director corrects the mistake and returns to step 4 of the normal flow.\n5a. No data is returned:\n5a1. The System alerts the Spirit Director that no data is available in the generated report.\n5a2. The Spirit Director either chooses to return to step 3 of the normal flow or chooses to terminate the use case.\n6a. The Spirit Director finds errors in a “Completed” appearance request:\n6a1. User case terminates.\n8a. The Spirit Director finds errors in a generated payment request:\n8a1. The Spirit Director edits this payment request form directly.\n8a2. Returns to step 9 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Generate TCU Honorarium (Payment for services) Request Forms",
+        "summary": "The Spirit Director generates TCU Honorarium (Payment for services) Request Forms for SuperFrog Students who have completed appearances, so they can be paid by TCU Payroll Services.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System",
+          "TCU Payroll Services"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to generate TCU Honorarium (Payment for services) Request Forms."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Asks the Spirit Director to provide configurable report generating parameters."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Enters the required parameters and confirms completion."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates the input parameters."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Retrieves and displays a list of 'Completed' appearance requests within the specified time period, organized by SuperFrog Students."
+              },
+              {
+                "index": 6,
+                "actor": "Spirit Director",
+                "description": "Validates each 'Completed' appearance request and selects appearance requests to generate forms."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Generates the TCU Honorarium (Payment for services) Request Forms and displays them to the Spirit Director."
+              },
+              {
+                "index": 8,
+                "actor": "Spirit Director",
+                "description": "Validates every generated TCU Honorarium (Payment for Services) Request Form."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Delivers the generated report according to the specified report disposition and format."
+              },
+              {
+                "index": 10,
+                "actor": "Spirit Director",
+                "description": "Enters SSNs for each SuperFrog Student, enters Authorized Codes (Account, Fund, Dept, Project), and confirms printing."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Prints all the payment requests."
+              },
+              {
+                "index": 12,
+                "actor": "System",
+                "description": "Updates the statuses of the selected appearance requests from 'Completed' to 'Submitted to payroll'."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Corrects the mistake and returns to step 4 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_5a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that no data is available in the generated report."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Either chooses to return to step 3 of the normal flow or chooses to terminate the use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_6a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "User case terminates."
+              }
+            ]
+          },
+          {
+            "id": "ALT_8a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 8,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Edits this payment request form directly."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Returns to step 9 of the normal flow."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

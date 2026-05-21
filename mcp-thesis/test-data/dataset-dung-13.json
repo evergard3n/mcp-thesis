@@ -1,0 +1,79 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:53:32.077Z",
+  "testCases": [
+    {
+      "id": "dung-13",
+      "domain": "Education",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Hệ thống phải xác thực danh tính của sinh viên trước khi cho phép gửi yêu cầu tham gia. Mã lớp học phải duy nhất và được tạo bởi giáo viên khi khởi tạo lớp. Hệ thống đảm bảo không một sinh viên nào có thể tham gia cùng một lớp nhiều lần."
+      },
+      "inputs": {
+        "vague": "A student requests to join an existing class by providing the class code. The system acknowledges the request, notifies the teacher, and then informs the student that their request is awaiting approval.",
+        "detailed": "Ca sử dụng này cho phép Sinh viên gửi yêu cầu tham gia một lớp học hiện có trong hệ thống. Sinh viên có thể cung cấp mã lớp học hoặc thông tin định danh lớp để gửi yêu cầu đến Giáo viên phụ trách. Sinh viên yêu cầu hệ thống cho phép tham gia một lớp học. Hệ thống yêu cầu sinh viên cung cấp mã lớp học của lớp sinh viên muốn vào. Sinh viên cung cấp mã lớp học. Hệ thống xác nhận thông tin lớp học có tồn tại trong hệ thống, ghi nhận yêu cầu tham gia vả gửi thông báo tới giáo viên chủ nhiệm của lớp học. Hệ thống thông báo cho sinh viên rằng yêu cầu đã được gửi đi và đang chờ phê duyệt. Nếu mã lớp không hợp lệ, hệ thống không tìm thấy lớp học tương ứng với mã lớp được cung cấp và thông báo cho sinh viên rằng mã lớp không hợp lệ. Hệ thống phải xác thực danh tính của sinh viên trước khi cho phép gửi yêu cầu tham gia. Mã lớp học phải duy nhất và được tạo bởi giáo viên khi khởi tạo lớp. Hệ thống đảm bảo không một sinh viên nào có thể tham gia cùng một lớp nhiều lần. Sinh viên đã đăng nhập hợp lệ vào hệ thống. Lớp học tồn tại trong hệ thống và đang hoạt động. Nếu sinh viên được chấp nhận, danh sách thành viên của lớp học được cập nhật tương ứng."
+      },
+      "groundTruth": {
+        "name": "Tham gia lớp học",
+        "summary": "Sinh viên yêu cầu tham gia một lớp học hiện có trong hệ thống bằng cách cung cấp mã lớp học.",
+        "mainActor": "Sinh viên",
+        "actors": [
+          "Sinh viên",
+          "Hệ thống",
+          "Giáo viên"
+        ],
+        "preconditions": [
+          "Sinh viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Lớp học tồn tại trong hệ thống và đang hoạt động."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Sinh viên",
+                "description": "Yêu cầu hệ thống cho phép tham gia một lớp học."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Yêu cầu sinh viên cung cấp mã lớp học."
+              },
+              {
+                "index": 3,
+                "actor": "Sinh viên",
+                "description": "Cung cấp mã lớp học."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Xác nhận thông tin lớp học có tồn tại, ghi nhận yêu cầu tham gia và gửi thông báo tới giáo viên chủ nhiệm của lớp học."
+              },
+              {
+                "index": 5,
+                "actor": "Hệ thống",
+                "description": "Thông báo cho sinh viên rằng yêu cầu đã được gửi đi và đang chờ phê duyệt."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Hệ thống",
+                "description": "Không tìm thấy lớp học tương ứng với mã lớp được cung cấp và thông báo cho sinh viên rằng mã lớp không hợp lệ."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:52:08.252Z",
+  "testCases": [
+    {
+      "id": "dung-12",
+      "domain": "Education/Learning Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Hệ thống xác thực quyền chấm điểm của Giáo viên và trạng thái của bài nộp."
+      },
+      "inputs": {
+        "vague": "Giáo viên truy cập danh sách các bài nộp, chọn một bài cụ thể rồi nhập điểm số và nhận xét cho bài đó. Hệ thống sau đó lưu lại kết quả đánh giá cho sinh viên.",
+        "detailed": "Ca sử dụng này cho phép Giáo viên thực hiện việc đánh giá và chấm điểm các bài tập hoặc bài thi do Sinh viên nộp trong lớp học hoặc môn học mà họ phụ trách. Giáo viên có thể xem lại nội dung bài nộp, đối chiếu với yêu cầu ban đầu, sau đó ghi nhận kết quả đánh giá và phản hồi cho sinh viên. Giảng viên yêu cầu truy cập danh sách các bài đã nộp của một bài tập hoặc bài thi cụ thể. Hệ thống hiển thị danh sách các bài đã nộp hợp lệ của sinh viên. Giáo viên chọn một bài đã nộp cụ thể để đánh giá. Hệ thống cung cấp thông tin chi tiết về bài đã nộp và các yêu cầu ban đầu. Giáo viên thực hiện đánh giá bài đã nộp, cho điểm và thêm nhận xét. Hệ thống ghi nhận điểm số, nhận xét và cập nhật trạng thái kết quả của sinh viên. Điểm số là trường bắt buộc. Hệ thống phải xác minh quyền của Giáo viên để chấm điểm trong lớp học hoặc môn học tương ứng. Giáo viên phải đăng nhập hợp lệ vào hệ thống. Học sinh đã nộp bài tập hoặc bài kiểm tra. Bài đã nộp vẫn trong trạng thái chờ chấm điểm. Sau khi hoàn thành, điểm và nhận xét của sinh viên được lưu trữ trong hệ thống."
+      },
+      "groundTruth": {
+        "name": "Chấm điểm bài tập/bài thi",
+        "summary": "Ca sử dụng này cho phép Giáo viên thực hiện việc đánh giá và chấm điểm các bài tập hoặc bài thi do Sinh viên nộp trong lớp học hoặc môn học mà họ phụ trách. Giáo viên có thể xem lại nội dung bài nộp, đối chiếu với yêu cầu ban đầu, sau đó ghi nhận kết quả đánh giá và phản hồi cho sinh viên.",
+        "mainActor": "Giáo viên",
+        "actors": [
+          "Giáo viên",
+          "Hệ thống",
+          "Sinh viên"
+        ],
+        "preconditions": [
+          "Giáo viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Sinh viên đã nộp bài tập hoặc bài thi.",
+          "Bài nộp còn trong trạng thái “chờ chấm điểm”."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Giáo viên",
+                "description": "Yêu cầu truy cập danh sách bài nộp của một bài tập hoặc bài thi."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Hiển thị danh sách bài nộp hợp lệ của sinh viên."
+              },
+              {
+                "index": 3,
+                "actor": "Giáo viên",
+                "description": "Chọn một bài nộp cụ thể để tiến hành đánh giá."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Cung cấp thông tin chi tiết của bài nộp và nội dung yêu cầu gốc."
+              },
+              {
+                "index": 5,
+                "actor": "Giáo viên",
+                "description": "Đánh giá bài nộp, xác định điểm số và nhận xét."
+              },
+              {
+                "index": 6,
+                "actor": "Hệ thống",
+                "description": "Ghi nhận điểm số, nhận xét và cập nhật kết quả vào bài nộp của sinh viên."
+              }
+            ]
+          },
+          {
+            "id": "EXT_7a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 7,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Hệ thống",
+                "description": "Thông báo lỗi quyền chấm điểm và ngừng thực hiện."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:54:13.662Z",
+  "testCases": [
+    {
+      "id": "dung-14",
+      "domain": "Quản lý dự án",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Yêu cầu đặc biệt: Chỉ thành viên nhóm mới có quyền đóng góp nội dung. Chỉ trưởng nhóm được quyền phê duyệt, hợp nhất hoặc khóa mô hình bài tập lớn."
+      },
+      "inputs": {
+        "vague": "Members of a project group contribute content to their group's project model. The group leader reviews and approves these contributions, which are then integrated into the overall project.",
+        "detailed": "Ca sử dụng này cho phép trưởng nhóm bài tập lớn và các thành viên trong nhóm quản lý quá trình thực hiện và đóng góp nội dung cho bài tập lớn của nhóm. Mỗi nhóm bài tập lớn được gắn với một mô hình dự án - đây là sản phẩm nhóm được hình thành từ các phần đóng góp của từng thành viên. Trường hợp trưởng nhóm hoặc thành viên muốn cập nhật tiến độ hoặc nội dung của bài tập lớn. Thành viên nhóm yêu cầu xem hoặc đóng góp nội dung mới vào mô hình bài tập lớn của nhóm, hệ thống sẽ xác nhận quyền thành viên của người dùng trong nhóm. Thành viên nhóm gửi phần đóng góp để nhóm trưởng xem xét và hệ thống ghi nhận đóng góp với trạng thái “chờ phê duyệt”. Trưởng nhóm xem xét các đóng góp của các thành viên, phê duyệt hoặc từ chối đóng góp đó. Cuối cùng, hệ thống hợp nhất nội dung đóng góp vào mô hình chung của nhóm. \n\nTrong các luồng thay thế, Trưởng nhóm có thể thay đổi thông tin nhóm hoặc quản lý thành viên bất kỳ lúc nào. Điều này bao gồm việc Trưởng nhóm yêu cầu cập nhật thông tin mô tả nhóm hoặc mục tiêu bài tập lớn, hệ thống sẽ yêu cầu Trưởng nhóm nhập các thông tin cần cập nhật (mô tả nhóm, mục tiêu bài tập nhóm), và sau khi Trưởng nhóm xác nhận các thông tin đã chỉnh sửa, hệ thống sẽ xác nhận thay đổi và thông báo đến Trưởng nhóm.\n\nNgoài ra, Trưởng nhóm có thể phân công cụ thể phần việc cho từng thành viên. Điều này xảy ra khi Trưởng nhóm yêu cầu phân công nhiệm vụ cho các thành viên, và hệ thống sẽ ghi nhận thông tin phân công và hiển thị cho toàn nhóm.\n\nHệ thống phải đảm bảo chỉ thành viên nhóm mới có quyền đóng góp nội dung. Chỉ Trưởng nhóm được quyền phê duyệt, hợp nhất hoặc khóa mô hình bài tập lớn. Các điều kiện để sử dụng ca này là sinh viên đã đăng nhập hợp lệ vào hệ thống, nhóm bài tập lớn đã được tạo thành công và người dùng là thành viên hợp lệ của nhóm (Trưởng nhóm hoặc thành viên). Sau khi hoàn tất, các đóng góp được ghi nhận và, nếu được phê duyệt, hợp nhất vào mô hình bài tập lớn."
+      },
+      "groundTruth": {
+        "name": "Quản lý đóng góp và tiến độ Bài tập lớn",
+        "summary": "Ca sử dụng này cho phép trưởng nhóm bài tập lớn và các thành viên trong nhóm quản lý quá trình thực hiện và đóng góp nội dung cho bài tập lớn của nhóm.",
+        "mainActor": "Thành viên nhóm",
+        "actors": [
+          "Thành viên nhóm",
+          "Trưởng nhóm",
+          "Hệ thống"
+        ],
+        "preconditions": [
+          "Sinh viên đã đăng nhập hợp lệ vào hệ thống.",
+          "Nhóm bài tập lớn đã được tạo thành công.",
+          "Người dùng là thành viên hợp lệ của nhóm (trưởng nhóm hoặc thành viên)."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Thành viên nhóm",
+                "target": "Hệ thống",
+                "description": "Yêu cầu xem hoặc đóng góp nội dung mới vào mô hình bài tập lớn của nhóm."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Xác nhận quyền thành viên của người dùng trong nhóm."
+              },
+              {
+                "index": 3,
+                "actor": "Thành viên nhóm",
+                "description": "Gửi phần đóng góp để trưởng nhóm xem xét."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Ghi nhận đóng góp và đánh dấu trạng thái 'chờ phê duyệt'."
+              },
+              {
+                "index": 5,
+                "actor": "Trưởng nhóm",
+                "description": "Xem xét các đóng góp của các thành viên, phê duyệt hoặc từ chối đóng góp đó."
+              },
+              {
+                "index": 6,
+                "actor": "Hệ thống",
+                "description": "Hợp nhất nội dung đóng góp vào mô hình chung của nhóm."
+              }
+            ]
+          },
+          {
+            "id": "ALT_7a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 7,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Trưởng nhóm",
+                "target": "Hệ thống",
+                "description": "Yêu cầu cập nhật thông tin mô tả nhóm hoặc mục tiêu bài tập lớn."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Yêu cầu trưởng nhóm nhập các thông tin cần cập nhật."
+              },
+              {
+                "index": 3,
+                "actor": "Trưởng nhóm",
+                "target": "Hệ thống",
+                "description": "Xác nhận các thông tin đã chỉnh sửa."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Xác nhận thay đổi và thông báo đến trưởng nhóm."
+              }
+            ]
+          },
+          {
+            "id": "ALT_8a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 8,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Trưởng nhóm",
+                "target": "Hệ thống",
+                "description": "Yêu cầu phân công nhiệm vụ cho các thành viên."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Ghi nhận thông tin phân công và hiển thị cho toàn nhóm."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

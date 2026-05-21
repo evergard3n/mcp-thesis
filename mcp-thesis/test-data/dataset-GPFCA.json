@@ -1,0 +1,140 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-16T09:19:13.900Z",
+  "testCases": [
+    {
+      "id": "GPFCA",
+      "domain": "Insurance/Claims",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 6,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "The claimant submits their detailed information to us. We review everything they've provided, confirm it aligns with their policy, and then issue a payment to them.",
+        "detailed": "Use Case: Get paid for car accident\nDesign Scope: The insurance company (\"MyInsCo\")\nGoal Level: Strategic\nPrimary Actor: The claimant\nMain success scenario\n1. Claimant submits claim with substantiating data.\n2. Insurance company verifies claimant owns a valid policy\n3. Insurance company assigns agent to examine case\n4. Agent verifies all details are within policy guidelines\n5. Insurance company pays claimant\nExtensions:\n1a. Submitted data is incomplete:\n1a1. Insurance company requests missing information\n1a2. Claimant supplies missing information\n2a. Claimant does not own a valid policy:\n2a1. Insurance company declines claim, notifies claimant, records all this,\nterminates proceedings.\n3a. No agents are available at this time\n3a1. (What does the insurance company do here?)\n4a. Accident violates basic policy guidelines:\n4a1. Insurance company declines claim, notifies claimant, records all this,\nterminates proceedings.\n4b. Accident violates some minor policy guidelines:\n4b1. Insurance company begins negotiation with claimant as to degree of payment\nto be made."
+      },
+      "groundTruth": {
+        "name": "Get paid for car accident",
+        "summary": "The claimant submits a claim to MyInsCo for a car accident and receives payment if the claim is valid and policy guidelines are met.",
+        "mainActor": "Claimant",
+        "actors": [
+          "Claimant",
+          "Insurance company",
+          "Agent"
+        ],
+        "preconditions": [
+          "Claimant has a car accident.",
+          "Claimant has a policy with MyInsCo."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Claimant",
+                "description": "Submits claim with substantiating data."
+              },
+              {
+                "index": 2,
+                "actor": "Insurance company",
+                "description": "Verifies claimant owns a valid policy."
+              },
+              {
+                "index": 3,
+                "actor": "Insurance company",
+                "description": "Assigns agent to examine case."
+              },
+              {
+                "index": 4,
+                "actor": "Agent",
+                "description": "Verifies all details are within policy guidelines."
+              },
+              {
+                "index": 5,
+                "actor": "Insurance company",
+                "description": "Pays claimant."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance company",
+                "description": "Requests missing information."
+              },
+              {
+                "index": 2,
+                "actor": "Claimant",
+                "description": "Supplies missing information."
+              },
+              {
+                "index": 3,
+                "actor": "Insurance company",
+                "description": "Continues with step 2 of MAIN flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_2a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 2,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance company",
+                "description": "Declines claim, notifies claimant, records all details, and terminates proceedings."
+              }
+            ]
+          },
+          {
+            "id": "ALT_3a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 3,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance company",
+                "description": "Waits for an agent to become available and then assigns the agent."
+              }
+            ]
+          },
+          {
+            "id": "EXT_4a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance company",
+                "description": "Declines claim, notifies claimant, records all details, and terminates proceedings."
+              }
+            ]
+          },
+          {
+            "id": "ALT_4a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 4,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Insurance company",
+                "description": "Begins negotiation with claimant as to degree of payment to be made."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

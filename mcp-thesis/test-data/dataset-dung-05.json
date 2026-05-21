@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:40:35.342Z",
+  "testCases": [
+    {
+      "id": "dung-05",
+      "domain": "Quản lý người dùng",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": "Xóa mềm dữ liệu liên kết, lưu nhật ký để khôi phục."
+      },
+      "inputs": {
+        "vague": "The system administrator deletes a specific user account. The system confirms this deletion and removes the account. Users are then assured the account has been successfully removed.",
+        "detailed": "Ca sử dụng này cho phép Quản trị viên hệ thống xóa tài khoản của một người dùng bất kỳ khi có yêu cầu chính đáng hoặc khi tài khoản đó có dấu hiệu vi phạm quy định, hoạt động bất thường, hoặc không còn được sử dụng. Hành động xóa tài khoản giúp đảm bảo an toàn hệ thống và duy trì tính toàn vẹn dữ liệu người dùng.\nCa sử dụng bắt đầu khi quản trị viên muốn xóa tài khoản của một người dùng. Quản trị viên yêu cầu xóa một tài khoản người dùng cụ thể. Hệ thống kiểm tra quyền hạn của quản trị viên và xác nhận tài khoản cần xóa tồn tại trong cơ sở dữ liệu. Quản trị viên xác nhận yêu cầu xóa tài khoản. Hệ thống thực hiện quá trình xóa tài khoản khỏi cơ sở dữ liệu và thông báo đã xoá tài khoản thành công.\nChỉ tài khoản có vai trò quản trị viên mới có thể xoá tài khoản người dùng trong hệ thống. Khi tài khoản bị xóa, các dữ liệu liên kết (lớp học, dự án, đóng góp, bài nộp, v.v.) cần được xử lý theo chính sách hệ thống (xóa mềm). Quản trị viên đã đăng nhập hợp lệ và có quyền quản trị hệ thống. Tài khoản người dùng cần xóa đang tồn tại trong cơ sở dữ liệu. Tài khoản người dùng được xóa khỏi hệ thống. Hệ thống sẽ lưu lại nhật ký xoá tài khoản để phục vụ cho khôi phục lại tài khoản."
+      },
+      "groundTruth": {
+        "name": "Xóa Tài Khoản Người Dùng",
+        "summary": "Use case này cho phép Quản trị viên hệ thống xóa tài khoản của một người dùng bất kỳ khi có yêu cầu chính đáng hoặc khi tài khoản đó có dấu hiệu vi phạm quy định, hoạt động bất thường, hoặc không còn được sử dụng. Hành động xóa tài khoản giúp đảm bảo an toàn hệ thống và duy trì tính toàn vẹn dữ liệu người dùng.",
+        "mainActor": "Quản trị viên",
+        "actors": [
+          "Quản trị viên",
+          "Hệ thống"
+        ],
+        "preconditions": [
+          "Quản trị viên đã đăng nhập hợp lệ và có quyền quản trị hệ thống.",
+          "Tài khoản người dùng cần xóa đang tồn tại trong cơ sở dữ liệu."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Quản trị viên",
+                "description": "Yêu cầu xóa một tài khoản người dùng cụ thể."
+              },
+              {
+                "index": 2,
+                "actor": "Hệ thống",
+                "description": "Kiểm tra quyền hạn của quản trị viên và xác nhận tài khoản cần xóa tồn tại trong cơ sở dữ liệu."
+              },
+              {
+                "index": 3,
+                "actor": "Quản trị viên",
+                "description": "Xác nhận yêu cầu xóa tài khoản."
+              },
+              {
+                "index": 4,
+                "actor": "Hệ thống",
+                "description": "Thực hiện quá trình xóa tài khoản khỏi cơ sở dữ liệu, xử lý dữ liệu liên kết theo chính sách hệ thống (xóa mềm), và thông báo đã xóa tài khoản thành công. Lưu lại nhật ký xóa tài khoản."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

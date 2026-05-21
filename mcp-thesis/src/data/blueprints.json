@@ -1,0 +1,1187 @@
+{
+  "modelId": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+  "blueprints": [
+    {
+      "id": "approval_chain",
+      "name": "Approval Chain",
+      "probeQuestion": "Does this process involve a human approver who reviews a submission and can approve, reject, or request changes?",
+      "domainType": "human-system",
+      "domainDescription": "Human-initiated approval workflows with human decision-makers",
+      "families": ["purchasing", "claims", "corporate", "insurance"],
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "submitter",
+          "description": "The actor who initiates or submits a request for approval",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "initiates a request",
+            "submits a request for approval",
+            "files a request",
+            "creates a submission",
+            "sends a request for review",
+            "requests approval"
+          ]
+        },
+        {
+          "id": "approver",
+          "description": "The actor who reviews, approves, or authorizes the request",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "approves the request",
+            "reviews and accepts the submission",
+            "authorizes the request",
+            "signs off on the request",
+            "validates the approval",
+            "approves and forwards"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "reject",
+          "description": "Approver rejects or declines the request",
+          "triggerCondition": "status != approved",
+          "anchorRole": "approver",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What happens if {approver.actor} rejects or declines at step {approver.stepIndex} (\"{approver.description}\")? Can they request changes instead of outright rejection?",
+          "checkPhrases": [
+            "approver rejects the request",
+            "approver declines the submission",
+            "send back for revision",
+            "rejected by approver",
+            "approval denied"
+          ]
+        },
+        {
+          "id": "conditional_approval",
+          "description": "Approver approves with conditions or requires re-approval",
+          "triggerCondition": "approval with conditions",
+          "anchorRole": "approver",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "Can {approver.actor} approve with conditions at step {approver.stepIndex}? What changes require re-approval?",
+          "checkPhrases": [
+            "approval with conditions",
+            "conditional approval",
+            "partial approval",
+            "requires re-approval",
+            "approval contingent"
+          ]
+        },
+        {
+          "id": "delegate_approval",
+          "description": "Approver is unavailable or not authorized, and approval is delegated",
+          "triggerCondition": "approver unavailable",
+          "anchorRole": "approver",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {approver.actor} is unavailable or not the expected authority at step {approver.stepIndex}? Can someone else approve or delegate?",
+          "checkPhrases": [
+            "alternate approver",
+            "delegated approval",
+            "not the expected authority",
+            "approver unavailable",
+            "supervisor approves"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "request_lifecycle",
+      "name": "Request Fulfillment Lifecycle",
+      "probeQuestion": "Does this process involve an initiator submitting a request that is later fulfilled, delivered, or resolved by another actor or system?",
+      "domainType": "human-system",
+      "domainDescription": "Human-initiated requests fulfilled by humans or systems",
+      "families": ["claims", "purchasing", "logistics", "corporate", "insurance"],
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "initiator",
+          "description": "The actor who initiates a request, order, or claim",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "initiates a request",
+            "submits an order",
+            "starts the process",
+            "files a claim",
+            "reports a claim",
+            "creates a request",
+            "places an order"
+          ]
+        },
+        {
+          "id": "fulfiller",
+          "description": "The actor or party who fulfills, delivers, or resolves the request",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "delivers the goods",
+            "fulfills the request",
+            "completes the order",
+            "resolves the claim",
+            "closes the claim",
+            "provides the service",
+            "ships the product"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "cancel_midprocess",
+          "description": "Initiator cancels or withdraws the request after submission",
+          "triggerCondition": "request withdrawn",
+          "anchorRole": "initiator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "Can {initiator.actor} cancel or withdraw the request after step {initiator.stepIndex} (\"{initiator.description}\")? What happens to downstream processing?",
+          "checkPhrases": [
+            "cancels the request",
+            "withdraws the request",
+            "removes from processing",
+            "request is canceled",
+            "claim withdrawn"
+          ]
+        },
+        {
+          "id": "modify_midprocess",
+          "description": "Initiator modifies the request during processing",
+          "triggerCondition": "request modified",
+          "anchorRole": "initiator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "Can {initiator.actor} change the request after submission at step {initiator.stepIndex}? Do modifications require re-approval or re-evaluation?",
+          "checkPhrases": [
+            "modifies the request",
+            "changes the order",
+            "updates the request",
+            "revised request",
+            "changes after submission"
+          ]
+        },
+        {
+          "id": "partial_fulfillment",
+          "description": "Request is only partially fulfilled",
+          "triggerCondition": "partial fulfillment",
+          "anchorRole": "fulfiller",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {fulfiller.actor} only partially fulfills the request at step {fulfiller.stepIndex} (\"{fulfiller.description}\")? How is the remainder handled?",
+          "checkPhrases": [
+            "partial delivery",
+            "partially fulfilled",
+            "partial settlement",
+            "incomplete fulfillment",
+            "partial coverage"
+          ]
+        },
+        {
+          "id": "wrong_fulfillment",
+          "description": "Fulfillment does not match the request",
+          "triggerCondition": "fulfillment mismatch",
+          "anchorRole": "fulfiller",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if what {fulfiller.actor} delivers at step {fulfiller.stepIndex} does not match what was requested? Who verifies and how is it resolved?",
+          "checkPhrases": [
+            "wrong goods",
+            "incorrect delivery",
+            "does not match request",
+            "incorrect fulfillment",
+            "mismatched delivery"
+          ]
+        },
+        {
+          "id": "late_fulfillment",
+          "description": "Fulfillment is delayed beyond expected timeframe",
+          "triggerCondition": "fulfillment delayed",
+          "anchorRole": "fulfiller",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What happens if {fulfiller.actor} does not fulfill by the expected time at step {fulfiller.stepIndex}? Is there a deadline or alert mechanism?",
+          "checkPhrases": [
+            "does not deliver on time",
+            "delivery delayed",
+            "overdue fulfillment",
+            "late delivery",
+            "delayed resolution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "multi_party_selection",
+      "name": "Multi-Party Selection",
+      "probeQuestion": "Does this process involve a procurement or sourcing actor selecting among multiple vendors, suppliers, or contractors — where no match, multiple matches, or request splitting may occur?",
+      "domainType": "human-system",
+      "domainDescription": "Procurement/sourcing actor selects among multiple vendors or suppliers, with scenarios for no match, split orders, or merged requests",
+      "families": ["purchasing", "corporate", "claims"],
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "selector",
+          "description": "The procurement or sourcing actor who selects among multiple vendors, suppliers, or contractors",
+          "isMandatory": true,
+          "threshold": 0.50,
+          "keywords": [
+            "identifies the best vendor for the purchase",
+            "selects a supplier to fulfill the order",
+            "evaluates vendor bids",
+            "compares supplier quotes",
+            "issues purchase order to vendor",
+            "sources from multiple contractors"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "split_request",
+          "description": "Request is split across multiple entities",
+          "triggerCondition": "multiple entities required",
+          "anchorRole": "selector",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if the request at step {selector.stepIndex} requires multiple entities? Can {selector.actor} split the request across multiple parties?",
+          "checkPhrases": [
+            "multiple vendors",
+            "split the request",
+            "generates multiple orders",
+            "multiple suppliers",
+            "separate purchase orders"
+          ]
+        },
+        {
+          "id": "merge_requests",
+          "description": "Multiple requests are merged for efficiency",
+          "triggerCondition": "requests merged",
+          "anchorRole": "selector",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "Can {selector.actor} merge multiple similar requests at step {selector.stepIndex}? How are merged items tracked?",
+          "checkPhrases": [
+            "merges requests",
+            "combines orders",
+            "batch processing",
+            "merge multiple requests",
+            "consolidate orders"
+          ]
+        },
+        {
+          "id": "no_match",
+          "description": "No suitable option is found",
+          "triggerCondition": "no suitable match",
+          "anchorRole": "selector",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {selector.actor} cannot find a suitable match at step {selector.stepIndex}? Is there a fallback or alternative source?",
+          "checkPhrases": [
+            "no vendor found",
+            "no suitable match",
+            "no available option",
+            "no provider available",
+            "unable to find vendor"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "information_completeness",
+      "name": "Information Completeness",
+      "probeQuestion": "Does this process require an actor to fill in a form or structured data entry with required fields, where some fields may be unknown, missing, or deferred to a later step or another actor?",
+      "domainType": "human-system",
+      "domainDescription": "Human fills out structured forms or data entry with required fields, handling incomplete mandatory data scenarios",
+      "families": ["generic"],
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "provider",
+          "description": "The actor who fills in a form or structured data entry with required fields",
+          "isMandatory": true,
+          "threshold": 0.52,
+          "keywords": [
+            "fills in the form",
+            "completes the form fields",
+            "enters required information into the form",
+            "submits the form with details",
+            "inputs mandatory fields",
+            "fills out the request form"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "missing_info",
+          "description": "Required information is unknown or unavailable",
+          "triggerCondition": "missing information",
+          "anchorRole": "provider",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {provider.actor} does not know all required information at step {provider.stepIndex} (\"{provider.description}\")? Can fields be left blank and filled later?",
+          "checkPhrases": [
+            "missing information",
+            "does not know",
+            "leave blank",
+            "incomplete information",
+            "unknown details"
+          ]
+        },
+        {
+          "id": "fill_later",
+          "description": "Missing information is filled in later by another actor",
+          "triggerCondition": "information completed later",
+          "anchorRole": "provider",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "If information is missing at step {provider.stepIndex}, who fills it in later and does this require re-approval or re-evaluation?",
+          "checkPhrases": [
+            "filled in later",
+            "completes missing information",
+            "supplies missing information later",
+            "later provides details",
+            "information completed later"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "adjudication_decisioning",
+      "name": "Adjudication Decisioning",
+      "probeQuestion": "Does this process involve an insurance claim, benefits case, or formal adjudication where eligibility/policy rules are validated and outcomes include decline, settlement, or negotiated payment?",
+      "domainType": "human-system",
+      "domainDescription": "Insurance/benefits claim review with formal eligibility validation and adjudication outcomes (decline, settlement, negotiated payment)",
+      "families": ["claims", "insurance"],
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "claimant",
+          "description": "The actor who files an insurance claim or benefits case for adjudication",
+          "isMandatory": true,
+          "threshold": 0.50,
+          "keywords": [
+            "files an insurance claim",
+            "submits a claim for coverage",
+            "reports an insurance incident",
+            "submits claim with supporting documents",
+            "files for benefits",
+            "provides substantiating data for claim"
+          ]
+        },
+        {
+          "id": "adjudicator",
+          "description": "The insurer, adjuster, or authority that validates policy coverage and decides claim outcomes",
+          "isMandatory": true,
+          "threshold": 0.50,
+          "keywords": [
+            "verifies insurance policy coverage",
+            "validates claim eligibility",
+            "reviews insurance claim",
+            "assigns claims adjuster",
+            "declines insurance claim",
+            "authorizes claim payment",
+            "settles the claim"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "eligibility_failure",
+          "description": "Eligibility or policy validation fails, leading to decline/termination",
+          "triggerCondition": "policy invalid or eligibility failed",
+          "anchorRole": "adjudicator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "If policy or eligibility validation fails at step {adjudicator.stepIndex}, what exact actions occur (decline, notify, record) and does the process terminate or allow appeal?",
+          "checkPhrases": [
+            "invalid policy",
+            "claim declined",
+            "declines claim",
+            "terminates proceedings",
+            "not eligible"
+          ]
+        },
+        {
+          "id": "assignee_unavailable",
+          "description": "No reviewer/agent is available when assignment is needed",
+          "triggerCondition": "agent unavailable",
+          "anchorRole": "adjudicator",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if no reviewer/agent is available at step {adjudicator.stepIndex}? Is the case queued or put on hold, who is notified, and when does processing resume?",
+          "checkPhrases": [
+            "no agents are available",
+            "agent unavailable",
+            "put on hold",
+            "wait for agent",
+            "assign once available"
+          ]
+        },
+        {
+          "id": "policy_severity_branch",
+          "description": "Policy violations branch to different outcomes based on severity",
+          "triggerCondition": "policy violation severity",
+          "anchorRole": "adjudicator",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "When policy guidelines are violated, how are major violations handled versus minor violations? Does one path terminate while another allows negotiation or adjusted payment?",
+          "checkPhrases": [
+            "violates policy guidelines",
+            "minor policy violation",
+            "major policy violation",
+            "begins negotiation",
+            "degree of payment"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "api_integration",
+      "name": "API Integration Pattern",
+      "probeQuestion": "Does this process involve one system calling another system's API or service, where timeouts, unavailability, or bad responses may occur?",
+      "domainType": "system-system",
+      "domainDescription": "System-to-system communication via APIs with error handling",
+      "families": ["integration", "messaging"],
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "caller",
+          "description": "The system that initiates an API call or request",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "calls the API",
+            "sends request to service",
+            "invokes the endpoint",
+            "queries the service",
+            "transmits data to system",
+            "initiates API call"
+          ]
+        },
+        {
+          "id": "responder",
+          "description": "The system that processes the request and returns a response",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "returns response",
+            "processes the request",
+            "sends back result",
+            "provides API response",
+            "responds with data",
+            "returns status code"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "timeout",
+          "description": "API call times out without response",
+          "triggerCondition": "no response within timeout",
+          "anchorRole": "caller",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What happens if {responder.actor} does not respond within the timeout period at step {responder.stepIndex}? Does {caller.actor} retry or fail?",
+          "checkPhrases": [
+            "request times out",
+            "no response received",
+            "timeout error",
+            "exceeds timeout limit",
+            "connection timeout"
+          ]
+        },
+        {
+          "id": "service_unavailable",
+          "description": "Target service is unavailable or down",
+          "triggerCondition": "service unavailable",
+          "anchorRole": "responder",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {responder.actor} is unavailable at step {responder.stepIndex}? Is there a fallback service or circuit breaker?",
+          "checkPhrases": [
+            "service unavailable",
+            "service is down",
+            "connection refused",
+            "503 error",
+            "server not responding"
+          ]
+        },
+        {
+          "id": "malformed_response",
+          "description": "API returns unexpected or malformed data",
+          "triggerCondition": "invalid response format",
+          "anchorRole": "responder",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {responder.actor} returns malformed or unexpected data at step {responder.stepIndex}? How does {caller.actor} handle schema validation failures?",
+          "checkPhrases": [
+            "invalid response format",
+            "malformed data",
+            "schema validation fails",
+            "unexpected response structure",
+            "parsing error"
+          ]
+        },
+        {
+          "id": "rate_limit",
+          "description": "API rate limit exceeded",
+          "triggerCondition": "too many requests",
+          "anchorRole": "responder",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {caller.actor} exceeds rate limits at step {caller.stepIndex}? Is there retry logic with exponential backoff?",
+          "checkPhrases": [
+            "rate limit exceeded",
+            "too many requests",
+            "429 error",
+            "quota exceeded",
+            "throttling error"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "data_synchronization",
+      "name": "Data Synchronization Pattern",
+      "probeQuestion": "Does this process involve synchronizing data between two or more systems, where conflicts, failures, or stale data may occur?",
+      "domainType": "system-system",
+      "domainDescription": "Systems synchronizing data across databases or services",
+      "families": ["integration", "operations"],
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "source_system",
+          "description": "The system that provides or publishes data",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "publishes data",
+            "sends update",
+            "broadcasts event",
+            "emits change notification",
+            "provides source data",
+            "triggers sync"
+          ]
+        },
+        {
+          "id": "target_system",
+          "description": "The system that receives and processes synchronized data",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "receives update",
+            "processes sync data",
+            "updates local copy",
+            "consumes event",
+            "synchronizes data",
+            "applies changes"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "sync_conflict",
+          "description": "Conflicting updates from multiple sources",
+          "triggerCondition": "concurrent modifications",
+          "anchorRole": "target_system",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {target_system.actor} receives conflicting updates at step {target_system.stepIndex}? How is conflict resolution handled (last-write-wins, versioning)?",
+          "checkPhrases": [
+            "conflicting updates",
+            "data conflict",
+            "concurrent modification",
+            "version mismatch",
+            "merge conflict"
+          ]
+        },
+        {
+          "id": "sync_failure",
+          "description": "Synchronization fails due to network or system error",
+          "triggerCondition": "sync error",
+          "anchorRole": "target_system",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if synchronization fails at step {target_system.stepIndex}? Does {source_system.actor} retry or queue updates?",
+          "checkPhrases": [
+            "sync fails",
+            "synchronization error",
+            "failed to update",
+            "sync queue backup",
+            "replication failure"
+          ]
+        },
+        {
+          "id": "partial_sync",
+          "description": "Only partial data is synchronized successfully",
+          "triggerCondition": "incomplete sync",
+          "anchorRole": "target_system",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if only partial data is synchronized at step {target_system.stepIndex}? How is data consistency maintained?",
+          "checkPhrases": [
+            "partial sync",
+            "incomplete synchronization",
+            "some records failed",
+            "batch partially succeeded",
+            "inconsistent state"
+          ]
+        },
+        {
+          "id": "stale_data",
+          "description": "Target system has stale or outdated data",
+          "triggerCondition": "data freshness issue",
+          "anchorRole": "target_system",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {target_system.actor} has stale data at step {target_system.stepIndex}? Is there a mechanism to detect and refresh outdated records?",
+          "checkPhrases": [
+            "stale data",
+            "outdated records",
+            "data freshness issue",
+            "cache expired",
+            "old version of data"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "event_driven_processing",
+      "name": "Event-Driven Processing Pattern",
+      "probeQuestion": "Does this process involve a system publishing events or messages that another system consumes asynchronously, where events may be lost, duplicated, or arrive out of order?",
+      "domainType": "system-system",
+      "domainDescription": "Asynchronous event publishing and consumption between systems",
+      "families": ["messaging", "integration"],
+      "activation": {
+        "minRolesMatched": 2,
+        "requireDifferentActors": true
+      },
+      "roles": [
+        {
+          "id": "publisher",
+          "description": "The system that publishes or emits events",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "publishes event",
+            "emits message",
+            "sends notification",
+            "triggers event",
+            "broadcasts message",
+            "pushes to queue"
+          ]
+        },
+        {
+          "id": "subscriber",
+          "description": "The system that subscribes to and processes events",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "consumes event",
+            "listens for message",
+            "processes notification",
+            "handles event",
+            "receives message",
+            "polls queue"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "event_loss",
+          "description": "Event is lost before being consumed",
+          "triggerCondition": "message not delivered",
+          "anchorRole": "publisher",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if an event published by {publisher.actor} at step {publisher.stepIndex} is lost? Is there guaranteed delivery or dead-letter queue?",
+          "checkPhrases": [
+            "event lost",
+            "message not delivered",
+            "dropped event",
+            "queue overflow",
+            "message expiration"
+          ]
+        },
+        {
+          "id": "duplicate_event",
+          "description": "Same event is processed multiple times",
+          "triggerCondition": "duplicate delivery",
+          "anchorRole": "subscriber",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {subscriber.actor} receives duplicate events at step {subscriber.stepIndex}? Is there idempotency handling?",
+          "checkPhrases": [
+            "duplicate event",
+            "message processed twice",
+            "idempotency issue",
+            "repeated delivery",
+            "duplicate processing"
+          ]
+        },
+        {
+          "id": "out_of_order",
+          "description": "Events are consumed out of order",
+          "triggerCondition": "ordering violation",
+          "anchorRole": "subscriber",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {subscriber.actor} receives events out of order at step {subscriber.stepIndex}? Is ordering guaranteed or does the system handle reordering?",
+          "checkPhrases": [
+            "out of order",
+            "sequence violation",
+            "wrong event order",
+            "ordering issue",
+            "events received in wrong sequence"
+          ]
+        },
+        {
+          "id": "processing_failure",
+          "description": "Subscriber fails to process event",
+          "triggerCondition": "processing error",
+          "anchorRole": "subscriber",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {subscriber.actor} fails to process an event at step {subscriber.stepIndex}? Is there retry logic or compensation?",
+          "checkPhrases": [
+            "processing fails",
+            "event handler error",
+            "failed to process message",
+            "consumer exception",
+            "processing error"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "batch_processing",
+      "name": "Batch Processing Pattern",
+      "probeQuestion": "Does this process involve a system executing batch or bulk operations over datasets, where partial failures, timeouts, or duplicate runs may occur?",
+      "domainType": "system-system",
+      "domainDescription": "Automated batch jobs processing large datasets across systems",
+      "families": ["operations", "integration"],
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "batch_processor",
+          "description": "The system that executes batch processing jobs",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "processes batch",
+            "runs scheduled job",
+            "executes batch job",
+            "processes dataset",
+            "performs bulk operation",
+            "runs nightly job"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "partial_batch_failure",
+          "description": "Some records in batch fail while others succeed",
+          "triggerCondition": "partial failure",
+          "anchorRole": "batch_processor",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if only some records succeed at step {batch_processor.stepIndex}? Does {batch_processor.actor} rollback successful records or continue?",
+          "checkPhrases": [
+            "partial batch failure",
+            "some records fail",
+            "batch partially succeeds",
+            "mixed results",
+            "incomplete batch processing"
+          ]
+        },
+        {
+          "id": "batch_timeout",
+          "description": "Batch job exceeds time limit",
+          "triggerCondition": "processing timeout",
+          "anchorRole": "batch_processor",
+          "severity": "high",
+          "threshold": 0.65,
+          "questionTemplate": "What if {batch_processor.actor} cannot complete within time window at step {batch_processor.stepIndex}? Can it resume or must it restart?",
+          "checkPhrases": [
+            "batch timeout",
+            "job exceeds time limit",
+            "processing window exceeded",
+            "long-running batch",
+            "batch job timeout"
+          ]
+        },
+        {
+          "id": "duplicate_batch_run",
+          "description": "Batch job runs twice due to scheduling error",
+          "triggerCondition": "duplicate execution",
+          "anchorRole": "batch_processor",
+          "severity": "medium",
+          "threshold": 0.65,
+          "questionTemplate": "What if {batch_processor.actor} runs twice at step {batch_processor.stepIndex}? Is there duplicate detection or idempotency?",
+          "checkPhrases": [
+            "duplicate batch run",
+            "job runs twice",
+            "re-execution",
+            "double processing",
+            "batch overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource_locking",
+      "name": "Resource Locking & Concurrency Control",
+      "probeQuestion": "Does this process involve shared resources that multiple clients or systems may access concurrently, requiring locking, contention handling, or deadlock prevention?",
+      "domainType": "system-system",
+      "domainDescription": "System-to-system resource access control, lock management, and concurrency handling",
+      "families": ["locking", "integration", "operations"],
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "resource_manager",
+          "description": "The system component that manages resource access, grants/releases locks, and handles contention",
+          "isMandatory": true,
+          "threshold": 0.4,
+          "keywords": [
+            "checks resource availability",
+            "grants access to resource",
+            "releases lock",
+            "verifies lock status",
+            "manages resource access",
+            "controls access",
+            "checks if resource is available",
+            "updates lock count",
+            "increments lock",
+            "acquires lock",
+            "checks access permissions",
+            "validates access request"
+          ]
+        },
+        {
+          "id": "client_system",
+          "description": "The system or service that requests access to shared resources",
+          "isMandatory": false,
+          "threshold": 0.4,
+          "keywords": [
+            "requests access",
+            "requests exclusive access",
+            "requests shared access",
+            "waits for resource",
+            "acquires resource",
+            "releases resource",
+            "holds lock on resource"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "lock_contention",
+          "description": "Multiple clients compete for the same resource",
+          "triggerCondition": "resource conflict",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What happens when multiple clients try to access the same resource at step {resource_manager.stepIndex}? How does {resource_manager.actor} handle contention?",
+          "checkPhrases": [
+            "resource contention",
+            "multiple clients waiting",
+            "competing for resource",
+            "resource conflict",
+            "concurrent access",
+            "lock contention"
+          ]
+        },
+        {
+          "id": "upgrade_lock",
+          "description": "Client wants to upgrade from shared to exclusive access",
+          "triggerCondition": "lock conversion",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What if a client at step {resource_manager.stepIndex} wants to upgrade from shared to exclusive access? Can {resource_manager.actor} safely convert the lock?",
+          "checkPhrases": [
+            "upgrade lock",
+            "convert to exclusive",
+            "lock conversion",
+            "shared to exclusive",
+            "escalate access",
+            "upgrade access level"
+          ]
+        },
+        {
+          "id": "deadlock_prevention",
+          "description": "Circular wait for resources could cause deadlock",
+          "triggerCondition": "circular dependency",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "How does {resource_manager.actor} prevent deadlock at step {resource_manager.stepIndex} when multiple resources are involved? Is there deadlock detection?",
+          "checkPhrases": [
+            "deadlock prevention",
+            "circular wait",
+            "deadlock detection",
+            "resource ordering",
+            "prevent deadlock",
+            "deadlock avoidance"
+          ]
+        },
+        {
+          "id": "lock_timeout",
+          "description": "Client holds lock for too long without releasing",
+          "triggerCondition": "lock held indefinitely",
+          "anchorRole": "resource_manager",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What if a client holds the lock indefinitely after step {resource_manager.stepIndex}? Does {resource_manager.actor} have a timeout mechanism?",
+          "checkPhrases": [
+            "lock timeout",
+            "maximum hold time",
+            "lock expiration",
+            "timeout on lock",
+            "stale lock",
+            "abandoned lock"
+          ]
+        },
+        {
+          "id": "resource_exhaustion",
+          "description": "All resources are locked/unavailable",
+          "triggerCondition": "no available resources",
+          "anchorRole": "resource_manager",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What happens at step {resource_manager.stepIndex} when all resources are locked? How does {resource_manager.actor} handle exhaustion?",
+          "checkPhrases": [
+            "resource exhaustion",
+            "all resources locked",
+            "no available resources",
+            "resource pool empty",
+            "out of resources",
+            "maximum locks reached"
+          ]
+        },
+        {
+          "id": "lock_release_failure",
+          "description": "Client fails or crashes while holding lock",
+          "triggerCondition": "client failure with lock",
+          "anchorRole": "resource_manager",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What if the client crashes or fails while holding a lock after step {resource_manager.stepIndex}? How does {resource_manager.actor} recover the lock?",
+          "checkPhrases": [
+            "client crashes with lock",
+            "failed to release lock",
+            "orphaned lock",
+            "lock recovery",
+            "cleanup after failure",
+            "release on disconnect"
+          ]
+        },
+        {
+          "id": "priority_access",
+          "description": "High-priority client needs access while resource is locked",
+          "triggerCondition": "priority request",
+          "anchorRole": "resource_manager",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What if a high-priority client requests access at step {resource_manager.stepIndex} while the resource is locked? Can {resource_manager.actor} preempt the current lock?",
+          "checkPhrases": [
+            "priority access",
+            "preempt lock",
+            "high-priority request",
+            "priority escalation",
+            "urgent access",
+            "override lock"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "session_persistence",
+      "name": "Session Persistence & Recovery",
+      "probeQuestion": "Can users save their work mid-process and resume later, or recover if the session is interrupted, timed out, or unexpectedly terminated?",
+      "domainType": "human-system",
+      "domainDescription": "User can save, pause, resume, and restart interrupted work",
+      "families": ["web", "corporate", "purchasing"],
+      "activation": {
+        "minRolesMatched": 1,
+        "requireDifferentActors": false
+      },
+      "roles": [
+        {
+          "id": "user",
+          "description": "The actor who performs work that may be interrupted",
+          "isMandatory": true,
+          "threshold": 0.45,
+          "keywords": [
+            "saves their work",
+            "resumes their work",
+            "logs back in",
+            "picks up where they left off",
+            "session timed out",
+            "session expired",
+            "browser closed",
+            "connection lost",
+            "fills out a form",
+            "completes an online form",
+            "submits an online application",
+            "enters data in the system",
+            "works through a multi-step wizard",
+            "navigates a digital workflow"
+          ]
+        },
+        {
+          "id": "system",
+          "description": "The system that manages session state and recovery",
+          "isMandatory": false,
+          "threshold": 0.45,
+          "keywords": [
+            "saves state",
+            "stores progress",
+            "maintains session",
+            "persists data",
+            "tracks progress",
+            "manages session",
+            "auto-saves",
+            "restores session",
+            "session management",
+            "saves draft"
+          ]
+        }
+      ],
+      "expectedScenarios": [
+        {
+          "id": "save_progress",
+          "description": "User saves work in progress to continue later",
+          "triggerCondition": "work incomplete",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "Can {user.actor} save their work at step {user.stepIndex} (\"{user.description}\") to continue later? What happens to incomplete data?",
+          "checkPhrases": [
+            "saves progress",
+            "saves work",
+            "saves state",
+            "save and exit",
+            "stores incomplete work",
+            "saves draft"
+          ]
+        },
+        {
+          "id": "pause_work",
+          "description": "User pauses or temporarily stops work",
+          "triggerCondition": "work interrupted",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What happens if {user.actor} needs to pause at step {user.stepIndex}? Is their progress preserved?",
+          "checkPhrases": [
+            "pauses work",
+            "temporarily stops",
+            "interrupts task",
+            "takes a break",
+            "suspends work",
+            "puts on hold"
+          ]
+        },
+        {
+          "id": "resume_work",
+          "description": "User resumes previously saved or paused work",
+          "triggerCondition": "returning to work",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "Can {user.actor} resume their work from where they left off? How does the system restore the previous state?",
+          "checkPhrases": [
+            "resumes work",
+            "continues work",
+            "picks up where left off",
+            "restores session",
+            "loads saved state",
+            "returns to work"
+          ]
+        },
+        {
+          "id": "restart_interrupted",
+          "description": "User needs to restart work after unexpected interruption",
+          "triggerCondition": "unexpected interruption",
+          "anchorRole": "user",
+          "severity": "high",
+          "threshold": 0.6,
+          "questionTemplate": "What if {user.actor}'s work is unexpectedly interrupted at step {user.stepIndex} (network failure, browser crash, timeout)? Can they restart or must they start over?",
+          "checkPhrases": [
+            "restarts work",
+            "starts over",
+            "recovers from interruption",
+            "lost progress",
+            "session expired",
+            "connection lost",
+            "timeout occurred"
+          ]
+        },
+        {
+          "id": "session_timeout",
+          "description": "User's session expires due to inactivity",
+          "triggerCondition": "session timeout",
+          "anchorRole": "user",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "What happens if {user.actor}'s session times out during step {user.stepIndex}? Is their work saved automatically?",
+          "checkPhrases": [
+            "session times out",
+            "session expires",
+            "inactivity timeout",
+            "logged out automatically",
+            "session expired",
+            "timed out"
+          ]
+        },
+        {
+          "id": "auto_save",
+          "description": "System automatically saves user's progress",
+          "triggerCondition": "periodic save",
+          "anchorRole": "system",
+          "severity": "medium",
+          "threshold": 0.6,
+          "questionTemplate": "Does the system automatically save {user.actor}'s progress during step {user.stepIndex}? How frequently?",
+          "checkPhrases": [
+            "auto-saves",
+            "automatically saves",
+            "periodic save",
+            "saves every",
+            "automatic backup",
+            "continuous save"
+          ]
+        }
+      ]
+    }
+  ]
+}

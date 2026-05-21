@@ -1,0 +1,100 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T08:01:23.385Z",
+  "testCases": [
+    {
+      "id": "dung-21",
+      "domain": "Project Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "User must be authenticated. Contribution status changes based on decision."
+      },
+      "inputs": {
+        "vague": "Project Stakeholders or Moderators review pending contributions, select one to examine, and then decide to approve it. The system records this decision, integrates the contribution into the project model, and logs the changes.",
+        "detailed": "This use case allows a Project Owner or Project Moderator to accept or reject contributions submitted to the system by Fellows. The use case begins when the Project Owner or Moderator wishes to make a final decision on a pending contribution. The user requests to view a list of contributions awaiting approval. The system displays the details of each contribution. The user selects a specific contribution for review. The system displays the full content, comments, and validation results related to the contribution. The user determines that the contribution meets the requirements and decides to approve it. The system records the approval decision, merges the contribution content into the project's main model, and logs the change history. Alternatively, if the reviewer determines that the contribution does not meet the requirements or is not suitable for the project's direction, they choose the \"Reject Contribution\" option. The system prompts for a rejection reason. The reviewer enters a specific reason and confirms the rejection. The system records the decision and updates the contribution status to \"Rejected\". Only Project Owners and Project Moderators have the right to approve or reject contributions. The user (Project Owner or Moderator) must be logged in. The contribution must exist and have a \"Pending Approval\" status. The contribution must have been validated and have complete evaluation results. If approved, the contribution is merged into the project's main model and the edit history is saved. If rejected, the contribution remains in \"Rejected\" status along with the detailed reason."
+      },
+      "groundTruth": {
+        "name": "Approve or Reject Contribution",
+        "summary": "This use case allows Project Owners or Project Moderators to approve or reject contributions submitted by Researchers.",
+        "mainActor": "Project Owner or Project Moderator",
+        "actors": [
+          "Project Owner or Project Moderator",
+          "System",
+          "Researcher"
+        ],
+        "preconditions": [
+          "User (Project Owner or Project Moderator) is logged in.",
+          "Contribution exists and is in 'Pending approval' status.",
+          "Contribution has been validated and has complete evaluation results."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Project Owner or Project Moderator",
+                "description": "Requests to view the list of contributions awaiting approval."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays detailed information for each pending contribution."
+              },
+              {
+                "index": 3,
+                "actor": "Project Owner or Project Moderator",
+                "description": "Selects a specific contribution for review."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Displays the full content, comments, and validation results related to the contribution."
+              },
+              {
+                "index": 5,
+                "actor": "Project Owner or Project Moderator",
+                "description": "Determines that the contribution meets the requirements and decides to approve."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Records the approval decision, merges the contribution content into the project's main model, and records the change history."
+              }
+            ]
+          },
+          {
+            "id": "ALT_7a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 7,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Project Owner or Project Moderator",
+                "description": "Selects the 'Reject contribution' option."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Prompts for the reason for rejection."
+              },
+              {
+                "index": 3,
+                "actor": "Project Owner or Project Moderator",
+                "description": "Enters a specific reason and confirms rejection."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Records the decision and updates the contribution status to 'Rejected'."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

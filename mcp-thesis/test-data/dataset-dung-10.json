@@ -1,0 +1,116 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:50:40.306Z",
+  "testCases": [
+    {
+      "id": "dung-10",
+      "domain": "Hệ thống quản lý giáo dục",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 3,
+        "notes": "Chỉ Giáo viên phụ trách môn học mới có quyền chỉnh sửa hoặc xóa các bài giảng của mình."
+      },
+      "inputs": {
+        "vague": "A teacher asks to create a new lecture for their course. The system prompts the teacher for the necessary information, and once provided, the system creates the lecture and confirms its successful creation.",
+        "detailed": "Ca sử dụng này cho phép Giáo viên tạo và đăng tải các bài giảng, tài liệu học tập hoặc học liệu bổ trợ cho sinh viên trong hệ thống. Giáo viên có thể nhập thông tin mô tả bài giảng, đính kèm tài liệu, hoặc chèn liên kết ngoài. Ca sử dụng bắt đầu khi Giáo viên muốn đăng tải một bài giảng mới cho môn học mà họ phụ trách. Giáo viên yêu cầu tạo bài giảng mới cho một môn học. Hệ thống yêu cầu Giáo viên cung cấp các thông tin cần thiết cho bài giảng. Giáo viên gửi yêu cầu tạo bài giảng với thông tin đã nhập. Hệ thống xác thực dữ liệu, tạo bài giảng mới và thông báo tạo bài giảng thành công cho giáo viên. \n\nHoặc ca sử dụng bắt đầu khi Giáo viên muốn chỉnh sửa thông tin của một bài giảng hiện có. Giáo viên yêu cầu cập nhật thông tin của một bài giảng đã được tạo. Hệ thống truy xuất thông tin bài giảng hiện có và yêu cầu Giáo viên cung cấp nội dung cập nhật. Giáo viên xác nhận yêu cầu cập nhật. Hệ thống ghi nhận thay đổi và xác nhận bài giảng đã được updated, gửi thông báo updated thành công cho giáo viên.\n\nHoặc ca sử dụng bắt đầu khi Giáo viên muốn xóa một bài giảng không còn cần thiết. Giáo viên yêu cầu xóa một bài giảng. Hệ thống xác nhận lại yêu cầu xoá của giáo viên và yêu cầu giáo viên xác nhận hoặc huỷ bỏ. Giáo viên xác nhận thao tác xóa bài giảng. Hệ thống loại bỏ bài giảng khỏi danh sách của môn học và thông báo tới giáo viên đã xoá thành công. Chỉ Giáo viên phụ trách môn học mới có quyền chỉnh sửa hoặc xóa các bài giảng của mình. Giáo viên đã đăng nhập hợp lệ vào hệ thống. Giáo viên có quyền quản lý môn học tương ứng. Bài giảng được thêm mới, chỉnh sửa hoặc xóa khỏi hệ thống. Danh sách bài giảng của môn học được cập nhật tương ứng."
+      },
+      "groundTruth": {
+        "name": "Manage Course Materials",
+        "summary": "This use case allows a Teacher to create, update, or delete course materials (lectures, learning resources) for their assigned courses within the system.",
+        "mainActor": "Teacher",
+        "actors": [
+          "Teacher",
+          "System"
+        ],
+        "preconditions": [
+          "Teacher has logged into the system.",
+          "Teacher has management rights for the corresponding course."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Teacher",
+                "description": "Requests to create a new lecture for a course they are responsible for."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests the Teacher to provide necessary lecture information (description, attachments, external links)."
+              },
+              {
+                "index": 3,
+                "actor": "Teacher",
+                "description": "Submits the request to create a lecture with the entered information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates the data, creates the new lecture, and notifies the Teacher of successful creation."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Teacher",
+                "description": "Requests to update an existing lecture's information."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Retrieves the existing lecture information and prompts the Teacher to provide updated content."
+              },
+              {
+                "index": 3,
+                "actor": "Teacher",
+                "description": "Confirms the update request with the modified information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Records the changes, confirms the lecture has been updated, and notifies the Teacher of successful update."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Teacher",
+                "description": "Requests to delete a lecture that is no longer needed."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Reconfirms the deletion request with the Teacher and asks for confirmation or cancellation."
+              },
+              {
+                "index": 3,
+                "actor": "Teacher",
+                "description": "Confirms the lecture deletion operation."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Removes the lecture from the course's list and notifies the Teacher of successful deletion."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

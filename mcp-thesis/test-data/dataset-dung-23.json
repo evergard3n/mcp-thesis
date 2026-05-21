@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T08:53:39.063Z",
+  "testCases": [
+    {
+      "id": "dung-23",
+      "domain": "User Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Credential security constraints; duplicate email detection; invalid data format handling"
+      },
+      "inputs": {
+        "vague": "A new user wants to create an account, so they provide their details in the registration form. The system then creates their profile and logs them in, giving them access to their dashboard.",
+        "detailed": "Allows unregistered individuals to create a new system account by providing personal information and credentials to access role-specific functionalities. A new user registers a new account upon accessing the system. The system displays a registration form and prompts for required credentials such as name, email, and password. The user enters this information, and the system validates the data format and checks the availability of the provided email address. After the user submits the request, the system creates a new user profile, notifies them of successful registration, automatically authenticates them, and grants access to the dashboard. Before registration, the system ensures the user is not currently logged in and that the registration module is active. Upon successful registration, the system commits the new user record to the production database, synchronizes credentials with the authentication service, and enables future logins with the registered email and password. Password security constraints include a minimum of 8 characters, at least one uppercase letter, one lowercase letter, and one special character. Email syntax is validated against the standard example@domain.com format. If the entered email is already associated with an existing account, the system informs the user and provides an option to navigate to the Login page. If the submitted data does not meet the security constraints, the system highlights errors and prompts the user to correct the information."
+      },
+      "groundTruth": {
+        "name": "User Registration",
+        "summary": "Allows unregistered individuals to create a new system account by providing personal information and credentials to access role-specific functionalities.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "User requests to register a new account upon accessing the system."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "System displays the registration form and prompts for required credentials (name, email, and password)."
+              },
+              {
+                "index": 3,
+                "actor": "User",
+                "description": "User enters the required registration information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "System validates the data format and checks the availability of the provided email address."
+              },
+              {
+                "index": 5,
+                "actor": "User",
+                "description": "User submits the registration request."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "System creates a new user profile and displays a \"Registration Successful\" notification."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "System automatically authenticates the user and grants access to the dashboard."
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 8,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "System identifies that the entered email address is already associated with an existing account."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "System displays an alert informing the user that the account already exists."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "System provides an option for the user to navigate to the Login page."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

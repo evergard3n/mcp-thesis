@@ -1,0 +1,133 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:49:06.076Z",
+  "testCases": [
+    {
+      "id": "UC5",
+      "domain": "University/Event Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Includes an option for the director to return to a previous step for modifications."
+      },
+      "inputs": {
+        "vague": "The Spirit Director requests a SuperFrog appearance by selecting an available date and time, providing event details, and assigning a SuperFrog Student. The system then saves this confirmed request and notifies relevant parties.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nSuperFrog Student\nTrigger:\nThe Spirit Director indicates to request a SuperFrog appearance for a TCU event.\nDescription:\nThe Spirit Director wants to request a SuperFrog appearance for a TCU event such as sporting event or student orientation, so that a SuperFrog can show up and entertain the guests during the event.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPostconditions:\nPOST-1. The request is stored in the System with a status of “Assigned” or “Approved”.\nMain Success Scenario:\nThe Spirit Director indicates to request a SuperFrog appearance for a TCU event.\nThe System displays available date and time. (see BR-1)\nThe Spirit Director views and selects an available date and time.\nThe System asks the Spirit Director to enter details of this new request according to the “Details” defined in the Associated Information of this use case.\nThe Spirit Director enters the details of this new request and confirms that she has finished.\nThe System validates the Spirit Director’s inputs according to the “Details” defined in the Associated Information of this use case.\nThe System asks the Spirit Director to assign this appearance to a SuperFrog Student by prompting a list of available SuperFrog Students.\nThe Spirit Director assigns this appearance to a SuperFrog Student in the list.\nThe System displays the details of the new request, assigned SuperFrog Student, and asks the Spirit Director to confirm the creation.\nThe Spirit Director either confirms the creation (continues the normal flow) or chooses to modify the details (returns to step 5).\nThe System saves the new request, marks it either as “Assigned” or “Approved” based on the Spirit Director’s choice in step 8, and informs the Spirit Director that this request has been created.\nThe System notifies relevant actors about the creation of the request according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n6a. Input validation rule violation:\n6a1. The System alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error.\n6a2. The Spirit Director corrects the mistake and returns to step 6 of the normal flow.\n8a. The Spirit Director chooses to skip this step and let SuperFrog Students sign up for this event:\n8a1. Returns to step 9 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Request SuperFrog Appearance",
+        "summary": "The Spirit Director requests a SuperFrog appearance for a TCU event, such as a sporting event or student orientation, to entertain guests.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to request a SuperFrog appearance for a TCU event."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays available date and time."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Views and selects an available date and time."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Asks the Spirit Director to enter details of this new request."
+              },
+              {
+                "index": 5,
+                "actor": "Spirit Director",
+                "description": "Enters the details of this new request and confirms completion."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Validates the Spirit Director’s inputs."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Asks the Spirit Director to assign this appearance to a SuperFrog Student by prompting a list of available SuperFrog Students."
+              },
+              {
+                "index": 8,
+                "actor": "Spirit Director",
+                "description": "Assigns this appearance to a SuperFrog Student in the list."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Displays the details of the new request, assigned SuperFrog Student, and asks the Spirit Director to confirm the creation."
+              },
+              {
+                "index": 10,
+                "actor": "Spirit Director",
+                "description": "Confirms the creation."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Saves the new request, marks it either as “Assigned” or “Approved” based on the Spirit Director’s choice in step 8, and informs the Spirit Director that this request has been created."
+              },
+              {
+                "index": 12,
+                "actor": "System",
+                "description": "Notifies relevant actors about the creation of the request."
+              }
+            ]
+          },
+          {
+            "id": "EXT_6a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "condition": "Input validation rule violation",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Corrects the mistake and returns to step 6 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "ALT_8a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 8,
+            "condition": "The Spirit Director chooses to skip this step and let SuperFrog Students sign up for this event",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Returns to step 9 of the main flow."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

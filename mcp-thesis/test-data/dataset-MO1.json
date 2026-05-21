@@ -1,0 +1,197 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-02-18T14:05:12.277Z",
+  "testCases": [
+    {
+      "id": "MO1",
+      "domain": "Logistics",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 10,
+        "notes": "Includes handling of physical objects (box, bags) and interaction with external entities (TransportCompany, delivery person). Describes a manual fallback process for system downtime."
+      },
+      "inputs": {
+        "vague": "The Receiving Agent receives a box from the transport company, validates its ID, and then records its arrival into the system with relevant details including the number of bags inside. Finally, the agent removes the bags and gives them to the Registration Operator.",
+        "detailed": "UC MO1. Register arrival of a box\nRA means \"Receiving Agent\".\nRO means \"Registration Operator\"\nDS means \"Department Supervisor\"\nPrimary Actor: RA\nSystem: Nightime Receiving Registry Software\n1. RA receives and opens box (box id, bags with bag ids) from TransportCompany TC\n2. RA validates box id with TC registered ids.\n3. RA maybe signs paper form for delivery person\n4. RA registers arrival into system, which stores:\nRA id\ndate, time\nbox id\nTransportCompany\n<Person name?>\n# bags (?with bag ids)\n<estimated value?>\n5. RA removes bags from box, puts onto cart, takes to RO.\nExtensions:\n2a. box id does not match transport company\n4a. fire alarm goes off and interrupts registration\n4b. computer goes down\nleave the money on the desk and wait for computer to come back up."
+      },
+      "groundTruth": {
+        "name": "UC MO1. Register arrival of a box",
+        "summary": "The Receiving Agent registers the arrival of a box containing bags into the system, validating its ID and ensuring proper transfer to the Registration Operator.",
+        "mainActor": "Receiving Agent",
+        "actors": [
+          "Receiving Agent",
+          "Transport Company",
+          "System",
+          "Registration Operator"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Receives and opens box (with box ID and bags with bag IDs) from Transport Company."
+              },
+              {
+                "index": 2,
+                "actor": "Receiving Agent",
+                "description": "Validates box ID against Transport Company's registered IDs."
+              },
+              {
+                "index": 3,
+                "actor": "Receiving Agent",
+                "description": "Signs paper form for delivery person (optional)."
+              },
+              {
+                "index": 4,
+                "actor": "Receiving Agent",
+                "target": "System",
+                "description": "Registers arrival into the System, providing RA ID, date, time, box ID, Transport Company, number of bags, and estimated value if available."
+              },
+              {
+                "index": 5,
+                "actor": "Receiving Agent",
+                "description": "Removes bags from the box, places them onto a cart, and takes the cart to the Registration Operator."
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Notifies the Transport Company and follows company protocol for unmatching box IDs."
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Notifies the Transport Company and follows company protocol for unmatching box IDs."
+              }
+            ]
+          },
+          {
+            "id": "EXT_10a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Informs Transport Company about the invalid box ID and follows protocol for discrepancies."
+              }
+            ]
+          },
+          {
+            "id": "EXT_11a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Contact Transport Company for clarification and resolution."
+              },
+              {
+                "index": 2,
+                "actor": "Receiving Agent",
+                "description": "Follows established protocol for handling invalid box IDs."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Notifies Transport Company of the mismatch and follows the defined protocol for such discrepancies."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Informs Transport Company about the mismatching box ID."
+              },
+              {
+                "index": 2,
+                "actor": "Receiving Agent",
+                "description": "Follows internal protocol for handling invalid box IDs, potentially returning the box or seeking further instructions."
+              }
+            ]
+          },
+          {
+            "id": "EXT_14a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Contacts the Transport Company to resolve the box ID mismatch."
+              },
+              {
+                "index": 2,
+                "actor": "Receiving Agent",
+                "description": "Follows company policy regarding unmatching box IDs."
+              }
+            ]
+          },
+          {
+            "id": "EXT_6a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Ceases registration process due to fire alarm."
+              },
+              {
+                "index": 2,
+                "actor": "Receiving Agent",
+                "description": "Follows fire evacuation procedures."
+              }
+            ]
+          },
+          {
+            "id": "EXT_7a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Receiving Agent",
+                "description": "Leaves all materials on the desk."
+              },
+              {
+                "index": 2,
+                "actor": "Receiving Agent",
+                "description": "Waits for the computer system to become available again to resume registration."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

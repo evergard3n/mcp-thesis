@@ -1,0 +1,116 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:51:31.142Z",
+  "testCases": [
+    {
+      "id": "dung-11",
+      "domain": "Education/Course Management",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 3,
+        "notes": "Hệ thống phải xác thực quyền của Giáo viên. Kiểm tra hợp lệ thời gian công bố và hạn nộp bài."
+      },
+      "inputs": {
+        "vague": "A teacher creates a new assignment or exam for their class. The system records the assignment details and makes it available to the students.",
+        "detailed": "Ca sử dụng này cho phép Giáo viên tạo và giao bài tập hoặc bài thi cho sinh viên trong môn học hoặc lớp học mà họ phụ trách. Giáo viên yêu cầu tạo bài tập hoặc bài thi mới cho lớp học. Hệ thống yêu cầu Giáo viên cung cấp thông tin về bài tập hoặc bài thi. Giáo viên xác nhận yêu cầu giao bài. Hệ thống ghi nhận thông tin bài tập hoặc bài thi và liên kết với lớp học tương ứng, thông báo rằng bài tập/bài thi đã được giao thành công và sẵn sàng cho sinh viên truy cập.\n\nNgoài ra, Giáo viên cũng có thể muốn chỉnh sửa bài đã giao. Trong trường hợp này, Giáo viên yêu cầu chỉnh sửa bài tập hoặc bài thi đã giao. Hệ thống yêu cầu thông tin cập nhật từ giáo viên. Giáo viên xác nhận cập nhật thông tin bài tập, bài thi mới. Hệ thống cập nhật và thông báo tới giáo viên rằng đã cập nhật thành công.\n\nMột trường hợp khác là Giáo viên muốn xoá bài tập hoặc bài thi đã giao. Giáo viên yêu cầu xoá bài tập hoặc bài thi đã giao. Hệ thống xác nhận lại yêu cầu từ giáo viên. Giáo viên xác nhận xoá bài tập, bài thi. Hệ thống xoá bài tập, bài thi khỏi danh sách và thông báo tới giáo viên xoá thành công.\n\nHệ thống phải xác thực quyền của Giáo viên trước khi giao, chỉnh sửa hoặc xóa bài tập/bài thi. Thời gian công bố và hạn nộp bài phải được kiểm tra hợp lệ trước khi ghi nhận. Tiền điều kiện là Giáo viên đã đăng nhập hợp lệ vào hệ thống và có quyền quản lý lớp học hoặc môn học liên quan. Sau khi thực hiện ca sử dụng, bài tập hoặc bài thi được thêm mới, cập nhật, hoặc xóa khỏi hệ thống, và sinh viên trong lớp học có thể truy cập bài được giao."
+      },
+      "groundTruth": {
+        "name": "Create, Edit, or Delete Assignment/Exam",
+        "summary": "This use case allows a Teacher to create, assign, update, or delete an assignment or exam for students within a course or class they manage.",
+        "mainActor": "Teacher",
+        "actors": [
+          "Teacher",
+          "System"
+        ],
+        "preconditions": [
+          "Teacher has successfully logged into the system.",
+          "Teacher has the right to manage the related class or subject."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Teacher",
+                "description": "Requests to create a new assignment or exam for a class."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests the Teacher to provide information about the assignment or exam."
+              },
+              {
+                "index": 3,
+                "actor": "Teacher",
+                "description": "Confirms the assignment request by providing the required information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Verifies teacher's permissions, validates disclosure time and submission deadline, records the assignment or exam information, links it to the corresponding class, notifies that the assignment/exam has been successfully assigned, and is ready for students to access."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Teacher",
+                "description": "Requests to edit an existing assignment or exam."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests updated information from the Teacher for the assignment or exam."
+              },
+              {
+                "index": 3,
+                "actor": "Teacher",
+                "description": "Confirms the update with new assignment or exam information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Verifies teacher's permissions, validates disclosure time and submission deadline, updates the assignment or exam, and notifies the Teacher of successful update."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Teacher",
+                "description": "Requests to delete an existing assignment or exam."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Confirms the deletion request with the Teacher."
+              },
+              {
+                "index": 3,
+                "actor": "Teacher",
+                "description": "Confirms the deletion of the assignment or exam."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Verifies teacher's permissions, deletes the assignment or exam from the list, and notifies the Teacher of successful deletion."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

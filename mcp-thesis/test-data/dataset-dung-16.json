@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:57:55.436Z",
+  "testCases": [
+    {
+      "id": "dung-16",
+      "domain": "Research/Community Projects",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Mọi đóng góp phải được ghi nhận, kèm thời gian và người thực hiện. Hệ thống đảm bảo tính toàn vẹn giữa mô hình dự án, cộng tác viên, và trạng thái phê duyệt."
+      },
+      "inputs": {
+        "vague": "A PhD student wants to create a new research project within the online research community. They provide the project details, and the system then establishes the project and designates them as the project owner.",
+        "detailed": "Ca sử dụng này cho phép Nghiên cứu sinh khởi tạo và quản lý một dự án cộng đồng trong môi trường nghiên cứu trực tuyến của hệ thống. Mỗi dự án đại diện cho một mô hình OCL/UML, được xây dựng và hoàn thiện dần thông qua sự đóng góp của nhiều nghiên cứu sinh khác nhau. Người khởi tạo dự án được xem là Chủ thể dự án (Project Owner), có quyền mời cộng tác viên, quản lý nội dung mô hình, và theo dõi tiến độ. Luồng cơ bản bắt đầu khi Nghiên cứu sinh muốn khởi tạo một dự án nghiên cứu mới. Hệ thống yêu cầu cung cấp thông tin mô tả dự án và sau đó ghi nhận dự án mới, gán quyền “Chủ thể dự án” cho người tạo. Một luồng thay thế cho phép Chủ thể dự án chỉnh sửa mô tả, phạm vi hoặc mục tiêu của dự án; hệ thống sẽ ghi nhận thay đổi và thông báo cập nhật thành công. Một luồng thay thế khác cho phép Chủ thể dự án yêu cầu đóng hoặc hủy dự án khi đã hoàn thiện hoặc không còn hoạt động, sau khi xác nhận lại từ chủ thể dự án, hệ thống sẽ cập nhật trạng thái dự án và thông báo xác nhận đã kết thúc. Mọi đóng góp phải được ghi nhận, kèm thời gian và người thực hiện. Hệ thống đảm bảo tính toàn vẹn giữa mô hình dự án, cộng tác viên, và trạng thái phê duyệt. Nghiên cứu sinh phải đăng nhập hợp lệ vào hệ thống và dự án được tạo trong phạm vi cộng đồng hợp lệ. Sau khi hoàn thành, dự án được tạo, cập nhật hoặc đóng trong hệ thống, và mô hình dự án được duy trì và lưu trữ cùng lịch sử thay đổi."
+      },
+      "groundTruth": {
+        "name": "Manage Community Project",
+        "summary": "This use case allows a Researcher to create and manage a community project in the online research environment. Each project represents an OCL/UML model, built and refined through contributions from various researchers. The project creator becomes the Project Owner, with rights to invite collaborators, manage model content, and track progress.",
+        "mainActor": "Researcher",
+        "actors": [
+          "Researcher",
+          "System",
+          "Project Owner"
+        ],
+        "preconditions": [
+          "Researcher has successfully logged into the system.",
+          "Project is created within a valid community."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Researcher",
+                "description": "Requests to create a new community project."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests project description information (including potential reviewer)."
+              },
+              {
+                "index": 3,
+                "actor": "Researcher",
+                "description": "Confirms project creation."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Registers the new project and assigns 'Project Owner' rights to the creator."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Project Owner",
+                "description": "Requests to edit project description information, scope, or objectives."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests updated project description information."
+              },
+              {
+                "index": 3,
+                "actor": "Project Owner",
+                "description": "Confirms updating project information."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Records the changes and notifies that the update was successful."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 6,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Project Owner",
+                "description": "Requests to close or cancel the project."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Requests a second confirmation from the Project Owner."
+              },
+              {
+                "index": 3,
+                "actor": "Project Owner",
+                "description": "Confirms ending the project."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Updates the project status and confirms that the project has been closed."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

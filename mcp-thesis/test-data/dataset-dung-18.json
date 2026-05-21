@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:59:10.935Z",
+  "testCases": [
+    {
+      "id": "dung-18",
+      "domain": "Community Project Contribution",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A researcher wants to submit a contribution to an existing community project they are part of. They provide the necessary details and the system records their submission for review.",
+        "detailed": "Ca sử dụng này cho phép nghiên cứu sinh gửi phần đóng góp vào một dự án cộng đồng đã tồn tại trong hệ thống. Ca sử dụng bắt đầu khi Nghiên cứu sinh muốn gửi một phần nội dung đóng góp cho một dự án cộng đồng mà họ đang tham gia. Nghiên cứu sinh yêu cầu gửi đóng góp mới cho một dự án cụ thể. Hệ thống yêu cầu nghiên cứu sinh cung cấp thông tin đóng góp. Nghiên cứu sinh xác nhận gửi đóng góp. Hệ thống ghi nhận đóng góp, gán trạng thái “Chờ kiểm duyệt” và chuyển yêu cầu tới Kiểm duyệt viên dự án. Tại bất kỳ thời điểm nào trước khi được kiểm duyệt, nghiên cứu sinh có thể chỉnh sửa hoặc rút lại đóng góp của mình. Nghiên cứu sinh yêu cầu chỉnh sửa hoặc hủy đóng góp đã gửi. Hệ thống kiểm tra trạng thái đóng góp, yêu cầu nghiên cứu sinh cung cấp thông tin chỉnh sửa. Nghiên cứu sinh xác nhận đóng góp hoặc huỷ. Hệ thống thay đổi đóng góp của nghiên cứu sinh và thông báo đã chỉnh sửa/huỷ thành công. Nghiên cứu sinh đã đăng nhập hợp lệ vào hệ thống. Hệ thống lưu lại lịch sử đóng góp, người gửi, và kết quả kiểm duyệt."
+      },
+      "groundTruth": {
+        "name": "Submit Community Project Contribution",
+        "summary": "This use case allows a researcher to submit a contribution to an existing community project in the system.",
+        "mainActor": "Researcher",
+        "actors": [
+          "Researcher",
+          "System",
+          "Project Reviewer"
+        ],
+        "preconditions": [
+          "Researcher is successfully logged into the system."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Researcher",
+                "description": "Requests to submit a new contribution for a specific project."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Prompts the researcher to provide contribution information."
+              },
+              {
+                "index": 3,
+                "actor": "Researcher",
+                "description": "Confirms submission of the contribution."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Records the contribution, assigns 'Pending Review' status, and forwards the request to the Project Reviewer."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 5,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Researcher",
+                "description": "Requests to edit or withdraw a previously submitted contribution."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Checks the contribution status and prompts the researcher to provide updated information."
+              },
+              {
+                "index": 3,
+                "actor": "Researcher",
+                "description": "Confirms the updated contribution or withdrawal."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Modifies the researcher's contribution and notifies them of successful edit/withdrawal."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

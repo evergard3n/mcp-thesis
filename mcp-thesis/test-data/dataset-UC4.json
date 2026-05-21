@@ -1,0 +1,122 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:48:32.698Z",
+  "testCases": [
+    {
+      "id": "UC4",
+      "domain": "NA",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "NA"
+      },
+      "inputs": {
+        "vague": "The Spirit Director logs in and reviews a pending SuperFrog appearance request, chooses to approve it, and confirms the decision. The system then updates the request status, schedules the appearance, and informs relevant parties.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nCustomer, SuperFrog Student\nTrigger:\nThe Spirit Director indicates to approve/reject a SuperFrog appearance request submitted by a Customer.\nDescription:\nThe Spirit Director wants to approve or reject a SuperFrog appearance request at least 5 days before the event date and time, so that the Customer will get a decision on her request and SuperFrog Students have enough time to sign up if the request is approved.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. There exists at least one “Pending” request in the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The “Pending” request is updated in the System with a status of either “Approved” or “Rejected”.\nPOST-2. If approved, the request is added to the Spirit Team calendar so that the requested date and time becomes unavailable to future requests.\nMain Success Scenario:\nThe Spirit Director indicates to approve/reject a SuperFrog appearance request submitted by a Customer.\nThe Spirit Director views the details of this “Pending” appearance request through UC-7: View an appearance request.\nThe Spirit Director chooses to approve the request.\nThe System shows a list of competing “Pending” requests, alerts the Spirit Director that this approval will automatically reject other competing “Pending” requests (See BR-10), and asks the Spirit Director to confirm the approval.\nThe Spirit Director confirms the approval.\nThe System updates the status of the request from “Pending” to “Approved”.\nThe System adds the request to the Spirit Team calendar and automatically rejects other competing “Pending” requests. (See BR-10) The rejection reason will be “Date and time not available any more”.\nThe System notifies relevant actors about the approval of the request according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n3a. The Spirit Director chooses to reject this request (See BR-2, BR-3, BR-4, BR-5):\n3a1. The System asks the Spirit Director to confirm the rejection.\n3a2. The Spirit Director confirms the rejections and enters a reason.\n3a3. The System updates the status of the request from “Pending” to “Rejected”. \n3a4. The System notifies the Customer of the decision and the reason.\n3a5. The Spirit Director either decides to approve another request and return to step 1 of the normal flow or decides to terminate the use case.\n5a. The Spirit Director decides to cancel the approval:\n5a1. Returns to step 1 of the normal flow or decides to terminate the use case.\n\n"
+      },
+      "groundTruth": {
+        "name": "Approve or Reject SuperFrog Appearance Request",
+        "summary": "The Spirit Director approves or rejects a SuperFrog appearance request, ensuring sufficient time for SuperFrog Students to sign up if approved and informing the Customer of the decision.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "Customer",
+          "SuperFrog Student",
+          "System"
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to approve/reject a SuperFrog appearance request submitted by a Customer."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of this 'Pending' appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Chooses to approve the request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Shows a list of competing 'Pending' requests, alerts the Spirit Director that this approval will automatically reject other competing 'Pending' requests, and asks the Spirit Director to confirm the approval."
+              },
+              {
+                "index": 5,
+                "actor": "Spirit Director",
+                "description": "Confirms the approval."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Updates the status of the request from 'Pending' to 'Approved'."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Adds the request to the Spirit Team calendar and automatically rejects other competing 'Pending' requests with the reason 'Date and time not available any more'."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Notifies relevant actors about the approval of the request."
+              }
+            ]
+          },
+          {
+            "id": "ALT_9a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Asks the Spirit Director to confirm the rejection."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Confirms the rejection and enters a reason."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Updates the status of the request from 'Pending' to 'Rejected'."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Notifies the Customer of the decision and the reason."
+              },
+              {
+                "index": 5,
+                "actor": "Spirit Director",
+                "description": "Decides to either approve another request and return to step 1 of the normal flow or terminate the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Decides to either return to step 1 of the normal flow or terminate the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

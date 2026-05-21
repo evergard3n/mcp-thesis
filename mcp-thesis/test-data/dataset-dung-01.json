@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:30:14.145Z",
+  "testCases": [
+    {
+      "id": "dung-01",
+      "domain": "Authentication",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Fast response time requirement (3 seconds), password encryption."
+      },
+      "inputs": {
+        "vague": "Người dùng muốn sử dụng hệ thống nên họ sẽ yêu cầu đăng nhập. Sau khi cung cấp thông tin cần thiết, hệ thống sẽ xác thực và đưa họ đến trang phù hợp với vai trò của họ.",
+        "detailed": "Ca sử dụng này mô tả cách người dùng đăng nhập vào hệ thống để truy cập các chức năng tương ứng với vai trò của mình. Người dùng phải có tài khoản đã được đăng ký trong hệ thống. Mật khẩu người dùng phải được mã hóa trước khi gửi lên máy chủ. Hệ thống phải phản hồi kết quả đăng nhập trong vòng 3 giây. Nếu đăng nhập thành công, người dùng sẽ được lưu phiên đăng nhập. Nếu thông tin đăng nhập không khớp với tài khoản nào trong hệ thống, hệ thống sẽ hiển thị thông báo lỗi và yêu cầu người dùng nhập lại."
+      },
+      "groundTruth": {
+        "name": "User Login",
+        "summary": "This use case describes how a user logs into the system to access functions corresponding to their role.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "preconditions": [
+          "The user attempting to log in must have a registered account in the system."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "User requests to log into the system."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "System displays the login interface and requests the user to enter authentication information."
+              },
+              {
+                "index": 3,
+                "actor": "User",
+                "description": "User enters their login credentials (email, password)."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "System validates the format and authenticity of the login information. (Password must be encrypted before sending)."
+              },
+              {
+                "index": 5,
+                "actor": "User",
+                "description": "User submits the login request with the authentication information."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "System navigates the user to the homepage or dashboard corresponding to their role."
+              }
+            ]
+          },
+          {
+            "id": "ALT_3a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "fromStepIndex": 3,
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "User enters login information that does not match any account in the system."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "System displays a message indicating incorrect email or password and prompts the user to re-enter."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

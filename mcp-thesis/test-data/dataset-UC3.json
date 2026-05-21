@@ -1,0 +1,118 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:47:54.528Z",
+  "testCases": [
+    {
+      "id": "UC3",
+      "domain": "University/Student Services",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 2,
+        "notes": "Asynchronous notifications to relevant actors after changes are saved to the system."
+      },
+      "inputs": {
+        "vague": "A customer wants to update their pre-existing SuperFrog appearance request. The system retrieves and allows the customer to modify the request, then saves the updated information.",
+        "detailed": "Primary Actor:\nCustomer\nSecondary Actors:\nSpirit Director, SuperFrog Student\nTrigger:\nThe Customer indicates to edit a submitted SuperFrog appearance request.\nDescription:\nThe Customer wants to edit a submitted SuperFrog request, so that she can provide the most recent SuperFrog request information to the TCU Spirit Team.\nPreconditions:\nPRE-1. A request of the Customer has been submitted to the System and is in either “Pending” or “Approved” or “Assigned” status. See BR-15.\nPostconditions:\nPOST-1. Changes made to the request are stored in the System.\nMain Success Scenario:\nThe Customer indicates to change the details of an existing SuperFrog appearance request. The Customer provides the unique identifier of the request to the System.\nThe System retrieves the specified request and displays it to the Customer.\nThe Customer chooses to change the details of this request.\nThe System asks the Customer to make changes to this request where allowed according to the “Details” defined in the Associated Information and the “Security/access concerns” defined in the Business Rules of this use case.\nThe Customer makes changes to this request until she confirms that she has finished changing.\nThe System validates the Customer’s changes and alerts warning messages according to the “Details” defined in the Associated Information of this use case.\nThe Customer acknowledges the warnings and chooses to continue.\nThe System displays the updated details of this request, the terms & conditions of a TCU Spirit Appearance, and alerts the Customer to confirm the change.\nThe Customer either agrees to the terms & conditions of a TCU Spirit Appearance and confirms the change (continues the normal flow) or chooses to continue to change the details (returns to step 5).\nThe System saves the changes, carries out the effect of change according to the “Details” defined in the Associated Information of this use case, and informs the Customer that this request has been changed.\nThe System notifies relevant actors about the change of request according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n6a. Input validation rule violation:\n6a1. The System alerts the Customer that an input validation rule is violated and displays the nature and location of the error.\n6a2. The Customer corrects the mistake and returns to step 6 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Edit SuperFrog Appearance Request",
+        "summary": "The Customer wants to edit a submitted SuperFrog request, so that she can provide the most recent SuperFrog request information to the TCU Spirit Team.",
+        "mainActor": "Customer",
+        "actors": [
+          "Customer",
+          "System",
+          "Spirit Director",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "A request of the Customer has been submitted to the System and is in either “Pending” or “Approved” or “Assigned” status."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Indicates to change the details of an existing SuperFrog appearance request."
+              },
+              {
+                "index": 2,
+                "actor": "Customer",
+                "description": "Provides the unique identifier of the request to the System."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Retrieves the specified request and displays it to the Customer."
+              },
+              {
+                "index": 4,
+                "actor": "Customer",
+                "description": "Chooses to change the details of this request."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Asks the Customer to make changes to this request where allowed."
+              },
+              {
+                "index": 6,
+                "actor": "Customer",
+                "description": "Makes changes to this request."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Validates the Customer’s changes and alerts warning messages."
+              },
+              {
+                "index": 8,
+                "actor": "Customer",
+                "description": "Acknowledges the warnings and chooses to continue."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Displays the updated details of this request, the terms & conditions of a TCU Spirit Appearance, and alerts the Customer to confirm the change."
+              },
+              {
+                "index": 10,
+                "actor": "Customer",
+                "description": "Agrees to the terms & conditions of a TCU Spirit Appearance and confirms the change."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Saves the changes, carries out the effect of change, and informs the Customer that this request has been changed."
+              },
+              {
+                "index": 12,
+                "actor": "System",
+                "description": "Notifies relevant actors about the change of request."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Customer that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Customer",
+                "description": "Corrects the mistake and returns to step 6 of the normal flow."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
