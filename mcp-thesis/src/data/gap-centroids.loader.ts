@@ -36,6 +36,10 @@ export interface GapCategory {
   gapType: GapType;
   requiresExceptionCheck: boolean;
   answerGuidance?: string;
+  /** Suffix appended after stepContext prefix for centroidGap question generation. */
+  questionSuffix?: string;
+  /** Full question template with {placeholder} substitution for other detectors. */
+  questionTemplate?: string;
 }
 
 interface GapCentroidData {
@@ -70,7 +74,7 @@ const DEFAULT_ANSWER_GUIDANCE =
  * Returns the answerGuidance stored in gap-centroids.json for the given gapType,
  * or a generic fallback if the type is not found.
  */
-export function getGuidanceForGapType(gapType: string): string {
+export function getGuidanceForGapType(gapType: GapType): string {
   const cat = gapCentroidsCache?.find((c) => c.gapType === gapType);
   return cat?.answerGuidance ?? DEFAULT_ANSWER_GUIDANCE;
 }

@@ -15,7 +15,6 @@ import {
 import {
   GapSeverity,
   isStepSource,
-  type DetectionPhase,
   type EmbeddedText,
   type Gap,
   type GapDetectionContext,
@@ -29,7 +28,7 @@ import { GAP_DETECTORS } from "./gap-detectors.registry.js";
 export { clearGapCentroidsCache } from "../data/gap-centroids.loader.js";
 export type { GapType } from "../data/gap-centroids.loader.js";
 export type {
-  ConditionSource, DetectionPhase, EmbeddedText, Gap, GapDetectionContext, GapDetectorConfig, StepSource
+  ConditionSource, EmbeddedText, Gap, GapDetectionContext, GapDetectorConfig, StepSource
 } from "./gap-detector.types.js";
 
 // ---------------------------------------------------------------------------
@@ -356,22 +355,14 @@ function computePriorityGaps(gaps: Gap[]): GapType[] {
 
 /**
  * Analyze gaps in a use case using the registered detector pipeline.
- *
- * @param phase  Controls which detectors run:
- *   - "initial"    — only "always" detectors fire (keyword, actor check).
- *                    Safe on a vague baseline before any probing.
- *   - "post-probe" — all detectors fire (centroid, structural, pattern too).
- *                    Pass this after blueprint probing has completed.
- *
- * Defaults to "initial" so existing callers that don't pass the argument
- * remain noise-free on the first run.
+ * Runs all detectors — centroid, structural, and pattern — after blueprint
+ * probing has completed.
  */
 export async function analyzeGaps(
   useCase: GenUseCase,
   originalDescription: string,
   probeContext: BlueprintProbeContext,
   conversationHistory?: InteractionMemory[],
-  phase: DetectionPhase = "post-probe",
 ): Promise<GapAnalysis> {
   const gaps: Gap[] = [];
   const { domainType, confirmedIds } = probeContext;
@@ -407,9 +398,7 @@ export async function analyzeGaps(
     suppressedGapTypes: new Set(),
   };
 
-  const activeDetectors = GAP_DETECTORS.filter(
-    (d) => d.phase === "always" || d.phase === phase,
-  );
+  const activeDetectors = GAP_DETECTORS;
 
   for (const detector of activeDetectors) {
     gaps.push(...(await detector.detect(ctx)));

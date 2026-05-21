@@ -331,16 +331,16 @@ export const openApiSpec = {
         },
       },
     },
-    "/sessions/{sessionId}/testing/embed-dataset": {
+    "/sessions/{sessionId}/testing/run-hitl-comparison": {
       post: {
         tags: ["Testing"],
-        summary: "Embed dataset",
+        summary: "Run HITL comparison",
         parameters: [{ $ref: "#/components/parameters/SessionId" }],
         requestBody: {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/EmbedDatasetRequest" },
+              schema: { $ref: "#/components/schemas/RunHitlComparisonRequest" },
             },
           },
         },
@@ -352,16 +352,17 @@ export const openApiSpec = {
         },
       },
     },
-    "/sessions/{sessionId}/testing/run-hitl-comparison": {
+    "/sessions/{sessionId}/testing/run-hitl-batch": {
       post: {
         tags: ["Testing"],
-        summary: "Run HITL comparison",
+        summary: "Run HITL batch across all (or filtered) datasets",
+        description: "Blocking call. Progress is logged to server stdout. Equivalent to the CLI script `test-hitl-all-datasets.ts`.",
         parameters: [{ $ref: "#/components/parameters/SessionId" }],
         requestBody: {
-          required: true,
+          required: false,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/RunHitlComparisonRequest" },
+              schema: { $ref: "#/components/schemas/RunHitlBatchRequest" },
             },
           },
         },
@@ -515,6 +516,14 @@ export const openApiSpec = {
           },
         },
         required: ["datasetPath"],
+      },
+      RunHitlBatchRequest: {
+        type: "object",
+        properties: {
+          concurrency: { type: "integer", minimum: 1, maximum: 20, default: 3, description: "Max parallel datasets" },
+          only: { type: "array", items: { type: "string" }, description: "Whitelist of dataset IDs (e.g. [\"UC1\", \"BG\"])" },
+          exclude: { type: "array", items: { type: "string" }, description: "Dataset IDs to skip" },
+        },
       },
       EvaluateResultsRequest: {
         type: "object",

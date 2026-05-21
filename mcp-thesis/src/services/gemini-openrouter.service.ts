@@ -6,17 +6,12 @@ import { zodToJsonSchema } from "zod-to-json-schema";
  * Implements the same interface as GeminiFunctions but routes through OpenRouter
  */
 class GeminiOpenRouterFunctions {
-  private apiKey: string;
   private openrouterApiKey: string;
 
-  constructor(apiKey: string, openrouterApiKey: string) {
-    if (!apiKey) {
-      throw new Error("Gemini API key is required");
-    }
+  constructor(openrouterApiKey: string) {
     if (!openrouterApiKey) {
       throw new Error("OpenRouter API key is required");
     }
-    this.apiKey = apiKey;
     this.openrouterApiKey = openrouterApiKey;
   }
 

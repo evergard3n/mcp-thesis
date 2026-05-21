@@ -14,18 +14,15 @@ export interface SessionContext {
 export class SessionManager {
   private readonly sessions = new Map<string, SessionContext>();
   private readonly openrouterApiKey: string;
-  private readonly geminiApiKey: string;
 
-  constructor(openrouterApiKey: string, geminiApiKey: string) {
+  constructor(openrouterApiKey: string) {
     this.openrouterApiKey = openrouterApiKey;
-    this.geminiApiKey = geminiApiKey;
   }
 
   createSession(): SessionContext {
     const sessionId = randomUUID();
     const projectStore = new JsonProjectStore(sessionId);
     const geminiFunctions = new GeminiOpenRouterFunctions(
-      this.geminiApiKey,
       this.openrouterApiKey,
     );
     const hitl = new HITLOrchestrator(sessionId, geminiFunctions);

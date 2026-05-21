@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "fs/promises";
 import { z } from "zod";
 import { evaluateUseCase } from "../evaluators/three-tier.evaluator.js";
 import { flowToSentenceText } from "../helpers/usecase-text.js";
@@ -294,6 +294,156 @@ export async function runHITLComparison(
   await writeFile(outputPath, JSON.stringify(results, null, 2));
 
   return { results, outputPath };
+}
+
+export interface DatasetRunResult {
+  datasetFile: string;
+  datasetPath: string;
+  elapsedMs: number;
+  testCaseCount?: number;
+  totalIterations?: number;
+  totalQuestions?: number;
+  outputPath?: string;
+  status: "success" | "error";
+  error?: string;
+}
+
+export async function runHITLBatch(
+  geminiFunctions: GeminiOpenRouterFunctions,
+  input: {
+    concurrency?: number;
+    only?: string[];
+    exclude?: string[];
+  },
+) {
+  const { concurrency = 3, only, exclude = [] } = input;
+  const testDataDir = "test-data";
+
+  const allFiles = (await readdir(testDataDir))
+    .filter((f) => f.startsWith("dataset-") && f.endsWith(".json"))
+    .sort();
+
+  const onlySet = only && only.length > 0 ? new Set(only) : null;
+  const excludeSet = new Set(exclude);
+
+  const datasetFiles = allFiles.filter((name) => {
+    const id = name.replace(/^dataset-/, "").replace(/\.json$/, "");
+    if (onlySet && !onlySet.has(id)) return false;
+    if (excludeSet.has(id)) return false;
+    return true;
+  });
+
+  if (datasetFiles.length === 0) {
+    return {
+      batchResults: [] as DatasetRunResult[],
+      indexPath: null,
+      summary: { total: 0, succeeded: 0, failed: 0 },
+    };
+  }
+
+  console.log(
+    `[batch] starting ${datasetFiles.length} dataset(s), concurrency=${concurrency}`,
+  );
+
+  const batchResults: DatasetRunResult[] = [];
+  const total = datasetFiles.length;
+
+  for (let offset = 0; offset < total; offset += concurrency) {
+    const chunk = datasetFiles.slice(offset, offset + concurrency);
+
+    const chunkResults = await Promise.all(
+      chunk.map(async (datasetFile, i) => {
+        const index = offset + i + 1;
+        const label = `[${String(index).padStart(2)}/${total}]`;
+        const datasetPath = `${testDataDir}/${datasetFile}`;
+        const startedAt = Date.now();
+
+        console.log(`${label} ▶ ${datasetFile}`);
+
+        try {
+          const { results, outputPath } = await runHITLComparison(
+            geminiFunctions,
+            { datasetPath },
+          );
+
+          const elapsedMs = Date.now() - startedAt;
+          const totalIterations = results.reduce(
+            (sum, r) => sum + (r.iterativeRefinement?.totalIterations ?? 0),
+            0,
+          );
+          const totalQuestions = results.reduce(
+            (sum, r) => sum + (r.iterativeRefinement?.totalQuestionsAsked ?? 0),
+            0,
+          );
+
+          console.log(
+            `${label} ✅ ${datasetFile} — ${(elapsedMs / 1000).toFixed(1)}s | ` +
+              `cases=${results.length} iters=${totalIterations} qs=${totalQuestions}`,
+          );
+
+          return {
+            datasetFile,
+            datasetPath,
+            elapsedMs,
+            testCaseCount: results.length,
+            totalIterations,
+            totalQuestions,
+            outputPath,
+            status: "success" as const,
+          };
+        } catch (err) {
+          const elapsedMs = Date.now() - startedAt;
+          const error = err instanceof Error ? err.message : String(err);
+          console.error(
+            `${label} ❌ ${datasetFile} — ${(elapsedMs / 1000).toFixed(1)}s | ${error.slice(0, 120)}`,
+          );
+          return {
+            datasetFile,
+            datasetPath,
+            elapsedMs,
+            status: "error" as const,
+            error,
+          };
+        }
+      }),
+    );
+
+    batchResults.push(...chunkResults);
+    console.log(`--- ${Math.min(offset + concurrency, total)}/${total} done ---`);
+  }
+
+  await mkdir("test-data/results/raw", { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const indexPath = `test-data/results/raw/hitl-batch-index-${timestamp}.json`;
+
+  const errors = batchResults.filter((r) => r.status === "error");
+  await writeFile(
+    indexPath,
+    JSON.stringify(
+      {
+        timestamp: new Date().toISOString(),
+        concurrency,
+        datasetCount: batchResults.length,
+        successCount: batchResults.length - errors.length,
+        errorCount: errors.length,
+        batchResults,
+      },
+      null,
+      2,
+    ),
+  );
+
+  const summary = {
+    total: batchResults.length,
+    succeeded: batchResults.length - errors.length,
+    failed: errors.length,
+  };
+
+  console.log(
+    `[batch] done — ${summary.succeeded}/${summary.total} succeeded, index saved: ${indexPath}`,
+  );
+
+  return { batchResults, indexPath, summary };
 }
 
 export async function evaluateResults(
