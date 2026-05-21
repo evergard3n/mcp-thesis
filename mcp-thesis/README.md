@@ -1,185 +1,171 @@
-# MCP Thesis - Use Case Management System
+# HITL Use Case Elaboration System
 
-A Model Context Protocol (MCP) server for managing UML projects, specifically focused on extracting, validating, and storing Use Cases using LLM capabilities (Gemini).
+A REST API backend implementing a **Human-in-the-Loop (HITL)** orchestration pipeline for use case elaboration. Given a vague use case description, the system iteratively detects gaps, generates targeted questions, collects expert answers, and produces a fully elaborated use case with complete exception and alternative flows.
 
-## Features
+## Architecture Overview
+
+```
+Client (Frontend / Test Script)
+        │  SSE stream + REST answers
+        ▼
+  Express REST Server  (port 3006)
+        │
+  SessionManager  ──────────────────────────────────────────┐
+        │                                                    │
+  HITLOrchestrator                                   JsonProjectStore
+        │                                             (Firebase-backed)
+  HITLCore (orchestration loop)
+        │
+        ├── DomainClassifierService   (heuristic + semantic)
+        ├── BlueprintDetector         (role-matching + family filter)
+        ├── GapAnalyzer               (centroid / structural / pattern)
+        ├── UncertaintyRanker         (clarity × criticality scoring)
+        ├── QuestionBuilders          (phase 0–3 question generation)
+        └── GeminiOpenRouterService   (LLM structured output)
+```
+
+### Key Design Decisions
+
+- **Session-scoped isolation**: each client session gets its own store, orchestrator, and LLM client.
+- **Semantic embeddings**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (MiniLM-L12, dim=384) loaded locally via `@xenova/transformers`.
+- **Gap detection pipeline**: centroid matching → blueprint gap → structural/condition/actor checks.
+- **Recall-first filtering**: prefer false positives over false negatives at every coarse filter stage.
+- **Stale gap deduplication**: two-layer filter (metadata tuple + semantic similarity against conversation history).
+
+## API Endpoints
+
+### Session Management
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sessions` | Create a new session |
+| `DELETE` | `/sessions/:sessionId` | Destroy a session |
+| `GET` | `/sessions/:sessionId/state` | Get current session state |
+
+### HITL Core
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/sessions/:sessionId/hitl/stream` | SSE stream for real-time HITL events |
+| `POST` | `/sessions/:sessionId/hitl/start` | Start a HITL elaboration run |
+| `POST` | `/sessions/:sessionId/hitl/answers` | Submit human answers for current iteration |
+| `POST` | `/sessions/:sessionId/hitl/cancel` | Cancel the current run |
 
 ### Project Management
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sessions/:sessionId/projects/init` | Initialize a new project |
+| `POST` | `/sessions/:sessionId/projects/load-by-name` | Load project by name |
+| `GET` | `/sessions/:sessionId/projects` | List all projects |
+| `GET` | `/sessions/:sessionId/projects/current` | Get current project |
+| `GET` | `/sessions/:sessionId/projects/current/use-cases` | List use cases in current project |
+| `POST` | `/sessions/:sessionId/projects/switch` | Switch active project |
+| `POST` | `/sessions/:sessionId/projects/delete` | Delete a project |
 
-- **Initialize Projects**: Create structured UML projects with dedicated storage for use cases, diagrams, and entities.
-- **Context Switching**: Load, find, and list available projects.
-- **Project Stats**: View summaries of use cases, actors, and steps.
+### Testing & Evaluation
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sessions/:sessionId/testing/prepare-test-data` | Prepare dataset for evaluation |
+| `POST` | `/sessions/:sessionId/testing/embed-dataset` | Embed dataset entries |
+| `POST` | `/sessions/:sessionId/testing/evaluate-results` | Evaluate elaboration results |
+| `POST` | `/sessions/:sessionId/testing/run-hitl-batch` | Run batch HITL over a dataset |
 
-### Use Case Workflow
-
-1. **Extraction**: Convert natural language descriptions into structured Use Case JSON using Gemini.
-2. **Validation**: Validate use cases against schema and best practices. Provides scoring and LLM-driven feedback with improvement questions.
-3. **UML Generation**: Convert use cases into PlantUML diagrams.
-
-## Tools
-
-### Project Tools (In progress)
-
-- `initProject`: Initialize a new UML project with markdown-based storage.
-- `loadProjectByName`: Load an existing project by name.
-- `findProjectByName`: Fuzzy search for a project by name or description.
-- `listAllProjects`: List all available projects.
-- `getProjectInfo`: Get information about the current project (stats, path, etc.).
-- `viewProjectUseCases`: View all use cases in the current project.
-
-### Use Case Tools (In progress)
-
-- `extractUseCase`: Extract use case details from user input into a structured format.
-- `validateUseCase`: Validate and score the extracted use case; generates improvement questions if quality is low.
-- `useCaseToUML`: Convert a saved use case to PlantUML format.
-
-## API Authentication
-
-This MCP server uses **OpenRouter** with the **Gemini 2.0 Flash** model for all LLM operations. It requires:
-1. A Gemini API key (passed via HTTP header for per-session authentication)
-2. An OpenRouter API key (configured in environment variables for server-side operations)
-
-### Required Configuration
-
-#### 1. HTTP Header (Per-Session)
-
-All requests to the MCP server must include:
+## Codebase Map
 
 ```
-x-gemini-api-key: YOUR_GEMINI_API_KEY_HERE
+src/
+├── index.ts                        # Express server entry point
+├── orchestrator/
+│   ├── hitl.core.ts                # Main HITL loop logic
+│   ├── hitl.orchestrator.ts        # Session-level orchestrator wrapper
+│   └── hitl.state.ts               # State machine types
+├── analyzers/
+│   ├── gap.analyzer.ts             # Gap analysis entry point + stale-gap filter
+│   ├── gap-detector.types.ts       # GapDetectorConfig interface + factory functions
+│   ├── gap-detectors.registry.ts   # Registry of all active gap detectors
+│   ├── gap-detector.types.ts       # Shared types (Gap, EmbeddedText, etc.)
+│   ├── blueprint.detector.ts       # Blueprint role-matching + gap detection
+│   └── uncertainty.ranker.ts       # Step clarity × criticality scoring
+├── services/
+│   ├── semantic.service.ts         # MiniLM-L12 embedding singleton
+│   ├── domain-classifier.service.ts# Heuristic + semantic domain classification
+│   ├── blueprint-family.service.ts # Coarse family label prediction
+│   ├── gemini-openrouter.service.ts# LLM structured output via OpenRouter
+│   └── usecase.service.ts          # Use case CRUD
+├── validators/
+│   ├── llm.validator.ts            # LLM prompt builders + expert answer simulation
+│   └── question-builders.ts        # Phase 0–3 question generation
+├── helpers/
+│   ├── consolidated-id.ts          # Consolidated question ID format
+│   ├── memory.builder.ts           # InteractionMemory embedding builder
+│   ├── usecase-text.ts             # Use case → text helpers
+│   ├── usecase.prompts.ts          # LLM prompt fragments
+│   └── env.ts                      # Environment variable exports
+├── data/
+│   ├── gap-centroids.json          # Gap category data (keywords, thresholds, question templates)
+│   ├── gap-centroids.loader.ts     # JSON loader + centroid computation + cache
+│   └── domain-keywords.ts          # Human/system actor keyword lists
+├── session/
+│   └── session.manager.ts          # Session lifecycle management
+├── stores/
+│   └── projectStore.ts             # Session-scoped project store (in-memory)
+├── schemas/
+│   └── genusecase.schema.ts        # Zod schema for GenUseCase
+└── interfaces/
+    ├── usecase.interface.new.ts    # GenUseCase / GenFlow / GenStep types
+    ├── usecase.interface.ts        # Legacy use case types
+    └── store.interface.ts          # Store / Project interfaces
 ```
 
-The API key is validated during the initialization request. If the header is missing, the server will return a `400 Bad Request` error.
+## Recommended Environment
 
-#### 2. Environment Variable (Server-Side)
+This project is primarily tested on Linux and macOS environments.
 
-The server requires an OpenRouter API key in the `.env` file:
+The local embedding model (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) runs via `@xenova/transformers` which depends on ONNX Runtime native bindings. While native Windows support may work, these bindings can require additional setup and may behave inconsistently across Node.js versions and Windows configurations.
 
-```bash
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-```
+**For Windows users, WSL2 is strongly recommended.**
 
-If this is not configured, the server will return a `500 Server Configuration Error`.
-
-### Why OpenRouter?
-
-- **Unified API**: Access Gemini models through OpenRouter's standardized API
-- **Better Rate Limiting**: OpenRouter provides more robust rate limiting and queue management
-- **Cost Tracking**: Built-in usage tracking and cost monitoring
-- **Fallback Options**: Easy to switch between different models if needed
-
-### Security Notes
-
-- The Gemini API key is stored per session and is not logged or persisted to disk
-- Each session maintains its own isolated Gemini API client with the provided key
-- The OpenRouter API key is stored server-side and shared across all sessions
-- Never commit your API keys to version control
-- For production use, consider implementing additional security measures like rate limiting and API key rotation
-
-## Development
+## Setup
 
 ### Prerequisites
 
-- Node.js
-- Gemini API Key (passed via HTTP header)
-- OpenRouter API Key (configured in `.env` file)
+- Node.js 18+
+- OpenRouter API key
 
-### Setup
+### Install & Run
 
-1. Install dependencies:
-
-   ```bash
-   cd mcp-thesis
-   npm install
-   ```
-
-2. Configure Environment:
-   
-   Create a `.env` file from the example:
-   
-   ```bash
-   cp env.example .env
-   ```
-   
-   Then edit `.env` and add your OpenRouter API key:
-   
-   ```bash
-   OPENROUTER_API_KEY=your_openrouter_api_key_here
-   PORT=3006
-   ```
-
-4. Run the server (starts on port 3006 by default):
-
-   ```bash
-   npm run dev
-   ```
-
-   For development with auto-rebuild:
-
-   ```bash
-   npm run watch
-   ```
-
-## Configuration (Claude Desktop)
-
-This server uses the SSE (Server-Sent Events) transport.
-
-1. Ensure the server is running locally (e.g., `npm run dev` in a terminal).
-
-2. Add the following to your Claude Desktop config:
-   - On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "mcp-thesis": {
-      "url": "http://localhost:3006/mcp",
-      "headers": {
-        "x-gemini-api-key": "YOUR_GEMINI_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**Important**: Replace `YOUR_GEMINI_API_KEY_HERE` with your actual Gemini API key.
-
-## Configuration (Visual Studio Code - Recommended)
-
-This server uses the SSE (Server-Sent Events) transport.
-
-1. Ensure the server is running locally (e.g., `npm run dev` in a terminal).
-
-2. Run this command in your terminal (replace `YOUR_GEMINI_API_KEY_HERE` with your actual API key):
+**Backend only (core API):**
 
 ```bash
-code --add-mcp "{\"name\":\"mcp-thesis\",\"type\":\"http\",\"url\":\"http://localhost:3006/mcp\",\"headers\":{\"x-gemini-api-key\":\"YOUR_GEMINI_API_KEY_HERE\"}}"
+cd mcp-thesis
+npm install
+cp env.example .env
+# Edit .env and set OPENROUTER_API_KEY
+npm run dev        # dev server with hot reload (port 3006)
+npm run build      # compile TypeScript → build/
 ```
 
-Or, you can locate to mcp.json and add this:
+**With interactive frontend:**
 
-```json
-{
-  "mcpServers": {
-    "mcp-thesis": {
-      "url": "http://localhost:3006/mcp",
-      "headers": {
-        "x-gemini-api-key": "YOUR_GEMINI_API_KEY_HERE"
-      }
-    }
-  }
-}
+```bash
+cd mcp-thesis-fe
+npm install
+npm run dev        # starts frontend (default port 5173)
 ```
 
-**Important**: Replace `YOUR_GEMINI_API_KEY_HERE` with your actual Gemini API key.
+The frontend connects to the backend at `http://localhost:3006`.
 
-## Project Structure
+### Environment Variables
 
-When a project is initialized, it creates:
+```bash
+OPENROUTER_API_KEY=...
+PORT=3006
+```
 
-- `README.md`: Project documentation
-- `project.json`: Metadata
-- `use-cases/`: Directory for use case descriptions
-- `diagrams/`: Directory for generated PlantUML diagrams
-- `entities/`: Directory for actors, systems, and classes
+## Testing
+
+Start the server and open the Swagger UI to explore and test all endpoints interactively:
+
+```
+http://localhost:3006/openapi.json
+```
+
+Import the OpenAPI spec into any REST client (Postman, Insomnia, VS Code REST Client) or use the frontend at `mcp-thesis-fe/` which consumes the same API.

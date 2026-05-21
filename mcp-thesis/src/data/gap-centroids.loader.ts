@@ -74,7 +74,7 @@ const DEFAULT_ANSWER_GUIDANCE =
  * Returns the answerGuidance stored in gap-centroids.json for the given gapType,
  * or a generic fallback if the type is not found.
  */
-export function getGuidanceForGapType(gapType: GapType): string {
+export function getGuidanceForGapType(gapType: string): string {
   const cat = gapCentroidsCache?.find((c) => c.gapType === gapType);
   return cat?.answerGuidance ?? DEFAULT_ANSWER_GUIDANCE;
 }

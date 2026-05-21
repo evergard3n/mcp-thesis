@@ -287,8 +287,8 @@ export function conditionQualityGap(options: {
 
           const suggestedQuestion = questionTemplate
             .replaceAll("{flowId}", src.flowId)
-            .replace("{flowKindLabel}", flowKindLabel)
-            .replace("{branchContext}", branchContext);
+            .replaceAll("{flowKindLabel}", flowKindLabel)
+            .replaceAll("{branchContext}", branchContext);
 
           gaps.push({
             type: options.gapType,

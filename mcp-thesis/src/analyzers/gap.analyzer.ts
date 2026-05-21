@@ -262,12 +262,12 @@ export async function filterStaleGaps(
   const exploredTuples = new Set(
     history
       .filter((h) => h.metadata.stepIndex !== undefined && h.metadata.gapType)
-      .map((h) => `${h.metadata.stepIndex}|${h.metadata.gapType}`),
+      .map((h) => `${h.metadata.flowId ?? "MAIN"}|${h.metadata.stepIndex}|${h.metadata.gapType}`),
   );
 
   const metadataFiltered = gaps.filter((gap) => {
     if (gap.relatedStep === undefined) return true;
-    return !exploredTuples.has(`${gap.relatedStep}|${gap.type}`);
+    return !exploredTuples.has(`${gap.relatedFlow ?? "MAIN"}|${gap.relatedStep}|${gap.type}`);
   });
 
   if (metadataFiltered.length === 0) return [];
