@@ -165,7 +165,13 @@ PORT=3006
 Start the server and open the Swagger UI to explore and test all endpoints interactively:
 
 ```
-http://localhost:3006/openapi.json
+http://localhost:3006/docs
 ```
 
-Import the OpenAPI spec into any REST client (Postman, Insomnia, VS Code REST Client) or use the frontend at `mcp-thesis-fe/` which consumes the same API.
+or use the frontend at 
+
+```
+http://localhost:5173
+```
+
+which consumes the same API.
