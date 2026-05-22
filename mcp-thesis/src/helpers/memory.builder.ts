@@ -26,7 +26,7 @@ export async function buildInteractionMemories(
     contextsToEmbed.push(contextString);
     questionsToEmbed.push(q.question);
 
-    // F3: use shared parser (previously had divergent capture group positions)
+    // get groups, consolidated IDs, and step indexes from question ID
     const parsedConsolidated = parseConsolidatedId(q.id);
     const consolidatedGroupId = parsedConsolidated?.groupId;
     const consolidatedSteps = parsedConsolidated?.stepIndexes;
@@ -38,9 +38,11 @@ export async function buildInteractionMemories(
       iteration: iterationNumber,
       answerConfidence: a.confidence as "low" | "medium" | "high" | undefined,
       metadata: {
+        // check if single step, then parse and add 
         stepIndex: q.id.match(/step-(\d+)/)
           ? parseInt(q.id.match(/step-(\d+)/)![1], 10)
           : undefined,
+          // check if consolidated questions, add all consolidated steps' ids
         stepIndexes: consolidatedSteps,
         gapType: q.context.patternType as GapType,
         consolidatedGroupId,

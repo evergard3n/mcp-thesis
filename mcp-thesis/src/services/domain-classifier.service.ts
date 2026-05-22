@@ -183,17 +183,36 @@ async function initializeSemanticCentroids(): Promise<void> {
   ];
 
   try {
+    const textToEmbed = [
+      ...humanActorExamples,
+      ...systemActorExamples,
+      ...humanActionExamples,
+      ...systemActionExamples,
+    ];
+    const embeddedExamples = await semanticService.embedBatch(textToEmbed);
     const [
       humanActorEmbeddings,
       systemActorEmbeddings,
       humanActionEmbeddings,
       systemActionEmbeddings,
-    ] = await Promise.all([
-      semanticService.embedBatch(humanActorExamples),
-      semanticService.embedBatch(systemActorExamples),
-      semanticService.embedBatch(humanActionExamples),
-      semanticService.embedBatch(systemActionExamples),
-    ]);
+    ] = [
+      embeddedExamples.slice(0, humanActorExamples.length),
+      embeddedExamples.slice(
+        humanActorExamples.length,
+        humanActorExamples.length + systemActorExamples.length,
+      ),
+      embeddedExamples.slice(
+        humanActorExamples.length + systemActorExamples.length,
+        humanActorExamples.length +
+          systemActorExamples.length +
+          humanActionExamples.length,
+      ),
+      embeddedExamples.slice(
+        humanActorExamples.length +
+          systemActorExamples.length +
+          humanActionExamples.length,
+      ),
+    ]
 
     humanActorCentroid =
       await semanticService.computeCentroid(humanActorEmbeddings);

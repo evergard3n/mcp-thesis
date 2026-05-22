@@ -7,6 +7,9 @@ import {
 import semanticService from "../services/semantic.service.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 
+// ─── Types & Schemas ─────────────────────────────────────────────────────────
+
+// Zod schema cho kết quả LLM trả về khi đánh giá batch flows
 const batchFlowEvalSchema = z.array(
   z.object({
     flowId: z.string(),
@@ -18,14 +21,29 @@ const batchFlowEvalSchema = z.array(
   }),
 );
 
+// Ground truth flow có thể đã có embedding cache sẵn từ lúc lưu vào DB
 type GroundTruthFlow = GenFlow & { embedding?: number[] };
 
+// Context để suy luận branch flow xuất phát từ step nào trong MAIN
+// Được build một lần từ MAIN flow rồi reuse cho tất cả branches
 type BranchInferenceContext = {
   mainSteps: GenFlow["steps"];
   mainStepEmbeddings: number[][];
   actorToStepIndexes: Map<string, number[]>;
 };
 
+// Kết quả sau khi match một generated flow với ground truth
+interface FlowMatchResult {
+  inGroundTruth: boolean;
+  isDuplicate: boolean;
+  matchedFlowId?: string;
+  bestScore: number;
+}
+
+
+// Tìm step nào trong MAIN flow là điểm rẽ của branch này.
+// Dùng actor matching trước (nhanh); nếu cùng actor xuất hiện nhiều lần
+// thì mới fallback sang cosine similarity để phân biệt bằng ngữ nghĩa.
 async function inferBranchStepIndex(
   flow: GenFlow,
   context: BranchInferenceContext,
@@ -60,6 +78,8 @@ async function inferBranchStepIndex(
   return bestIndex;
 }
 
+// Chuẩn bị context một lần từ MAIN flow để reuse cho tất cả branch lookups.
+// Embed tất cả steps và build map actor → [stepIndexes] để tra nhanh.
 async function buildBranchInferenceContext(
   mainFlow: GenFlow,
 ): Promise<BranchInferenceContext> {
@@ -81,42 +101,38 @@ async function buildBranchInferenceContext(
   };
 }
 
+
+// Lấy embeddings của ground truth flows, reuse cache nếu có.
+// Ground truth được embed sẵn khi lưu vào DB, nhưng fallback embed on-the-fly
+// nếu thiếu — thường chỉ xảy ra khi chạy test với data cũ.
 async function getGroundTruthEmbeddings(
   groundTruthFlows: GroundTruthFlow[],
 ): Promise<number[][]> {
   const embeddings: number[][] = new Array(groundTruthFlows.length);
-  const missingTexts: string[] = [];
-  const missingIndexes: number[] = [];
+  const textToEmbed = Array<string>();
 
   groundTruthFlows.forEach((flow, index) => {
-    if (flow.embedding && flow.embedding.length > 0) {
-      embeddings[index] = flow.embedding;
-    } else {
-      missingTexts.push(flowToSentenceText(flow));
-      missingIndexes.push(index);
-    }
+    textToEmbed.push(flowToSentenceText(flow));
   });
 
-  if (missingTexts.length > 0) {
+  if (textToEmbed.length > 0) {
     console.warn(
-      `Missing ${missingTexts.length} ground truth embeddings; embedding on the fly.`,
+      `Missing ${textToEmbed.length} ground truth embeddings; embedding on the fly.`,
     );
-    const generated = await semanticService.embedBatch(missingTexts);
+    const generated = await semanticService.embedBatch(textToEmbed);
     generated.forEach((embedding, idx) => {
-      embeddings[missingIndexes[idx]] = embedding;
+      embeddings[idx] = embedding;
     });
   }
 
   return embeddings;
 }
 
-interface FlowMatchResult {
-  inGroundTruth: boolean;
-  isDuplicate: boolean;
-  matchedFlowId?: string;
-  bestScore: number;
-}
-
+// So sánh từng generated flow với ground truth bằng cosine similarity.
+// Cộng structural bonus nếu cùng kind (+0.05) hoặc cùng branch origin (+0.1)
+// để các flows có cùng điểm rẽ không bị nhầm lẫn với nhau.
+// Dùng greedy matching: flow confident nhất được claim ground truth trước,
+// tránh flow yếu "cướp" slot của flow mạnh hơn.
 async function matchFlowsToGroundTruth(
   generatedFlows: GenFlow[],
   groundTruthFlows: GroundTruthFlow[],
@@ -281,6 +297,11 @@ async function matchFlowsToGroundTruth(
   return matchResults;
 }
 
+// ─── Main Evaluator ───────────────────────────────────────────────────────────
+
+// Orchestrate toàn bộ evaluation: LLM chấm grounded/logical/hallucination,
+// embedding matching xác định flow nào có trong ground truth,
+// sau đó tính 4 metrics: qualityScore, discoveryRate, precision, f1.
 export async function evaluateUseCase(
   useCase: GenUseCase,
   context: {

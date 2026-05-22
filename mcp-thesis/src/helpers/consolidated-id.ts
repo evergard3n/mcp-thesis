@@ -19,6 +19,8 @@ export interface ParsedConsolidatedId {
   stepIndexes: number[];
 }
 
+
+// retrieve consolidated steps indexes 
 export function parseConsolidatedId(id: string): ParsedConsolidatedId | null {
   const match = id.match(CONSOLIDATED_ID_REGEX);
   if (!match) return null;
