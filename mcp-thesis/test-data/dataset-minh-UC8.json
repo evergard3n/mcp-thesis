@@ -1,0 +1,149 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:50:37.110Z",
+  "testCases": [
+    {
+      "id": "minh-UC8",
+      "domain": "SuperFrog Appearances",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 4,
+        "notes": "Asynchronous notifications to relevant actors are part of the success scenario."
+      },
+      "inputs": {
+        "vague": "The Spirit Director, who has admin privileges and is logged in, needs to correct mistakes in an existing SuperFrog appearance request regardless of its current status. She opens the request through the view-request feature, modifies the allowed fields, and acknowledges any system warnings before confirming the changes. The system validates the edits, saves the updated request, and notifies the Customer and any assigned SuperFrog Student about the modifications.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nCustomer, SuperFrog Student\nTrigger:\nThe Spirit Director indicates to edit the details of a SuperFrog appearance request.\nDescription:\nThe Spirit Director wants to edit a SuperFrog request of all possible statuses, so that she can correct mistakes found in a request. See Glossary for all possible statuses of a request.\nPreconditions:\nPRE-1. There exists at least one submitted request in the System.\nPRE-2. The Spirit Director is logged into the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The request is updated in the System.\nMain Success Scenario:\nThe Spirit Director indicates to edit the details of a SuperFrog appearance request.\nThe Spirit Director views the details of this appearance request through UC-7: View an appearance request.\nThe Spirit Director chooses to change the details of this appearance request.\nThe System asks the Spirit Director to make changes to this request where allowed according to the “Details” defined in the Associated Information and the “Security/access concerns” defined in the Business Rules of this use case.\nThe Spirit Director makes changes to this request until she confirms that she has finished changing.\nThe System validates the Spirit Director’s changes and alerts warning messages according to the “Details” defined in the Associated Information of this use case.\nThe Spirit Director acknowledges the warnings and chooses to continue.\nThe System displays the updated details of this request and alerts the Spirit Director to confirm the change.\nThe Spirit Director either confirms the change (continues the normal flow) or chooses to continue to change the details (returns to step 5).\nThe System saves the changes, carries out the effect of change according to the “Details” defined in the Associated Information of this use case, and informs the Spirit Director that this request has been changed.\nThe System notifies relevant actors about the change of this request according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n6a. Input validation rule violation:\n6a1. The System alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error.\n6a2. The Spirit Director corrects the mistake and returns to step 6 of the normal flow.\n6b. Assigned SuperFrog Student not available at the new date and time:\n6b1. The System alerts the Spirit Director that the assigned SuperFrog Student is not available at the new date and time, and she must unassign the SuperFrog Student first.\n6b2. Use case terminates.\n\n"
+      },
+      "groundTruth": {
+        "name": "Edit SuperFrog Appearance Request",
+        "summary": "The Spirit Director edits the details of a SuperFrog appearance request to correct mistakes, regardless of its current status.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System",
+          "Customer",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "There exists at least one submitted request in the System.",
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to edit the details of a SuperFrog appearance request."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of this appearance request through UC-7: View an appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Chooses to change the details of this appearance request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Asks the Spirit Director to make changes to this request where allowed according to the “Details” and “Security/access concerns”."
+              },
+              {
+                "index": 5,
+                "actor": "Spirit Director",
+                "description": "Makes changes to this request until she confirms that she has finished changing."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Validates the Spirit Director’s changes and alerts warning messages according to the “Details”."
+              },
+              {
+                "index": 7,
+                "actor": "Spirit Director",
+                "description": "Acknowledges the warnings and chooses to continue."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Displays the updated details of this request and alerts the Spirit Director to confirm the change."
+              },
+              {
+                "index": 9,
+                "actor": "Spirit Director",
+                "description": "Confirms the change."
+              },
+              {
+                "index": 10,
+                "actor": "System",
+                "description": "Saves the changes, carries out the effect of change, and informs the Spirit Director that this request has been changed."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Notifies relevant actors about the change of this request."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Corrects the mistake and returns to step 6 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that the assigned SuperFrog Student is not available at the new date and time, and she must unassign the SuperFrog Student first."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_14a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to continue to change the details."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Returns to step 5 of the MAIN flow."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

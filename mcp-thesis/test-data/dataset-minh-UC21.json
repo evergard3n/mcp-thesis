@@ -1,0 +1,236 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:56:03.578Z",
+  "testCases": [
+    {
+      "id": "minh-UC21",
+      "domain": "Student Scheduling",
+      "metadata": {
+        "complexity": "medium",
+        "expectedFlows": 7,
+        "notes": "Handles creation, editing, and deletion of events. Features recurring events with options for single vs. series updates/deletions. Includes validation for overlapping events with assigned requests during event creation."
+      },
+      "inputs": {
+        "vague": "A SuperFrog Student manages her personal schedule by adding, editing, or deleting events. The system then updates her schedule based on her selections and inputs.",
+        "detailed": "Primary Actor:\nSuperFrog Student\nSecondary Actors:\n\n\nTrigger:\nThe SuperFrog Student indicates to manage her personal schedule.\nDescription:\nThe SuperFrog Student wants to add an event to, edit an existing event from, or delete an existing event from her personal schedule, so that the System can determine the availability of a SuperFrog Student for a SuperFrog appearance request.\n\nCommon events include taking classes at TCU (a recurring event) and one-time vacation.\nPreconditions:\nPRE-1. The SuperFrog Student is logged into the System.\nPostconditions:\nPOST-1. The personal schedule is updated.\nMain Success Scenario:\nThe SuperFrog Student indicates to manage her personal schedule.\nThe System displays her current personal schedule and asks the SuperFrog Student to select operations.\nCreate a new event (step 4-8)\nEdit an existing event (step 9-13)\nDelete an existing event (step 14-17)\nThe SuperFrog Student selects one out of the three operations.\n\nBased on the SuperFrog Student’s selection in step 3, the flow goes through either step 4-8, or step 9-13, or step 14-17.\nThe SuperFrog Student selects to create either a one-time event (e.g., vocation) or a recurring event (e.g., class). For each event, the SuperFrog Student provides:\nEvent title (e.g., Software Engineering class)\nStart date and time and end date and time\nRecurrence start date and end date if applicable\nThe System validates the creation.\nThe System displays the details of the new event and asks the SuperFrog Student to confirm the creation.\nThe SuperFrog Student either confirms the creation (continues the normal flow) or chooses to modify the details (return to step 4).\nThe System saves the creation and informs the SuperFrog Student that her personal schedule has been updated.\nThe SuperFrog Student selects to edit an existing event. For each event, the SuperFrog Student can modify:\nEvent title\nStart date and time and end date and time\nRecurrence start date and end date if applicable\nThe System validates the change.\nThe System displays the details of the updated event and asks the SuperFrog Student to confirm the change.\nThe SuperFrog Student either confirms the change (continues the normal flow) or chooses to modify the details (return to step 9).\nThe System saves the change and informs the SuperFrog Student that her personal schedule has been updated.\nThe SuperFrog Student selects to delete an existing event.\nThe System asks the SuperFrog Student to confirm the deletion.\nThe SuperFrog Student confirms the deletion.\nThe System deletes the event and informs the SuperFrog Student that her personal schedule has been updated.\n\nThe SuperFrog Student either indicates that she is done (goes to step 19) or continues to manage her personal schedule (returns to step 2).\nUse case ends.\nExtensions:\n5a. There exists signed-up appearance request within the specified start and end date and time:\n5a1. The System alerts the SuperFrog Student that she has been assigned to a request that conflicts with the newly created personal event.\n5a2. Use case terminates.\n9a. The event being edited is a recurring one:\n9a1. The SuperFrog Student indicates the change applies to either just one event or every event in this series.\n9a2. Returns to step 10 of the normal flow.\n14a. The event being deleted is a recurring one:\n14a1. The SuperFrog Student indicates the deletion applies to either just one event or every event in this series.\n14a2. Returns to step 15 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Manage Personal Schedule",
+        "summary": "The SuperFrog Student manages her personal schedule by adding, editing, or deleting events to indicate her availability for SuperFrog appearance requests.",
+        "mainActor": "SuperFrog Student",
+        "actors": [
+          "SuperFrog Student",
+          "System"
+        ],
+        "preconditions": [
+          "The SuperFrog Student is logged into the System."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Indicates to manage her personal schedule."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Displays her current personal schedule and asks her to select operations."
+              },
+              {
+                "index": 3,
+                "actor": "SuperFrog Student",
+                "description": "Selects one out of three operations: create a new event, edit an existing event, or delete an existing event."
+              },
+              {
+                "index": 4,
+                "actor": "SuperFrog Student",
+                "description": "Selects to create either a one-time event or a recurring event; provides event title, start/end dates and times, and recurrence start/end dates if applicable."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Validates the creation."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Displays the details of the new event and asks the SuperFrog Student to confirm the creation."
+              },
+              {
+                "index": 7,
+                "actor": "SuperFrog Student",
+                "description": "Confirms the creation."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Saves the creation and informs the SuperFrog Student that her personal schedule has been updated."
+              },
+              {
+                "index": 9,
+                "actor": "SuperFrog Student",
+                "description": "Selects to edit an existing event and modifies the event title, start/end dates and times, or recurrence start/end dates if applicable."
+              },
+              {
+                "index": 10,
+                "actor": "System",
+                "description": "Validates the change."
+              },
+              {
+                "index": 11,
+                "actor": "System",
+                "description": "Displays the details of the updated event and asks the SuperFrog Student to confirm the change."
+              },
+              {
+                "index": 12,
+                "actor": "SuperFrog Student",
+                "description": "Confirms the change."
+              },
+              {
+                "index": 13,
+                "actor": "System",
+                "description": "Saves the change and informs the SuperFrog Student that her personal schedule has been updated."
+              },
+              {
+                "index": 14,
+                "actor": "SuperFrog Student",
+                "description": "Selects to delete an existing event."
+              },
+              {
+                "index": 15,
+                "actor": "System",
+                "description": "Asks the SuperFrog Student to confirm the deletion."
+              },
+              {
+                "index": 16,
+                "actor": "SuperFrog Student",
+                "description": "Confirms the deletion."
+              },
+              {
+                "index": 17,
+                "actor": "System",
+                "description": "Deletes the event and informs the SuperFrog Student that her personal schedule has been updated."
+              },
+              {
+                "index": 18,
+                "actor": "SuperFrog Student",
+                "description": "Indicates that she is done."
+              },
+              {
+                "index": 19,
+                "actor": "System",
+                "description": "Ends the use case."
+              }
+            ]
+          },
+          {
+            "id": "ALT_20a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Chooses to modify the details."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to step 4 of the MAIN flow."
+              }
+            ]
+          },
+          {
+            "id": "ALT_21a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Chooses to modify the details."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to step 9 of the MAIN flow."
+              }
+            ]
+          },
+          {
+            "id": "ALT_22a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Continues to manage her personal schedule."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to step 2 of the MAIN flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_23a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the SuperFrog Student that she has been assigned to a request that conflicts with the newly created personal event."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Use case terminates."
+              }
+            ]
+          },
+          {
+            "id": "EXT_24a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Indicates the change applies to either just one event or every event in this series."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to step 10 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_25a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Indicates the deletion applies to either just one event or every event in this series."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Returns to step 15 of the normal flow."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

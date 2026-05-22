@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-05-18T07:35:12.248Z",
+  "testCases": [
+    {
+      "id": "minh-03",
+      "domain": "Hệ thống",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "Người dùng hoàn tất công việc của mình và yêu cầu hệ thống kết thúc phiên. Hệ thống xử lý yêu cầu đó và đưa môi trường về trạng thái an toàn.",
+        "detailed": "Ca sử dụng này mô tả quá trình người dùng thoát khỏi hệ thống sau khi đã hoàn thành phiên làm việc của mình. Việc đăng xuất giúp đảm bảo an toàn thông tin cá nhân và ngăn chặn truy cập trái phép vào tài khoản người dùng.\n\nNgười dùng yêu cầu hệ thống kết thúc phiên làm việc. Hệ thống tiếp nhận yêu cầu đăng xuất và chấm dứt phiên làm việc của người dùng. Hệ thống ghi nhận sự kiện đăng xuất và đưa hệ thống về trạng thái chưa xác thực người dùng. Hệ thống phải đảm bảo rằng sau khi đăng xuất, mọi hoạt động cần quyền xác thực đều bị từ chối cho đến khi người dùng đăng nhập lại.\n\nTiền điều kiện: Người dùng phải đang ở trong một phiên làm việc hợp lệ, hay nói cách khác là họ đã đăng nhập tài khoản từ trước đó.\nHậu điều kiện: Phiên làm việc của người dùng chấm dứt. Hệ thống trở về trạng thái chưa xác thực."
+      },
+      "groundTruth": {
+        "name": "Logout from System",
+        "summary": "This use case describes the process of a user logging out of the system after completing their session. Logging out helps ensure the security of personal information and prevents unauthorized access to the user's account.",
+        "mainActor": "User",
+        "actors": [
+          "User",
+          "System"
+        ],
+        "preconditions": [
+          "User is in a valid session (i.e., has already logged in)."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "User",
+                "description": "Requests to end the current session."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Receives the logout request and terminates the user's session."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Records the logout event and resets the system to an unauthenticated state."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

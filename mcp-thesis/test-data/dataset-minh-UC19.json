@@ -1,0 +1,104 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:55:00.062Z",
+  "testCases": [
+    {
+      "id": "minh-UC19",
+      "domain": "Student Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Input validation and data availability checks"
+      },
+      "inputs": {
+        "vague": "The Spirit Director requests a report for SuperFrog Student performance, provides the necessary information, and the system generates and displays the requested insights.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\n\n\nTrigger:\nThe Spirit Director indicates to generate a SuperFrog Students performance report.\nDescription:\nThe Spirit Director wants to generate a report showing the detailed performance of each SuperFrog Student, so that she can get an idea of the number of appearances completed and canceled by each SuperFrog Student in a time period.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The details of the report are returned and displayed to the Spirit Director.\nMain Success Scenario:\nThe Spirit Director indicates to generate a SuperFrog Students performance report.\nThe System asks the Spirit Director to provide configurable report generating parameters according to the “Report generating parameters” defined in the Associated Information of this use case.\nThe Spirit Director enters the required parameters and confirms that she has finished entering.\nThe System validates the input parameters according to the “Report generating parameters” defined in the Associated Information of this use case.\nThe System generates the performance report according to the “Report generating algorithm” defined in the Associated Information of this use case and displays to the Spirit Director according to the “Report generating parameters” defined in the Associated Information of this use case.\nThe System delivers the generated report according to the specified report disposition in the specified format in the “Report generating parameters” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n4a. Input validation rule violation:\n4a1. The System alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error.\n4a2. The Spirit Director corrects the mistake and returns to step 4 of the normal flow.\n5a. No data is returned:\n5a1. The System alerts the Spirit Director that no data is available in the generated report.\n5a2. The Spirit Director either chooses to return to step 3 of the normal flow or chooses to terminate the use case.\n\n"
+      },
+      "groundTruth": {
+        "name": "Generate SuperFrog Students Performance Report",
+        "summary": "The Spirit Director generates a report showing the detailed performance of each SuperFrog Student, including appearances completed and canceled, within a specified time period.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to generate a SuperFrog Students performance report."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Asks the Spirit Director to provide configurable report generating parameters."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Enters the required parameters and confirms completion."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates the input parameters."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Generates the performance report and displays it to the Spirit Director."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Delivers the generated report according to the specified disposition and format."
+              }
+            ]
+          },
+          {
+            "id": "EXT_7a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that an input validation rule is violated and displays the nature and location of the error."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Corrects the mistake and returns to step 4 of the normal flow."
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that no data is available in the generated report."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Chooses to return to step 3 of the normal flow or terminate the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

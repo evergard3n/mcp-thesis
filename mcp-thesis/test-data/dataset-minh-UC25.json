@@ -1,0 +1,144 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T04:01:25.684Z",
+  "testCases": [
+    {
+      "id": "minh-UC25",
+      "domain": "Administration/Spirit Team",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 4,
+        "notes": "Asynchronous notification of actors after reversal. Special handling for conflicting requests."
+      },
+      "inputs": {
+        "vague": "The Spirit Director changes their mind about an appearance request, so they indicate that they want to reverse a prior approval or rejection. The system then processes this change, updating the request's status and making necessary adjustments to the calendar.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nCustomer, SuperFrog Student\nTrigger:\nThe Spirit Director indicates to reverse the approval/rejection decision of an appearance request.\nDescription:\nThe Spirit Director wants to reverse the approval/rejection decision of an appearance request, so that she has an opportunity to change her mind for a request. See BR-9.\nPreconditions:\nPRE-1. There exists at least one “Approved” or “Rejected” request in the System.\nPRE-2. The Spirit Director is logged into the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The appearance request is updated in the System with the modified status.\nPOST-2. If a “Rejected” appearance request is approved, the appearance is added to the Spirit Team calendar so that the requested time becomes unavailable to future appearance requests.\nPOST-3. If an “Approved” appearance request is rejected, the request is removed from the Spirit Team calendar so that the requested time becomes available again to future appearance requests.\nMain Success Scenario:\nThe Spirit Director indicates to reverse the approval/rejection decision of an appearance request.\nThe Spirit Director views the details of this appearance request through UC-7: View an appearance request.\nThe Spirit Director chooses to reverse the approval/rejection decision of this appearance request.\n\nStep 4-8: rejecting an “Approved” appearance request. \nStep 9-14:approving a “Rejected” appearance request.\n\nThe Spirit Director chooses to reject the request.\nThe System asks the Spirit Director to confirm the rejection.\nThe Spirit Director confirms the rejection and enters a reason.\nThe System updates the status of the request from “Approved” to “Rejected”.\nThe System removes the request from the Spirit Team calendar.\n\nThe Spirit Director chooses to approve the request.\nThe System validates the approval.\nThe System asks the Spirit Director to confirm the approval.\nThe Spirit Director confirms the approval.\nThe System updates the status of the request from “Rejected” to “Approved”.\nThe System adds the request to the Spirit Team calendar.\n\nThe System notifies relevant actors about the reversal of the request according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n10a. There exists conflicting “Approved” request on the Spirit Team calendar:\n10a1. The System alerts and shows the conflicts.\n10a2. Use case ends.\n\n"
+      },
+      "groundTruth": {
+        "name": "Reverse Approval/Rejection of Appearance Request",
+        "summary": "The Spirit Director reverses the approval or rejection decision of an appearance request.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System",
+          "Customer",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "There exists at least one 'Approved' or 'Rejected' request in the System.",
+          "The Spirit Director is logged into the System.",
+          "The User has the 'admin' privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to reverse the approval/rejection decision of an appearance request."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of this appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Chooses to reverse the approval/rejection decision of this appearance request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Notifies relevant actors about the reversal of the request."
+              }
+            ]
+          },
+          {
+            "id": "ALT_5a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to reject the request that was previously approved."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Asks the Spirit Director to confirm the rejection."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Confirms the rejection and enters a reason."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Updates the status of the request from 'Approved' to 'Rejected'."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Removes the request from the Spirit Team calendar."
+              }
+            ]
+          },
+          {
+            "id": "ALT_6a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Chooses to approve the request that was previously rejected."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Validates the approval."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Asks the Spirit Director to confirm the approval."
+              },
+              {
+                "index": 4,
+                "actor": "Spirit Director",
+                "description": "Confirms the approval."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Updates the status of the request from 'Rejected' to 'Approved'."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Adds the request to the Spirit Team calendar."
+              }
+            ]
+          },
+          {
+            "id": "EXT_7a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts and shows conflicting requests."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

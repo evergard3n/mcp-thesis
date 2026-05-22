@@ -1,0 +1,82 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:50:58.519Z",
+  "testCases": [
+    {
+      "id": "minh-UC9",
+      "domain": "Student Scheduling",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": "System notifies relevant actors about the assignment according to the notification defined in the Associated Information"
+      },
+      "inputs": {
+        "vague": "The Spirit Director assigns an approved appearance request to an available SuperFrog Student. The system then updates the request's status and adds it to the student's schedule, confirming the assignment to the director.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nSuperFrog Student\nTrigger:\nThe Spirit Director indicates to assign a SuperFrog Student to an “Approved” request.\nDescription:\nThe Spirit Director wants to assign a SuperFrog Student to an “Approved” request, so that she is sure that a SuperFrog Student will appear in this event.\nPreconditions:\nPRE-1. There exists at least one “Approved” request in the System.\nPRE-2. The Spirit Director is logged into the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The request is updated in the System with a status of “Assigned”.\nPOST-2. The request is added to the SuperFrog Student’s personal schedule.\nMain Success Scenario:\nThe Spirit Director indicates to assign a SuperFrog Student to an “Approved” request.\nThe Spirit Director views the details of this appearance request through UC-7: View an appearance request.\nThe System asks the Spirit Director to assign this appearance to a SuperFrog Student by prompting a list of available SuperFrog Students.\nThe Spirit Director assigns this appearance to a SuperFrog Student in the list and confirms that she has finished assigning.\nThe System updates the status of this request from “Approved” to “Assigned”. \nThe System adds this request to the SuperFrog Student’s personal schedule.\nThe System informs the Spirit Director that the request has been assigned to a SuperFrog Student.\nThe System notifies relevant actors about the assignment according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\n\n"
+      },
+      "groundTruth": {
+        "name": "Assign an Approved Request to a SuperFrog Student",
+        "summary": "The Spirit Director assigns an 'Approved' request to a SuperFrog Student to ensure the event has the SuperFrog Student's presence.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "There exists at least one “Approved” request in the System.",
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to assign a SuperFrog Student to an \"Approved\" request."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of the appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Prompts a list of available SuperFrog Students for assignment."
+              },
+              {
+                "index": 4,
+                "actor": "Spirit Director",
+                "description": "Assigns the appearance to a SuperFrog Student from the list and confirms the assignment."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Updates the status of this request from \"Approved\" to \"Assigned\"."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Adds this request to the SuperFrog Student's personal schedule."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Informs the Spirit Director that the request has been assigned."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Notifies relevant actors about the assignment according to the \"Notification\" defined."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

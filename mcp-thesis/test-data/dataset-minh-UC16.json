@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:53:33.105Z",
+  "testCases": [
+    {
+      "id": "minh-UC16",
+      "domain": "University/Student Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 1,
+        "notes": "Integrates with UC-15: Find SuperFrog Students"
+      },
+      "inputs": {
+        "vague": "The Spirit Director logs in and searches for SuperFrog Students. They find a student account and view its details.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\n\n\nTrigger:\nThe Spirit Director indicates to view the details of a SuperFrog Student account.\nDescription:\nThe Spirit Director wants to view the details of a SuperFrog Student account, so that she can get a better idea of this SuperFrog Student’s profile details, personal schedule, and signed-up and completed appearances.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The details of the specified SuperFrog Student account are displayed to the Spirit Director.\nMain Success Scenario:\nThe Spirit Director indicates to view the details of a SuperFrog Student account.\nThe Spirit Director finds a list of SuperFrog Student accounts through UC-15: Find SuperFrog Students.\nThe Spirit Director views the list and chooses to view the details of one specific SuperFrog Student.\nThe System retrieves and displays details of this SuperFrog Student account according to the “Details” defined in the Associated Information and the “Security/access concerns” defined in the Business Rules of this use case.\nThe Spirit Director views the details of this SuperFrog Student.\nUse case ends.\n\n"
+      },
+      "groundTruth": {
+        "name": "View SuperFrog Student Account Details",
+        "summary": "The Spirit Director views the extensive details of a SuperFrog Student account, including profile, schedule, and appearance history.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "The Spirit Director has 'admin' privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to view the details of a SuperFrog Student account."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Finds a list of SuperFrog Student accounts."
+              },
+              {
+                "index": 3,
+                "actor": "Spirit Director",
+                "description": "Chooses to view the details of one specific SuperFrog Student from the list."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Retrieves and displays details of the selected SuperFrog Student account based on defined 'Details' and 'Security/access concerns'."
+              },
+              {
+                "index": 5,
+                "actor": "Spirit Director",
+                "description": "Views the displayed SuperFrog Student details."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

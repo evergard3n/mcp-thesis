@@ -1,0 +1,150 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T04:00:07.719Z",
+  "testCases": [
+    {
+      "id": "minh-UC22",
+      "domain": "University/Event Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 5,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A SuperFrog Student logs in and selects an approved, open appearance request to sign up for. The system checks their schedule, they confirm the sign-up, and the appearance is then assigned to them.",
+        "detailed": "Primary Actor:\nSuperFrog Student\nSecondary Actors:\nSpirit Director, Customer\nTrigger:\nThe SuperFrog Student indicates to sign up for a SuperFrog appearance.\nDescription:\nThe SuperFrog Student wants to view the details of an “Approved” appearance request and sign up for this appearance. One appearance request only allows one SuperFrog Student to sign up. It is “First Come, First Served”.\nPreconditions:\nPRE-1. The SuperFrog Student is logged into the System.\nPRE-2. There exists at least one “Approved” but unassigned appearance request in the System.\nPostconditions:\nPOST-1. The “Approved” appearance request is updated in the System with a status of “Assigned”.\nPOST-2: The appearance request is added to the SuperFrog Student’s personal schedule.\nMain Success Scenario:\nThe SuperFrog Student indicates to sign up for a SuperFrog appearance.\nThe SuperFrog Student views the details of an “Approved” but unassigned appearance request through UC-7: View an appearance request.\nThe SuperFrog Student chooses to sign up for this appearance request.\nThe System validates that this sign-up has no conflict with the SuperFrog Student’s personal schedule.\nThe System asks the SuperFrog Student to confirm the sign-up.\nThe SuperFrog Student either confirms the sign-up (continues the normal flow) or chooses to view another appearance request (return to step 2).\nThe System updates the status of the appearance request from “Approved” to “Assigned”.\nThe System adds this appearance to the SuperFrog Student’s personal schedule.\nThe System notifies relevant actors about the assignment according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n4a. There exists conflict between this appearance request and the SuperFrog Student’s personal schedule:\n4a1. The System alerts the SuperFrog Student that there is a time conflict, then terminates the use case.\n4b. This request has been signed up by another SuperFrog Student or has been assigned to another SuperFrog Student by the Spirit Director:\n4b1. The System alerts SuperFrog Student that this request has been signed up by others, then terminates the use case.\n4c. This request has been canceled or rejected:\n4c1. The System informs the SuperFrog Student that this request has been canceled or rejected (See UC-25), then terminates the usecase.\n\n"
+      },
+      "groundTruth": {
+        "name": "Sign up for an Appearance Request",
+        "summary": "The SuperFrog Student views details of an approved appearance request and signs up for it, if available and without conflict.",
+        "mainActor": "SuperFrog Student",
+        "actors": [
+          "SuperFrog Student",
+          "Spirit Director",
+          "Customer",
+          "System"
+        ],
+        "preconditions": [
+          "The SuperFrog Student is logged into the System.",
+          "There exists at least one “Approved” but unassigned appearance request in the System."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Indicates to sign up for a SuperFrog appearance."
+              },
+              {
+                "index": 2,
+                "actor": "SuperFrog Student",
+                "description": "Views the details of an “Approved” but unassigned appearance request."
+              },
+              {
+                "index": 3,
+                "actor": "SuperFrog Student",
+                "description": "Chooses to sign up for this appearance request."
+              },
+              {
+                "index": 4,
+                "actor": "System",
+                "description": "Validates that this sign-up has no conflict with the SuperFrog Student’s personal schedule."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Asks the SuperFrog Student to confirm the sign-up."
+              },
+              {
+                "index": 6,
+                "actor": "SuperFrog Student",
+                "description": "Confirms the sign-up."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Updates the status of the appearance request from “Approved” to “Assigned”."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Adds this appearance to the SuperFrog Student’s personal schedule."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "description": "Notifies relevant actors about the assignment."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "SuperFrog Student",
+                "description": "Chooses to view another appearance request."
+              }
+            ]
+          },
+          {
+            "id": "EXT_11a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the SuperFrog Student that there is a time conflict."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the SuperFrog Student that this request has been signed up by others."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Informs the SuperFrog Student that this request has been canceled or rejected."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

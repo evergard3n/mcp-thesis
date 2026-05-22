@@ -1,0 +1,134 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:47:03.653Z",
+  "testCases": [
+    {
+      "id": "minh-UC2",
+      "domain": "Student Engagement",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 4,
+        "notes": ""
+      },
+      "inputs": {
+        "vague": "A customer decides to withdraw a previously submitted SuperFrog appearance request that is currently Pending, Approved, or Assigned. She looks up the request using its unique identifier, reviews its details, and reads through the cancellation policy before confirming. The system then marks the request as canceled by the customer, triggers a refund through the Payment System if applicable, and notifies the Spirit Director and any assigned SuperFrog Student.",
+        "detailed": "Primary Actor:\nCustomer\nSecondary Actors:\nPayment System, Spirit Director, SuperFrog Student\nTrigger:\nThe Customer indicates to cancel a submitted SuperFrog appearance request.\nDescription:\nThe Customer wants to cancel a request so that she can inform the TCU Spirit Team that she no longer wants a SuperFrog appearance.\nPreconditions:\nPRE-1. A request of the Customer has been submitted to the System and is in either “Pending” or “Approved” or “Assigned” status.\nPostconditions:\nPOST-1. The request is updated in the System with a status of “Canceled by the customer”.\nMain Success Scenario:\nThe Customer indicates to cancel a submitted SuperFrog appearance request. The Customer provides the unique identifier of the request to the System.\nThe System retrieves the specified request and displays it to the Customer.\nThe Customer views the details of the request and chooses to cancel the request.\nThe System displays the cancellation policy and asks the Customer to confirm the cancellation. (See BR-13)\nThe Customer reads and agrees with the cancellation policy.\nThe Customer confirms the cancellation.\nThe System marks the request as “Canceled by the customer”.\nThe System has the Payment System process refund.\nThe System notifies relevant actors about the cancellation according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n7a. Canceling an approved request which has already been signed up by a SuperFrog Student:\n7a1. The System marks the request as “Canceled by the customer”.\n7a2. The System cancels the SuperFrog sign-up related to this request and returns to step 8 of the normal flow.\n8a. The Customer has not made a payment yet:\n8a1. Returns to step 9 of the normal flow.\n8b. The cancellation is within 24 hours of the event date and time:\n8b1. Returns to step 9 of the normal flow.\n\n"
+      },
+      "groundTruth": {
+        "name": "Cancel SuperFrog Appearance Request",
+        "summary": "Customer cancels a submitted SuperFrog appearance request.",
+        "mainActor": "Customer",
+        "actors": [
+          "Customer",
+          "System",
+          "Payment System",
+          "Spirit Director",
+          "SuperFrog Student"
+        ],
+        "preconditions": [
+          "A request of the Customer has been submitted to the System and is in either “Pending” or “Approved” or “Assigned” status."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Customer",
+                "description": "Indicates to cancel a submitted SuperFrog appearance request."
+              },
+              {
+                "index": 2,
+                "actor": "Customer",
+                "description": "Provides the unique identifier of the request to the System."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Retrieves the specified request and displays it to the Customer."
+              },
+              {
+                "index": 4,
+                "actor": "Customer",
+                "description": "Views the details of the request and chooses to cancel the request."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Displays the cancellation policy and asks the Customer to confirm the cancellation."
+              },
+              {
+                "index": 6,
+                "actor": "Customer",
+                "description": "Reads and agrees with the cancellation policy."
+              },
+              {
+                "index": 7,
+                "actor": "Customer",
+                "description": "Confirms the cancellation."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Marks the request as “Canceled by the customer”."
+              },
+              {
+                "index": 9,
+                "actor": "System",
+                "target": "Payment System",
+                "description": "Has the Payment System process refund."
+              },
+              {
+                "index": 10,
+                "actor": "System",
+                "description": "Notifies relevant actors about the cancellation."
+              }
+            ]
+          },
+          {
+            "id": "ALT_11a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Marks the request as “Canceled by the customer”."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Cancels the SuperFrog sign-up related to this request."
+              }
+            ]
+          },
+          {
+            "id": "EXT_12a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "The customer has not made a payment yet."
+              }
+            ]
+          },
+          {
+            "id": "EXT_13a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "The cancellation is within 24 hours of the event date and time."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

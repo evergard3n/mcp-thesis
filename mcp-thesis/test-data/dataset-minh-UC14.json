@@ -1,0 +1,111 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:52:56.359Z",
+  "testCases": [
+    {
+      "id": "minh-UC14",
+      "domain": "Student Account Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Validation for deactivation"
+      },
+      "inputs": {
+        "vague": "The Spirit Director selects a SuperFrog Student account to deactivate, provides a reason, and confirms the action. The system then deactivates the account and informs the Spirit Director.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\n\n\nTrigger:\nThe Spirit Director indicates to deactivate the account of a SuperFrog Student.\nDescription:\nWhen a SuperFrog Student retires, the Spirit Director wants to deactivate the account of this SuperFrog Student, so that this student no longer has access to the System.\nPreconditions:\nPRE-1. The Spirit Director is logged into the System.\nPRE-2. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The account of a SuperFrog Student is deactivated.\nMain Success Scenario:\nThe Spirit Director indicates to deactivate the account of a SuperFrog Student.\nThe Spirit Director views the details of this SuperFrog Student through UC-16: View a SuperFrog Student account and chooses to deactivate this account.\nThe System asks the Spirit Director to enter a reason and confirm.\nThe Spirit Director enters the reason and confirms the deactivation.\nThe System validates this deactivation.\nThe System deactivates this account and informs the Spirit Director that this account has been deactivated.\nThe System notifies relevant actors about the deactivation of an account according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n5a. This SuperFrog Student still has incomplete assigned appearances:\n5a1. The System alerts the Spirit Director that this SuperFrog Student has an active assigned appearance. Deactivation cannot be done at this moment.\n5a2. Use case terminates.\n5b. This SuperFrog Student has completed appearance requests, which have not been submitted to the TCU Payroll Services:\n5b1. The System alerts the Spirit Director that she needs to generate TCU Honorarium (Payment for services) Requests for this SuperFrog Student before deactivating her account.\n5b2. Use case terminates.\n\n"
+      },
+      "groundTruth": {
+        "name": "Deactivate SuperFrog Student Account",
+        "summary": "The Spirit Director deactivates a SuperFrog Student's account when the student retires, removing system access.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "System"
+        ],
+        "preconditions": [
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to deactivate the account of a SuperFrog Student."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of the SuperFrog Student through UC-16: View a SuperFrog Student account and chooses to deactivate this account."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Asks the Spirit Director to enter a reason and confirm."
+              },
+              {
+                "index": 4,
+                "actor": "Spirit Director",
+                "description": "Enters the reason and confirms the deactivation."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Validates this deactivation."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Deactivates this account and informs the Spirit Director that this account has been deactivated."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Notifies relevant actors about the deactivation of an account."
+              }
+            ]
+          },
+          {
+            "id": "EXT_8a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "condition": "This SuperFrog Student still has incomplete assigned appearances",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that this SuperFrog Student has an active assigned appearance. Deactivation cannot be done at this moment."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          },
+          {
+            "id": "EXT_9a",
+            "kind": "EXCEPTION",
+            "parentFlow": "MAIN",
+            "condition": "This SuperFrog Student has completed appearance requests, which have not been submitted to the TCU Payroll Services",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that she needs to generate TCU Honorarium (Payment for services) Requests for this SuperFrog Student before deactivating her account."
+              },
+              {
+                "index": 2,
+                "actor": "System",
+                "description": "Terminates the use case."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

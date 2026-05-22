@@ -1,0 +1,107 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-04-09T03:51:43.903Z",
+  "testCases": [
+    {
+      "id": "minh-UC11",
+      "domain": "Student Management",
+      "metadata": {
+        "complexity": "simple",
+        "expectedFlows": 3,
+        "notes": "Asynchronous notification of relevant actors."
+      },
+      "inputs": {
+        "vague": "The Spirit Director initiates cancellation of a SuperFrog Student's sign-up for an assigned request. The system confirms the cancellation, removes the request from the student's schedule, and updates the request status appropriately.",
+        "detailed": "Primary Actor:\nSpirit Director\nSecondary Actors:\nSuperFrog Student\nTrigger:\nThe Spirit Director indicates to cancel a SuperFrog Student sign-up of an “Assigned” request.\nDescription:\nThe Spirit Director wants to remove the currently assigned SuperFrog Student from an “Assigned” request, so that other SuperFrog Students can choose to sign up for this request.\nPreconditions:\nPRE-1. There exists at least one “Assigned” request in the System.\nPRE-2. The Spirit Director is logged into the System.\nPRE-3. The User has the “admin” privilege.\nPostconditions:\nPOST-1. The request is updated in the System with a status of “Approved”.\nPOST-2. The request is removed from the originally assigned SuperFrog Student’s personal schedule.\nMain Success Scenario:\nThe Spirit Director indicates to cancel a SuperFrog Student sign-up of an “Assigned” request.\nThe Spirit Director views the details of this appearance request through UC-7: View an appearance request and chooses to cancel the current SuperFrog Student’s sign-up.\nThe System validates that this sign-up cancellation is allowed and asks the Spirit Director to confirm the cancellation.\nThe Spirit Director confirms the cancellation.\nThe System removes this request from the originally assigned SuperFrog Student’s personal schedule.\nThe System updates the status of this request from “Assigned” to “Approved”.\nThe System informs the Spirit Director that the cancellation has been completed.\nThe System notifies relevant actors about the cancellation according to the “Notification” defined in the Associated Information of this use case.\nUse case ends.\nExtensions:\n3a. There are no other SuperFrog Students available for this request:\n3a1. The System alerts the Spirit Director that there are no other available SuperFrog Students besides the currently assigned SuperFrog student that can sign up to this request. Canceling the current sign-up will not allow other SuperFrog Students to sign up.\n3a2. Use case terminates.\n3b. The appearance event is less than 2 days from the current time (See BR-12):\n3b1. The System alerts the Spirit Director that it is too late to cancel an appearance sign-up. Instead, she needs to choose to assign it to a different SuperFrog Student through UC-10: Change SuperFrog Student sign-up of an assigned request.\n3b2. Use case terminates.\n\n"
+      },
+      "groundTruth": {
+        "name": "Cancel SuperFrog Student Sign-Up",
+        "summary": "The Spirit Director cancels a SuperFrog Student's sign-up for an assigned request, making it available for other students.",
+        "mainActor": "Spirit Director",
+        "actors": [
+          "Spirit Director",
+          "SuperFrog Student",
+          "System"
+        ],
+        "preconditions": [
+          "There exists at least one “Assigned” request in the System.",
+          "The Spirit Director is logged into the System.",
+          "The User has the “admin” privilege."
+        ],
+        "flows": [
+          {
+            "id": "MAIN",
+            "kind": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "Spirit Director",
+                "description": "Indicates to cancel a SuperFrog Student sign-up of an “Assigned” request."
+              },
+              {
+                "index": 2,
+                "actor": "Spirit Director",
+                "description": "Views the details of this appearance request and chooses to cancel the current SuperFrog Student’s sign-up."
+              },
+              {
+                "index": 3,
+                "actor": "System",
+                "description": "Validates that this sign-up cancellation is allowed and asks the Spirit Director to confirm the cancellation."
+              },
+              {
+                "index": 4,
+                "actor": "Spirit Director",
+                "description": "Confirms the cancellation."
+              },
+              {
+                "index": 5,
+                "actor": "System",
+                "description": "Removes this request from the originally assigned SuperFrog Student’s personal schedule."
+              },
+              {
+                "index": 6,
+                "actor": "System",
+                "description": "Updates the status of this request from “Assigned” to “Approved”."
+              },
+              {
+                "index": 7,
+                "actor": "System",
+                "description": "Informs the Spirit Director that the cancellation has been completed."
+              },
+              {
+                "index": 8,
+                "actor": "System",
+                "description": "Notifies relevant actors about the cancellation."
+              }
+            ]
+          },
+          {
+            "id": "ALT_9a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that there are no other available SuperFrog Students besides the currently assigned SuperFrog student that can sign up to this request. Canceling the current sign-up will not allow other SuperFrog Students to sign up."
+              }
+            ]
+          },
+          {
+            "id": "ALT_10a",
+            "kind": "ALTERNATIVE",
+            "parentFlow": "MAIN",
+            "condition": "The appearance event is less than 2 days from the current time.",
+            "steps": [
+              {
+                "index": 1,
+                "actor": "System",
+                "description": "Alerts the Spirit Director that it is too late to cancel an appearance sign-up and instructs them to assign it to a different SuperFrog Student."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
