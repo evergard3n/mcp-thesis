@@ -1,4 +1,4 @@
-# HITL Use Case Elaboration System
+# HIRE - Human-in-the-loop Requirements Elicitation
 
 A REST API backend implementing a **Human-in-the-Loop (HITL)** orchestration pipeline for use case elaboration. Given a vague use case description, the system iteratively detects gaps, generates targeted questions, collects expert answers, and produces a fully elaborated use case with complete exception and alternative flows.
 
