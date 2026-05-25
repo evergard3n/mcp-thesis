@@ -37,8 +37,8 @@ function getTopologicalLevel(
  */
 export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
   const normalized = JSON.parse(JSON.stringify(useCase)) as GenUseCase;
-  const flows = normalized.flows;
-  const mainStepCount = flows.find((f) => f.kind === "MAIN")?.steps.length ?? 0;
+  const flows = new Set(normalized.flows);
+  const mainStepCount = [...flows].find((f) => f.kind === "MAIN")?.steps.length ?? 0;
 
   // Maps old LLM-generated IDs → new canonical IDs (seeded with MAIN → MAIN).
   const renames = new Map<string, string>([["MAIN", "MAIN"]]);
@@ -52,7 +52,7 @@ export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
   const sorted = [...flows].sort((a, b) => {
     if (a.kind === "MAIN") return -1;
     if (b.kind === "MAIN") return 1;
-    return getTopologicalLevel(a.id, flows) - getTopologicalLevel(b.id, flows);
+    return getTopologicalLevel(a.id, [...flows]) - getTopologicalLevel(b.id, [...flows]);
   });
 
   for (const flow of sorted) {
@@ -62,17 +62,26 @@ export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
     const newParentId = renames.get(flow.parentFlow || "MAIN") ?? "MAIN";
     flow.parentFlow = newParentId;
 
-    // Resolve step index: use explicit value or allocate a fallback slot.
+    // Resolve step index: use explicit value, then try to parse from the LLM-generated
+    // ID (e.g. "EXT_4a" → 4, "ALT_2b" → 2, "EXT_1a.2a" → 2), then fall back to slot.
     let stepIndex: number;
     if (typeof flow.fromStepIndex === "number") {
       stepIndex = flow.fromStepIndex;
     } else {
-      const fallbackStart =
-        newParentId === "MAIN"
-          ? mainStepCount + 1
-          : (flows.find((f) => f.id === newParentId)?.steps.length ?? 0) + 1;
-      stepIndex = nextFallbackSlot.get(newParentId) ?? fallbackStart;
-      nextFallbackSlot.set(newParentId, stepIndex + 1);
+      // Try to extract step index from the original LLM-generated flow ID.
+      // Handles patterns like: EXT_4a, ALT_2b, EXT_1a.2a (last segment)
+      const idMatch = flow.id.match(/(\d+)[a-z]?$/);
+      const parsedFromId = idMatch ? parseInt(idMatch[1], 10) : NaN;
+      if (!isNaN(parsedFromId)) {
+        stepIndex = parsedFromId;
+      } else {
+        const fallbackStart =
+          newParentId === "MAIN"
+            ? mainStepCount + 1
+            : ([...flows].find((f) => f.id === newParentId)?.steps.length ?? 0) + 1;
+        stepIndex = nextFallbackSlot.get(newParentId) ?? fallbackStart;
+        nextFallbackSlot.set(newParentId, stepIndex + 1);
+      }
     }
     flow.fromStepIndex = stepIndex;
 
@@ -144,6 +153,7 @@ export async function generateFlatUseCase({
     prompt,
     schema: genUseCaseSchema,
   });
+  console.log("[LLM Output] Generated use case:", JSON.stringify(raw, null, 2));
   return normalizeFlowIds(raw);
 }
 

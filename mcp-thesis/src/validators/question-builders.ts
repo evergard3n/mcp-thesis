@@ -77,7 +77,7 @@ interface ConsolidatedGapGroup {
 export async function isQuestionDuplicate(
   newQuestion: string,
   previousQuestions: string[],
-  threshold: number = 0.85,
+  threshold: number = 0.70,
 ): Promise<boolean> {
   if (previousQuestions.length === 0) return false;
 

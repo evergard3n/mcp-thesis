@@ -417,12 +417,18 @@ export async function runHITLLoop(
     const isStalled = recentIterations.length >= 2 && consecutiveStalls >= 2;
     const shouldStopByConfidence =
       uncertaintyAnalysis.overallConfidence > 0.85 &&
-      uncertaintyAnalysis.highPriorityCount === 0;
+      uncertaintyAnalysis.highPriorityCount === 0 &&
+      iterationIndex >= 2; // F5: allow at least 2 iterations regardless of confidence (bootstrapping + initial low-confidence phases)
     const shouldStopByStall =
       isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
     const hasMinimumFlows = currentUseCase.flows.length >= 3;
 
+    console.log("[STOPPING CHECK]",shouldStopByConfidence, shouldStopByStall, uncertaintyAnalysis.overallConfidence, uncertaintyAnalysis.highPriorityCount, iterationIndex, consecutiveStalls);
+
     if ((shouldStopByConfidence && hasMinimumFlows) || shouldStopByStall) {
+      console.log(`[Stopping] Stopping loop at iteration ${iterationIndex + 1} due to ${
+        shouldStopByConfidence ? "high confidence" : "stalls"
+      }.`);
       callbacks?.onIterationComplete?.(
         {
           updatedUseCase: currentUseCase,
@@ -544,6 +550,15 @@ export async function runHITLLoop(
       }
     }
 
+    updatedUseCase = await refineWithHybridAnswers(
+        loopInput.vague,
+        updatedUseCase,
+        answers,
+        geminiFunctions,
+    );
+
+    updatedUseCase = normalizeFlowIds(updatedUseCase);
+
     currentUseCase = updatedUseCase;
     const flowCountAfter = currentUseCase.flows.length;
     const newFlowsAdded = flowCountAfter - flowCountBefore;
@@ -591,19 +606,19 @@ export async function runHITLLoop(
     );
   }
 
-  callbacks?.onPhaseChange?.(
-    "CONSOLIDATING",
-    "Consolidating redundant flows",
-    iterations.length,
-  );
-  const flowCountBeforeConsolidate = currentUseCase.flows.length;
-  currentUseCase = await consolidateFlows(currentUseCase, geminiFunctions);
-  const removed = flowCountBeforeConsolidate - currentUseCase.flows.length;
-  if (removed > 0) {
-    console.log(
-      `[Consolidation] Removed ${removed} redundant flow(s). Flows: ${flowCountBeforeConsolidate} → ${currentUseCase.flows.length}`,
-    );
-  }
+  // callbacks?.onPhaseChange?.(
+  //   "CONSOLIDATING",
+  //   "Consolidating redundant flows",
+  //   iterations.length,
+  // );
+  // const flowCountBeforeConsolidate = currentUseCase.flows.length;
+  // currentUseCase = await consolidateFlows(currentUseCase, geminiFunctions);
+  // const removed = flowCountBeforeConsolidate - currentUseCase.flows.length;
+  // if (removed > 0) {
+  //   console.log(
+  //     `[Consolidation] Removed ${removed} redundant flow(s). Flows: ${flowCountBeforeConsolidate} → ${currentUseCase.flows.length}`,
+  //   );
+  // }
 
   return {
     useCase: currentUseCase,

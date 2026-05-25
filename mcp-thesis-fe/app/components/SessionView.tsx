@@ -8,6 +8,8 @@ import { StartForm } from "~/components/StartForm";
 import { QuestionForm } from "~/components/QuestionForm";
 import { UseCaseDisplay } from "~/components/UseCaseDisplay";
 import { Spinner } from "~/components/Spinner";
+import { useNavigate } from "react-router";
+import { Button } from "./ui/button";
 
 interface SessionViewProps {
   sessionId: string;
@@ -39,6 +41,8 @@ export function SessionView({
 
   const hasAutoStarted = useRef(false);
 
+  const navigate = useNavigate();
+
   const isIdle = state === null || state.status === "IDLE";
   const sessionIsIdle = state !== null && state.status === "IDLE";
   const isRunning = state !== null && RUNNING_STATUSES.includes(state.status);
@@ -47,6 +51,11 @@ export function SessionView({
 
   // Show split layout once the loop is active (not idle)
   const isActive = state !== null && state.status !== "IDLE";
+
+  function onCancel() {
+    cancel();
+    navigate("/");
+  }
 
   // Auto-start when navigated from home with an initial vague description
   useEffect(() => {
@@ -95,15 +104,23 @@ export function SessionView({
         </div>
         <div className="flex items-center gap-3">
           <ConnectionBadge status={connectionStatus} />
-          {isRunning && (
+          {(isRunning || isError) && (
             <button
-              onClick={cancel}
+              onClick={onCancel}
               disabled={isCancelling}
               className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-50"
             >
               {isCancelling ? "Cancelling…" : "Cancel"}
             </button>
           )}
+          {
+            isDone && (
+              <Button variant="outline" size="sm" onClick={() => navigate("/")}>
+                Return to Home
+              </Button>
+            )
+          }
+          {state?.status}
         </div>
       </div>
 

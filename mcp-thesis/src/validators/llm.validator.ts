@@ -314,8 +314,10 @@ export async function generateAdaptiveQuestions(
   }
   askedInThisBatch = gapAsked;
 
-  // Phase 2 & 3 are skipped when blueprintOnly=true
-  if (blueprintOnly) return allQuestions;
+  // Phase 2 & 3 are skipped when blueprintOnly=true AND we already have questions.
+  // If blueprintOnly produced 0 questions (no blueprint gaps found), fall through
+  // to Phase 2 & 3 so the loop doesn't terminate with no questions at all.
+  if (blueprintOnly && allQuestions.length > 0) return allQuestions;
 
   // Phase 2: Missing flow conditions (requires useCase for context-rich question framing)
   if (!useCase) return allQuestions;
