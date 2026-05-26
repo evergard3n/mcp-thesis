@@ -37,8 +37,8 @@ import {
   generateAdaptiveQuestions,
   probeBlueprintsWithExpert,
   type OpenEndedAnswer,
-  type OpenEndedQuestion,
 } from "../validators/llm.validator.js";
+import { OpenEndedQuestion } from "../validators/question-builders.js";
 
 // ---------------------------------------------------------------------------
 // Answer classification + flow dedup helpers
@@ -423,12 +423,22 @@ export async function runHITLLoop(
       isStalled && uncertaintyAnalysis.overallConfidence > 0.6;
     const hasMinimumFlows = currentUseCase.flows.length >= 3;
 
-    console.log("[STOPPING CHECK]",shouldStopByConfidence, shouldStopByStall, uncertaintyAnalysis.overallConfidence, uncertaintyAnalysis.highPriorityCount, iterationIndex, consecutiveStalls);
+    console.log(
+      "[STOPPING CHECK]",
+      shouldStopByConfidence,
+      shouldStopByStall,
+      uncertaintyAnalysis.overallConfidence,
+      uncertaintyAnalysis.highPriorityCount,
+      iterationIndex,
+      consecutiveStalls,
+    );
 
     if ((shouldStopByConfidence && hasMinimumFlows) || shouldStopByStall) {
-      console.log(`[Stopping] Stopping loop at iteration ${iterationIndex + 1} due to ${
-        shouldStopByConfidence ? "high confidence" : "stalls"
-      }.`);
+      console.log(
+        `[Stopping] Stopping loop at iteration ${iterationIndex + 1} due to ${
+          shouldStopByConfidence ? "high confidence" : "stalls"
+        }.`,
+      );
       callbacks?.onIterationComplete?.(
         {
           updatedUseCase: currentUseCase,
@@ -487,6 +497,17 @@ export async function runHITLLoop(
 
     // --- answer + refine ---
     const answers = await answerProvider(questions, iterationIndex);
+    const qaTuple = [];
+    for (const answer of answers) {
+      for (const question of questions) {
+        if (question.id === answer.questionId) {
+          qaTuple.push({
+            ...answer,
+            question: question.question,
+          });
+        }
+      }
+    }
     const memories = await buildInteractionMemories(
       questions,
       answers,
@@ -550,16 +571,16 @@ export async function runHITLLoop(
       }
     }
 
-    updatedUseCase = await refineWithHybridAnswers(
-        loopInput.vague,
-        updatedUseCase,
-        answers,
-        geminiFunctions,
+    // temporary fix to prevent misbehavior
+    currentUseCase = await refineWithHybridAnswers(
+      loopInput.vague,
+      currentUseCase,
+      qaTuple,
+      geminiFunctions,
     );
 
-    updatedUseCase = normalizeFlowIds(updatedUseCase);
+    currentUseCase = normalizeFlowIds(currentUseCase);
 
-    currentUseCase = updatedUseCase;
     const flowCountAfter = currentUseCase.flows.length;
     const newFlowsAdded = flowCountAfter - flowCountBefore;
 

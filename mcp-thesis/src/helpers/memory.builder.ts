@@ -1,10 +1,11 @@
 import semanticService from "../services/semantic.service.js";
-import { type InteractionMemory, type GapType } from "../analyzers/gap.analyzer.js";
 import {
-  type OpenEndedQuestion,
-  type OpenEndedAnswer,
-} from "../validators/llm.validator.js";
+  type InteractionMemory,
+  type GapType,
+} from "../analyzers/gap.analyzer.js";
+import { type OpenEndedAnswer } from "../validators/llm.validator.js";
 import { parseConsolidatedId } from "./consolidated-id.js";
+import { OpenEndedQuestion } from "../validators/question-builders.js";
 
 export async function buildInteractionMemories(
   questions: OpenEndedQuestion[],
@@ -38,11 +39,11 @@ export async function buildInteractionMemories(
       iteration: iterationNumber,
       answerConfidence: a.confidence as "low" | "medium" | "high" | undefined,
       metadata: {
-        // check if single step, then parse and add 
+        // check if single step, then parse and add
         stepIndex: q.id.match(/step-(\d+)/)
           ? parseInt(q.id.match(/step-(\d+)/)![1], 10)
           : undefined,
-          // check if consolidated questions, add all consolidated steps' ids
+        // check if consolidated questions, add all consolidated steps' ids
         stepIndexes: consolidatedSteps,
         gapType: q.context.patternType as GapType,
         consolidatedGroupId,

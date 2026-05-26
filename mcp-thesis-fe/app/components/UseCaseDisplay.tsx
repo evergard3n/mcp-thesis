@@ -7,7 +7,7 @@ interface UseCaseDisplayProps {
 
 export function UseCaseDisplay({ useCase, badge = "Refined Use Case" }: UseCaseDisplayProps) {
   const mainFlow = useCase.flows.find((f) => f.id === "MAIN");
-  const otherFlows = useCase.flows.filter((f) => f.id !== "MAIN");
+  const otherFlows = useCase.flows.filter((f) => f.id !== "MAIN").sort((a, b) => a.id.localeCompare(b.id));
 
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6">

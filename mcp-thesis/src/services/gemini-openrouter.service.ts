@@ -48,9 +48,11 @@ class GeminiOpenRouterFunctions {
   async generateStructured<T extends z.ZodType>({
     prompt,
     schema,
+    _retryCount = 0,
   }: {
     prompt: string;
     schema: T;
+    _retryCount?: number;
   }): Promise<z.infer<T>> {
     const jsonSchema = zodToJsonSchema(schema);
 
@@ -124,7 +126,10 @@ class GeminiOpenRouterFunctions {
         "JSON parse error. Content received:",
         cleanedText.substring(0, 500),
       );
-      throw parseError;
+      if (_retryCount >= 2) {
+        throw new Error(`Failed to parse structured response after ${_retryCount + 1} attempts`);
+      }
+      return this.generateStructured({ prompt, schema, _retryCount: _retryCount + 1 });
     }
   }
 }

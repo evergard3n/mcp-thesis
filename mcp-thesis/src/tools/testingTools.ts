@@ -6,13 +6,10 @@ import { GenFlow } from "../interfaces/usecase.interface.new.js";
 import { genUseCaseSchema } from "../schemas/genusecase.schema.js";
 import { GeminiOpenRouterFunctions } from "../services/gemini-openrouter.service.js";
 import semanticService from "../services/semantic.service.js";
-import {
-  generateFlatUseCase,
-} from "../services/usecase.service.js";
-import {
-  expertAnswerOpenEndedQuestions,
-} from "../validators/llm.validator.js";
+import { generateFlatUseCase } from "../services/usecase.service.js";
 import { runHITLLoop, type AnswerProvider } from "../orchestrator/hitl.core.js";
+import { OpenEndedAnswer } from "../validators/llm.validator.js";
+import { OpenEndedQuestion } from "../validators/question-builders.js";
 
 interface EmbeddedFlow extends GenFlow {
   embedding?: number[];
@@ -82,8 +79,128 @@ const metadataExtractionSchema = z.object({
     .describe(
       "Optional notes about the use case (e.g., key characteristics, special patterns)",
     ),
-  detailedInput: z.string().describe("The detailed description of the use case, representing the domain knowledge needed to create this use case, but not the text-based ground truth use case itself"),
+  detailedInput: z
+    .string()
+    .describe(
+      "The detailed description of the use case, representing the domain knowledge needed to create this use case, but not the text-based ground truth use case itself",
+    ),
 });
+
+// ---------------------------------------------------------------------------
+// Prompt builder functions
+// ---------------------------------------------------------------------------
+
+function buildExpertAnswerOpenEndedQuestionsPrompt(
+  questions: OpenEndedQuestion[],
+  detailedDescription: string,
+  domain: string,
+): string {
+  return `
+<role>
+You are a Senior Business Analyst with expertise in ${domain}.
+You have complete knowledge about this use case from the detailed description.
+</role>
+
+<detailedDescription>
+${detailedDescription}
+</detailedDescription>
+
+<questions>
+${questions
+  .map(
+    (q, i) => `
+Question ${i + 1} (ID: ${q.id}):
+${q.question}
+
+Context: ${q.context.whyAsking}
+${q.context.step ? `Related to: ${q.context.step}` : ""}
+
+How to answer: ${q.answerGuidance}
+`,
+  )
+  .join("\n---\n")}
+</questions>
+
+<instructions>
+For each question:
+1. If the detailed description explicitly mentions this scenario, describe it completely
+2. If not explicitly mentioned, use domain expertise to provide a reasonable answer
+3. Structure your answer according to the guidance provided
+4. For exception/alternative flows, describe:
+   - What triggers this flow
+   - What steps the actors take
+   - How it ends (resumes, terminates, etc.)
+5. If a question lists multiple steps, explicitly address EACH step separately.
+   Do NOT answer with "same for all steps" unless you have checked each one and
+   can confirm there are truly no differences. If you claim no differences, state
+   that you verified each step explicitly.
+6. Set confidence level:
+   - "high" if answer is in detailed description
+   - "medium" if inferred from domain knowledge
+   - "low" if making reasonable assumption
+
+Keep answers concise but complete (2-4 sentences for each flow).
+</instructions>
+  `;
+}
+
+/**
+ * Simulates an expert answering open-ended questions using detailed knowledge.
+ * Used for testing the framework with ground truth data.
+ *
+ * @param questions - The open-ended questions to answer
+ * @param detailedDescription - The detailed description with full knowledge
+ * @param domain - The domain context
+ * @param geminiFunctions - Gemini functions for LLM calls
+ * @returns Array of answers with confidence levels
+ */
+export async function expertAnswerOpenEndedQuestions(
+  questions: OpenEndedQuestion[],
+  detailedDescription: string,
+  domain: string,
+  geminiFunctions: GeminiOpenRouterFunctions,
+): Promise<OpenEndedAnswer[]> {
+  const answerSchema = z.array(
+    z.object({
+      questionId: z.string(),
+      answer: z.string(),
+      confidence: z.string(),
+    }),
+  );
+
+  const prompt = buildExpertAnswerOpenEndedQuestionsPrompt(
+    questions,
+    detailedDescription,
+    domain,
+  );
+
+  const answers = await geminiFunctions.generateStructured({
+    prompt,
+    schema: answerSchema,
+  });
+
+  // Trust the LLM's confidence assessment from the structured prompt.
+  // The prompt already defines clear criteria:
+  //   high   = answer found in the detailed description
+  //   medium = inferred from domain knowledge
+  //   low    = making a reasonable assumption
+  //
+  // Previous approach: a regex flagged any answer containing words like
+  // "may", "could", "not explicitly" as low — but these words appear
+  // naturally even in answers that directly cite the source material
+  // (e.g. "This scenario is covered by Extension 2a, which may trigger
+  // when..."). This killed 72% of valid answers.
+  //
+  // Only override: if the LLM returned an empty/trivial confidence value,
+  // default to "medium" so downstream consumers always have a signal.
+  return answers.map((answer) => {
+    const conf = (answer.confidence || "").trim().toLowerCase();
+    if (!conf || !["high", "medium", "low"].includes(conf)) {
+      return { ...answer, confidence: "medium" };
+    }
+    return answer;
+  });
+}
 
 export async function prepareTestData(
   geminiFunctions: GeminiOpenRouterFunctions,
@@ -409,7 +526,9 @@ export async function runHITLBatch(
     );
 
     batchResults.push(...chunkResults);
-    console.log(`--- ${Math.min(offset + concurrency, total)}/${total} done ---`);
+    console.log(
+      `--- ${Math.min(offset + concurrency, total)}/${total} done ---`,
+    );
   }
 
   await mkdir("test-data/results/raw", { recursive: true });

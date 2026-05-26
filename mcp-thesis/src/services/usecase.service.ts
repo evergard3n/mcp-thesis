@@ -27,6 +27,19 @@ function getTopologicalLevel(
   return 1 + getTopologicalLevel(flow.parentFlow, flows, visited);
 }
 
+function deduplicateGeminiFlows(flows: GenFlow[]): GenFlow[] {
+  const seen = new Set<string>();
+  return flows.filter((flow) => {
+    const stepsKey = flow.steps
+      .map((s) => `${s.actor}::${s.description}`)
+      .join("|");
+    const fingerprint = `${flow.kind}|${flow.parentFlow ?? ""}|${flow.condition ?? ""}|${stepsKey}`;
+    if (seen.has(fingerprint)) return false;
+    seen.add(fingerprint);
+    return true;
+  });
+}
+
 /**
  * Rewrites every non-MAIN flow ID to match the canonical convention
  * (EXT_3a, ALT_2b, EXT_1a.2a, …) after an LLM call may have produced
@@ -37,8 +50,11 @@ function getTopologicalLevel(
  */
 export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
   const normalized = JSON.parse(JSON.stringify(useCase)) as GenUseCase;
+  normalized.flows = deduplicateGeminiFlows(normalized.flows);
   const flows = new Set(normalized.flows);
-  const mainStepCount = [...flows].find((f) => f.kind === "MAIN")?.steps.length ?? 0;
+  console.log("flows", flows);
+  const mainStepCount =
+    [...flows].find((f) => f.kind === "MAIN")?.steps.length ?? 0;
 
   // Maps old LLM-generated IDs → new canonical IDs (seeded with MAIN → MAIN).
   const renames = new Map<string, string>([["MAIN", "MAIN"]]);
@@ -52,7 +68,10 @@ export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
   const sorted = [...flows].sort((a, b) => {
     if (a.kind === "MAIN") return -1;
     if (b.kind === "MAIN") return 1;
-    return getTopologicalLevel(a.id, [...flows]) - getTopologicalLevel(b.id, [...flows]);
+    return (
+      getTopologicalLevel(a.id, [...flows]) -
+      getTopologicalLevel(b.id, [...flows])
+    );
   });
 
   for (const flow of sorted) {
@@ -78,7 +97,8 @@ export function normalizeFlowIds(useCase: GenUseCase): GenUseCase {
         const fallbackStart =
           newParentId === "MAIN"
             ? mainStepCount + 1
-            : ([...flows].find((f) => f.id === newParentId)?.steps.length ?? 0) + 1;
+            : ([...flows].find((f) => f.id === newParentId)?.steps.length ??
+                0) + 1;
         stepIndex = nextFallbackSlot.get(newParentId) ?? fallbackStart;
         nextFallbackSlot.set(newParentId, stepIndex + 1);
       }
@@ -276,13 +296,14 @@ export async function refineWithHybridAnswers(
     questionId: string;
     answer: string;
     confidence?: string;
+    question?: string;
   }>,
   geminiFunctions: GeminiOpenRouterFunctions,
 ): Promise<GenUseCase> {
   const qaContext = openEndedAnswers
     .map(
       (a) =>
-        `Answer [${a.questionId}] (confidence: ${a.confidence ?? "high"}):\n${a.answer}`,
+        `Question: ${a.question}\nAnswer: ${a.answer} (confidence: ${a.confidence ?? "high"})`,
     )
     .join("\n\n");
 

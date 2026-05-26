@@ -1,7 +1,7 @@
 import { GapAnalysis, InteractionMemory } from "../analyzers/gap.analyzer.js";
 import { UncertaintyAnalysis } from "../analyzers/uncertainty.ranker.js";
 import { GenUseCase } from "../interfaces/usecase.interface.new.js";
-import { OpenEndedQuestion } from "../validators/llm.validator.js";
+import { type OpenEndedQuestion } from "../validators/question-builders.js";
 
 export type HITLStatus =
   | "IDLE"

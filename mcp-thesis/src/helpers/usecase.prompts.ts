@@ -53,7 +53,7 @@ GenFlow:
   "fromStepIndex"?: number,
 
   // For MAIN, condition is usually omitted or null.
-  // For ALTERNATIVE/EXCEPTION, condition is the branching condition in natural language,
+  // For ALTERNATIVE/EXCEPTION, condition is the branching condition in natural language, you MUST include the condition of each alternative/exception flow.
   // e.g. "If payment is declined".
   "condition"?: string,
 
@@ -318,7 +318,7 @@ ${USECASE_SCHEMA_BLOCK}
 4. The "actors" array must reflect all actors mentioned in ALL steps (existing + new).
 5. Preserve existing flow IDs exactly.
 6. Every flow "kind" must be exactly one of: "MAIN", "ALTERNATIVE", "EXCEPTION".
-
+7. PRESERVE EXISTING FLOWS, only drop if theres a more general flow that covers the same steps.
 ${FLOW_ID_CONVENTION}
 </constraints>
 `;
