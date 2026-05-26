@@ -139,8 +139,9 @@ cd mcp-thesis
 npm install
 cp env.example .env
 # Edit .env and set OPENROUTER_API_KEY
-npm run dev        # dev server with hot reload (port 3006)
 npm run build      # compile TypeScript → build/
+npm run dev        # dev server with hot reload (port 3006)
+
 ```
 
 **With interactive frontend:**
